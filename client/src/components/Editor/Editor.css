@@ -1,0 +1,36 @@
+.editor-panel__status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.status-dot--offline {
+    background: var(--warning);
+    animation: none;
+}
+
+/* Yjs collaboration cursor styles */
+.yRemoteSelection {
+    background-color: var(--user-color, rgba(99, 102, 241, 0.3));
+}
+
+.yRemoteSelectionHead {
+    position: absolute;
+    border-left: 2px solid var(--user-color, #6366f1);
+    height: 100%;
+}
+
+.yRemoteSelectionHead::after {
+    content: attr(data-name);
+    position: absolute;
+    top: -18px;
+    left: 0;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 600;
+    color: white;
+    background: var(--user-color, #6366f1);
+    white-space: nowrap;
+    z-index: 10;
+}

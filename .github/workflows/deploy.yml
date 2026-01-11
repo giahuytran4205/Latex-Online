@@ -1,0 +1,107 @@
+name: Deploy to Termux Server
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: |
+            client/package-lock.json
+            server/package-lock.json
+
+      - name: Install client dependencies
+        working-directory: ./client
+        run: npm ci
+
+      - name: Build client
+        working-directory: ./client
+        run: npm run build
+
+      - name: Create deployment package
+        run: |
+          mkdir -p deploy
+          cp -r client/dist deploy/client-dist
+          cp -r server deploy/server
+          tar -czvf latex-online.tar.gz deploy
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: latex-online-package
+          path: latex-online.tar.gz
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: latex-online-package
+
+      - name: Deploy to Termux via SSH
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.TERMUX_HOST }}
+          port: ${{ secrets.TERMUX_PORT }}
+          username: ${{ secrets.TERMUX_USER }}
+          key: ${{ secrets.TERMUX_SSH_KEY }}
+          script: |
+            # Create app directory
+            mkdir -p ~/latex-online
+            cd ~/latex-online
+            
+            # Stop existing server if running
+            pkill -f "node index.js" || true
+            
+            # Clean old files
+            rm -rf client server
+            
+            echo "Waiting for file transfer..."
+
+      - name: Copy files to server
+        uses: appleboy/scp-action@v0.1.4
+        with:
+          host: ${{ secrets.TERMUX_HOST }}
+          port: ${{ secrets.TERMUX_PORT }}
+          username: ${{ secrets.TERMUX_USER }}
+          key: ${{ secrets.TERMUX_SSH_KEY }}
+          source: "latex-online.tar.gz"
+          target: "~/latex-online"
+
+      - name: Extract and start server
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.TERMUX_HOST }}
+          port: ${{ secrets.TERMUX_PORT }}
+          username: ${{ secrets.TERMUX_USER }}
+          key: ${{ secrets.TERMUX_SSH_KEY }}
+          script: |
+            cd ~/latex-online
+            
+            # Extract package
+            tar -xzvf latex-online.tar.gz
+            mv deploy/client-dist client/dist
+            mv deploy/server .
+            rm -rf deploy latex-online.tar.gz
+            
+            # Install server dependencies
+            cd server
+            npm install --production
+            
+            # Start server in background
+            nohup node index.js > ../server.log 2>&1 &
+            
+            echo "Server started! Check with: curl http://localhost:3000/api/health"

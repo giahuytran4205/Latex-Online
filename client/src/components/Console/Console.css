@@ -1,0 +1,6 @@
+/* Console styles are mostly in index.css */
+@media (max-width: 900px) {
+    .console {
+        left: 0;
+    }
+}

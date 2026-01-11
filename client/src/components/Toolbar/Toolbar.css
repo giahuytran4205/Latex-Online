@@ -1,0 +1,20 @@
+/* Toolbar styles are mostly in index.css */
+@media (max-width: 600px) {
+    .toolbar {
+        flex-wrap: wrap;
+        padding: 8px 12px;
+    }
+
+    .toolbar__logo {
+        font-size: 1rem;
+    }
+
+    .toolbar__actions {
+        flex-wrap: wrap;
+        justify-content: flex-end;
+    }
+
+    .btn {
+        padding: 8px 12px;
+    }
+}
