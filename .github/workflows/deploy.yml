@@ -31,7 +31,6 @@ jobs:
           cp -r client/dist deploy/client-dist
           cp -r server deploy/server
           tar -czvf latex-online.tar.gz deploy
-          ls -la latex-online.tar.gz
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -48,11 +47,6 @@ jobs:
         with:
           name: latex-online-package
 
-      - name: Check artifact
-        run: |
-          ls -la
-          file latex-online.tar.gz
-
       # Connect to Tailscale network
       - name: Setup Tailscale
         uses: tailscale/github-action@v2
@@ -61,24 +55,20 @@ jobs:
           oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
           tags: tag:ci
 
-      - name: Prepare remote directory
+      - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.0.0
         with:
           host: ${{ secrets.TERMUX_HOST }}
           port: ${{ secrets.TERMUX_PORT }}
           username: ${{ secrets.TERMUX_USER }}
           key: ${{ secrets.TERMUX_SSH_KEY }}
-          debug: true
+          script_stop: false
           script: |
-            echo "=== Preparing deployment ==="
-            whoami
-            pwd
-            mkdir -p ~/latex-online
-            cd ~/latex-online
-            pkill -f "node index.js" || echo "No server running"
-            rm -rf client server deploy *.tar.gz || true
-            echo "=== Ready for file transfer ==="
-            ls -la ~/
+            echo "Step 1: Prepare directory"
+            mkdir -p /data/data/com.termux/files/home/latex-online
+            cd /data/data/com.termux/files/home/latex-online
+            rm -rf client server deploy *.tar.gz 2>/dev/null || true
+            echo "Directory ready"
 
       - name: Copy files to server
         uses: appleboy/scp-action@v0.1.7
@@ -98,31 +88,34 @@ jobs:
           port: ${{ secrets.TERMUX_PORT }}
           username: ${{ secrets.TERMUX_USER }}
           key: ${{ secrets.TERMUX_SSH_KEY }}
-          debug: true
-          command_timeout: 5m
+          command_timeout: 10m
+          script_stop: false
           script: |
-            echo "=== Starting deployment ==="
-            cd ~/latex-online
+            cd /data/data/com.termux/files/home/latex-online
+            echo "Files in directory:"
             ls -la
             
-            echo "=== Extracting files ==="
+            echo "Extracting..."
             tar -xzvf latex-online.tar.gz
             
-            echo "=== Moving files ==="
+            echo "Moving files..."
             mkdir -p client
             mv deploy/client-dist client/dist
             mv deploy/server ./server
             rm -rf deploy latex-online.tar.gz
             
-            echo "=== Installing dependencies ==="
+            echo "Installing npm dependencies..."
             cd server
-            npm install --production
+            npm install --production --no-audit --no-fund
             
-            echo "=== Starting server ==="
+            echo "Stopping old server..."
+            killall node 2>/dev/null || echo "No node process"
+            sleep 1
+            
+            echo "Starting server..."
             nohup node index.js > ../server.log 2>&1 &
-            
             sleep 3
-            echo "=== Checking server ==="
-            curl -s http://localhost:3000/api/health || cat ../server.log | tail -20
             
-            echo "=== Deployment complete ==="
+            echo "Checking health..."
+            curl -s http://localhost:3000/api/health || echo "Server may still be starting"
+            echo "Done!"
