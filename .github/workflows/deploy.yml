@@ -31,6 +31,7 @@ jobs:
           cp -r client/dist deploy/client-dist
           cp -r server deploy/server
           tar -czvf latex-online.tar.gz deploy
+          ls -la latex-online.tar.gz
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -47,6 +48,11 @@ jobs:
         with:
           name: latex-online-package
 
+      - name: Check artifact
+        run: |
+          ls -la
+          file latex-online.tar.gz
+
       # Connect to Tailscale network
       - name: Setup Tailscale
         uses: tailscale/github-action@v2
@@ -55,29 +61,35 @@ jobs:
           oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
           tags: tag:ci
 
-      - name: Deploy to Termux via SSH
+      - name: Prepare remote directory
         uses: appleboy/ssh-action@v1.0.0
         with:
           host: ${{ secrets.TERMUX_HOST }}
           port: ${{ secrets.TERMUX_PORT }}
           username: ${{ secrets.TERMUX_USER }}
           key: ${{ secrets.TERMUX_SSH_KEY }}
+          debug: true
           script: |
-            cd ~
-            mkdir -p latex-online
-            cd latex-online
-            pkill -f "node index.js" || true
-            rm -rf client server
+            echo "=== Preparing deployment ==="
+            whoami
+            pwd
+            mkdir -p ~/latex-online
+            cd ~/latex-online
+            pkill -f "node index.js" || echo "No server running"
+            rm -rf client server deploy *.tar.gz || true
+            echo "=== Ready for file transfer ==="
+            ls -la ~/
 
       - name: Copy files to server
-        uses: appleboy/scp-action@v0.1.4
+        uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.TERMUX_HOST }}
           port: ${{ secrets.TERMUX_PORT }}
           username: ${{ secrets.TERMUX_USER }}
           key: ${{ secrets.TERMUX_SSH_KEY }}
           source: "latex-online.tar.gz"
-          target: "~/latex-online"
+          target: "/data/data/com.termux/files/home/latex-online"
+          debug: true
 
       - name: Extract and start server
         uses: appleboy/ssh-action@v1.0.0
@@ -86,14 +98,31 @@ jobs:
           port: ${{ secrets.TERMUX_PORT }}
           username: ${{ secrets.TERMUX_USER }}
           key: ${{ secrets.TERMUX_SSH_KEY }}
+          debug: true
+          command_timeout: 5m
           script: |
+            echo "=== Starting deployment ==="
             cd ~/latex-online
+            ls -la
+            
+            echo "=== Extracting files ==="
             tar -xzvf latex-online.tar.gz
+            
+            echo "=== Moving files ==="
+            mkdir -p client
             mv deploy/client-dist client/dist
-            mv deploy/server .
+            mv deploy/server ./server
             rm -rf deploy latex-online.tar.gz
+            
+            echo "=== Installing dependencies ==="
             cd server
             npm install --production
+            
+            echo "=== Starting server ==="
             nohup node index.js > ../server.log 2>&1 &
-            sleep 2
-            curl -s http://localhost:3000/api/health || echo "Server starting..."
+            
+            sleep 3
+            echo "=== Checking server ==="
+            curl -s http://localhost:3000/api/health || cat ../server.log | tail -20
+            
+            echo "=== Deployment complete ==="
