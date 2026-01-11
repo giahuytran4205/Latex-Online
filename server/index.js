@@ -4,7 +4,6 @@ import { createServer } from 'http'
 import { WebSocketServer } from 'ws'
 import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
-import * as Y from 'yjs'
 import compileRouter from './routes/compile.js'
 import filesRouter from './routes/files.js'
 
@@ -28,9 +27,9 @@ app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() })
 })
 
-// Simple Yjs WebSocket Server
-// Stores documents and syncs between connected clients
-const docs = new Map()
+// Simple WebSocket relay for Yjs collaboration
+// Just relays binary messages between clients in the same room
+const rooms = new Map()
 const wss = new WebSocketServer({ noServer: true })
 
 // Handle upgrade requests
@@ -48,40 +47,37 @@ wss.on('connection', (ws, req) => {
     const roomName = 'latex-room'
     console.log(`[WS] Client connected to ${roomName}`)
 
-    // Get or create document
-    if (!docs.has(roomName)) {
-        docs.set(roomName, {
-            doc: new Y.Doc(),
-            clients: new Set()
-        })
+    // Get or create room
+    if (!rooms.has(roomName)) {
+        rooms.set(roomName, new Set())
     }
-    const room = docs.get(roomName)
-    room.clients.add(ws)
+    const room = rooms.get(roomName)
+    room.add(ws)
 
-    // Send initial state
-    const state = Y.encodeStateAsUpdate(room.doc)
-    ws.send(state)
-
-    // Handle incoming messages
-    ws.on('message', (message) => {
-        try {
-            const update = new Uint8Array(message)
-            Y.applyUpdate(room.doc, update)
-
-            // Broadcast to other clients
-            room.clients.forEach(client => {
-                if (client !== ws && client.readyState === 1) {
-                    client.send(update)
+    // Relay messages to all other clients in room
+    ws.on('message', (message, isBinary) => {
+        // Only relay binary messages (Yjs updates)
+        if (isBinary || Buffer.isBuffer(message)) {
+            room.forEach(client => {
+                if (client !== ws && client.readyState === 1) { // WebSocket.OPEN = 1
+                    client.send(message)
                 }
             })
-        } catch (e) {
-            console.error('[WS] Error processing message:', e)
         }
     })
 
     ws.on('close', () => {
-        room.clients.delete(ws)
+        room.delete(ws)
         console.log(`[WS] Client disconnected from ${roomName}`)
+
+        // Cleanup empty rooms
+        if (room.size === 0) {
+            rooms.delete(roomName)
+        }
+    })
+
+    ws.on('error', (err) => {
+        console.error('[WS] Client error:', err.message)
     })
 })
 
