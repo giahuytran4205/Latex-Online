@@ -31,21 +31,44 @@ function checkEnvironment() {
     }
 }
 
-// Hardcode Termux Bin Path
-const TERMUX_BIN = '/data/data/com.termux/files/usr/bin'
+// Hardcode Termux Bin Path Base
+const TERMUX_BASE = '/data/data/com.termux/files'
+const TERMUX_BIN = join(TERMUX_BASE, 'usr/bin')
 
 /**
  * Get the full path to a LaTeX engine
  */
 function getEnginePath(engine) {
-    // If we are on a system that looks like Termux (has the bin dir), force absolute path
-    if (existsSync(TERMUX_BIN)) {
-        const absPath = join(TERMUX_BIN, engine)
-        console.log(`[LaTeX] Force using absolute path for Termux: ${absPath}`)
-        return absPath
+    const termuxPath = join(TERMUX_BIN, engine)
+
+    // 1. Check standard path
+    if (existsSync(termuxPath)) {
+        console.log(`[LaTeX] Found at standard path: ${termuxPath}`)
+        return termuxPath
     }
 
-    // Fallback for local dev
+    // 2. If on Termux, try to find it dynamically
+    if (existsSync(TERMUX_BIN)) {
+        console.log(`[LaTeX] Standard path failed. Searching in ${TERMUX_BASE}...`)
+        try {
+            // Find executable named 'engine' (e.g. pdflatex) in usr/bin or subdirs
+            // Limit depth to avoid slow search
+            const cmd = `find ${TERMUX_BASE}/usr -name ${engine} -type f -path "*/bin/*" 2>/dev/null | head -n 1`
+            const foundPath = execSync(cmd).toString().trim()
+
+            if (foundPath) {
+                console.log(`[LaTeX] Discovered path: ${foundPath}`)
+                return foundPath
+            }
+        } catch (e) {
+            console.error('[LaTeX] Path discovery failed:', e.message)
+        }
+
+        // 3. Fallback: maybe it's texlive wrapper?
+        // Some installations put it in .../usr/bin/texlive/bin/...
+    }
+
+    console.warn(`[LaTeX] Could not find ${engine}. Returning default "${engine}"`)
     return engine
 }
 
