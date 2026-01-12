@@ -115,10 +115,16 @@ jobs:
           script_stop: false
           script: |
             cd /data/data/com.termux/files/home/latex-online/server
-            echo "Starting server with setsid..."
-            setsid node index.js > ../server.log 2>&1 &
-            disown
+            
+            # Kill existing server
+            fuser -k 3000/tcp 2>/dev/null || true
+            sleep 2
+            
+            # Start server using bash
+            chmod +x start.sh 2>/dev/null || true
+            bash -c 'nohup node index.js > ../server.log 2>&1 &'
+            
             sleep 3
-            echo "Checking server status..."
-            curl -s http://localhost:3000/api/health && echo " - Server is running!" || echo "Server may need a moment to start"
+            echo "Checking server..."
+            curl -s http://localhost:3000/api/health && echo " - OK!" || echo "Starting..."
             echo "Deployment complete!"
