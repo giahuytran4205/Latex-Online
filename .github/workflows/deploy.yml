@@ -94,8 +94,14 @@ jobs:
             # 4. Restart Server
             echo "🔄 Restarting Server..."
             # Stop existing process safely
-            pkill -f "node index.js" || echo "No process found to stop."
-            sleep 2
+            # Using specific PID check to avoid killing the wrong process (or self if misidentified)
+            EXISTING_PID=$(pgrep -f "node index.js" || echo "")
+            if [ -n "$EXISTING_PID" ]; then
+                echo "Stopping existing server (PID $EXISTING_PID)..."
+                kill $EXISTING_PID || true
+                # Wait for it to die
+                sleep 2
+            fi
             
             # Start new process
             nohup node index.js > ../server.log 2>&1 &
