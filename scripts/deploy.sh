@@ -16,23 +16,72 @@ mkdir -p "$NGINX_LOG_DIR"
 export PATH="/data/data/com.termux/files/usr/bin:/data/data/com.termux/files/usr/bin/texlive:$PATH"
 export LC_ALL=C
 
-# Dynamic TeX Live Detection
-TEXLIVE_BASE="/data/data/com.termux/files/usr/share/texlive"
-TL_YEAR=$(ls "$TEXLIVE_BASE" 2>/dev/null | grep -E "^20[0-9]{2}" | sort -r | head -n 1 || echo "2025.0")
-export TEXMFROOT="$TEXLIVE_BASE/$TL_YEAR"
-export TEXMFDIST="$TEXMFROOT/texmf-dist"
-export PERL5LIB="$TEXMFROOT/tlpkg:$TEXMFDIST/scripts/texlive"
+# Dynamic TeX Live Detection & Setup
+setup_latex_env() {
+    echo "🔧 Setting up LaTeX environment..."
+    
+    # 1. Try to find kpsewhich (Standard tool for paths)
+    if command -v kpsewhich &> /dev/null; then
+        export TEXMFROOT=$(kpsewhich -var-value=TEXMFROOT)
+        export TEXMFDIST=$(kpsewhich -var-value=TEXMFDIST)
+    else
+        # Fallback: Heuristic Search
+        TEXLIVE_BASE="/data/data/com.termux/files/usr/share/texlive"
+        if [ -d "$TEXLIVE_BASE" ]; then
+            # Find the latest year directory that actually contains texmf-dist
+            for YEAR_DIR in $(ls "$TEXLIVE_BASE" 2>/dev/null | grep -E "^20[0-9]{2}" | sort -r); do
+                if [ -d "$TEXLIVE_BASE/$YEAR_DIR/texmf-dist" ]; then
+                    TL_YEAR="$YEAR_DIR"
+                    break
+                fi
+            done
+            
+            if [ -n "$TL_YEAR" ]; then
+                export TEXMFROOT="$TEXLIVE_BASE/$TL_YEAR"
+                export TEXMFDIST="$TEXMFROOT/texmf-dist"
+            fi
+        fi
+    fi
+
+    # 2. Fix Perl Include Paths (The main cause of "Can't locate mktexlsr.pl")
+    if [ -n "$TEXMFROOT" ]; then
+        # Find where mktexlsr.pl actually is
+        MKTEXLSR_PATH=$(find "$TEXMFROOT" "$TEXMFDIST" -name "mktexlsr.pl" 2>/dev/null | head -n 1)
+        
+        if [ -n "$MKTEXLSR_PATH" ]; then
+            MKTEXLSR_DIR=$(dirname "$MKTEXLSR_PATH")
+            # Usually it needs tlpkg and the scripts dir
+            export PERL5LIB="$TEXMFROOT/tlpkg:$MKTEXLSR_DIR"
+            echo "✅  Found mktexlsr.pl at $MKTEXLSR_PATH"
+            echo "    Set PERL5LIB=$PERL5LIB"
+        else
+            echo "⚠️  Could not find mktexlsr.pl"
+        fi
+    fi
+}
+
+setup_latex_env
 
 # 2. INSTALL SYSTEM DEPENDENCIES
 echo "📦 Updating system packages..."
 pkg update -y || true
 echo "📦 Installing nginx, nodejs, lsof..."
-pkg install -y nginx nodejs lsof
+echo "📦 Installing nginx, nodejs, lsof, texlive..."
+pkg install -y nginx nodejs lsof texlive
 
 # PM2 is installed via npm, not pkg
 if ! command -v pm2 &> /dev/null; then
     echo "📦 Installing PM2 globally..."
     npm install -g pm2
+fi
+
+# Ensure LaTeX formats are built (Fixes "I can't find the format file `pdflatex.fmt'!")
+if command -v fmtutil-sys &> /dev/null; then
+    echo "⚙️  Verifying LaTeX formats..."
+    if ! kpsewhich pdflatex.fmt &> /dev/null; then
+        echo "⚠️  pdflatex.fmt missing. Rebuilding formats..."
+        fmtutil-sys --all > /dev/null 2>&1 || fmtutil --all
+    fi
 fi
 
 # 3. BUILD APPLICATION
