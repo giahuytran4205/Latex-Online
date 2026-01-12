@@ -286,7 +286,7 @@ function App() {
                     <Editor
                         code={code}
                         onChange={setCode}
-                        onCollaboratorsChange={setCollaborators}
+                        onCompile={handleCompile}
                         activeFile={activeFileName}
                     />
 

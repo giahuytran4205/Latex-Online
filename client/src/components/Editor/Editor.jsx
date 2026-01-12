@@ -1,11 +1,11 @@
-import { useEffect, useRef, useState, useMemo } from 'react'
+import { useEffect, useRef, useState, useMemo, useCallback } from 'react'
 import { EditorView, basicSetup } from 'codemirror'
-import { EditorState, Compartment } from '@codemirror/state'
+import { EditorState } from '@codemirror/state'
 import { keymap } from '@codemirror/view'
 import { indentWithTab } from '@codemirror/commands'
 import { StreamLanguage } from '@codemirror/language'
 import { stex } from '@codemirror/legacy-modes/mode/stex'
-import { autocompletion, CompletionContext } from '@codemirror/autocomplete'
+import { autocompletion, startCompletion, acceptCompletion } from '@codemirror/autocomplete'
 import './Editor.css'
 
 // LaTeX autocomplete data
@@ -143,7 +143,7 @@ function latexCompletions(context) {
     if (envMatch) {
         const prefix = envMatch.text.replace('\\begin{', '')
         return {
-            from: envMatch.from + 7, // After \begin{
+            from: envMatch.from + 7,
             options: latexEnvironments
                 .filter(e => e.label.startsWith(prefix))
                 .map(e => ({
@@ -180,11 +180,22 @@ function latexCompletions(context) {
     }
 }
 
-function Editor({ code, onChange, onCollaboratorsChange, activeFile }) {
+// Wrap selection with LaTeX command
+function wrapSelection(view, before, after) {
+    const { from, to } = view.state.selection.main
+    const selectedText = view.state.doc.sliceString(from, to)
+
+    view.dispatch({
+        changes: { from, to, insert: before + selectedText + after },
+        selection: { anchor: from + before.length, head: from + before.length + selectedText.length }
+    })
+    return true
+}
+
+function Editor({ code, onChange, onCompile, activeFile }) {
     const editorRef = useRef(null)
     const viewRef = useRef(null)
-    const [connected, setConnected] = useState(true)
-    const isUpdatingRef = useRef(false)
+    const initialCodeRef = useRef(code)
 
     // Create editor theme
     const editorTheme = useMemo(() => EditorView.theme({
@@ -224,37 +235,112 @@ function Editor({ code, onChange, onCollaboratorsChange, activeFile }) {
                 color: 'var(--accent)',
             },
         },
-        '.cm-completionIcon': {
-            marginRight: '8px',
-        },
-        '.cm-completionLabel': {
-            fontFamily: "'JetBrains Mono', monospace",
-        },
-        '.cm-completionInfo': {
-            padding: '8px',
-            fontFamily: 'inherit',
-            fontSize: '12px',
-        },
     }), [])
 
-    // Initialize editor
+    // Create Overleaf-like keybindings
+    const createKeybindings = useCallback(() => {
+        return keymap.of([
+            // Tab to indent
+            indentWithTab,
+
+            // Ctrl+Space - Show autocomplete
+            {
+                key: 'Ctrl-Space',
+                run: startCompletion
+            },
+
+            // Ctrl+B - Bold
+            {
+                key: 'Ctrl-b',
+                run: (view) => wrapSelection(view, '\\textbf{', '}')
+            },
+
+            // Ctrl+I - Italic
+            {
+                key: 'Ctrl-i',
+                run: (view) => wrapSelection(view, '\\textit{', '}')
+            },
+
+            // Ctrl+U - Underline
+            {
+                key: 'Ctrl-u',
+                preventDefault: true,
+                run: (view) => wrapSelection(view, '\\underline{', '}')
+            },
+
+            // Ctrl+E - Emphasize
+            {
+                key: 'Ctrl-e',
+                run: (view) => wrapSelection(view, '\\emph{', '}')
+            },
+
+            // Ctrl+M - Math mode
+            {
+                key: 'Ctrl-m',
+                run: (view) => wrapSelection(view, '$', '$')
+            },
+
+            // Ctrl+Shift+M - Display math
+            {
+                key: 'Ctrl-Shift-m',
+                run: (view) => wrapSelection(view, '\\[\n', '\n\\]')
+            },
+
+            // Ctrl+S - Save and compile
+            {
+                key: 'Ctrl-s',
+                preventDefault: true,
+                run: () => {
+                    if (onCompile) onCompile()
+                    return true
+                }
+            },
+
+            // Ctrl+Enter - Compile
+            {
+                key: 'Ctrl-Enter',
+                run: () => {
+                    if (onCompile) onCompile()
+                    return true
+                }
+            },
+
+            // Tab in completion - accept
+            {
+                key: 'Tab',
+                run: acceptCompletion
+            },
+        ])
+    }, [onCompile])
+
+    // Initialize/reinitialize editor when activeFile changes
     useEffect(() => {
         if (!editorRef.current) return
+
+        // Clear previous editor
+        if (viewRef.current) {
+            viewRef.current.destroy()
+            viewRef.current = null
+        }
+
+        // Clear the container
+        editorRef.current.innerHTML = ''
 
         const state = EditorState.create({
             doc: code || '',
             extensions: [
                 basicSetup,
-                keymap.of([indentWithTab]),
+                createKeybindings(),
                 StreamLanguage.define(stex),
                 editorTheme,
                 autocompletion({
                     override: [latexCompletions],
                     activateOnTyping: true,
-                    maxRenderedOptions: 20,
+                    maxRenderedOptions: 15,
+                    defaultKeymap: true,
                 }),
                 EditorView.updateListener.of((update) => {
-                    if (update.docChanged && !isUpdatingRef.current) {
+                    if (update.docChanged) {
                         onChange(update.state.doc.toString())
                     }
                 }),
@@ -267,28 +353,35 @@ function Editor({ code, onChange, onCollaboratorsChange, activeFile }) {
         })
         viewRef.current = view
 
-        return () => {
-            view.destroy()
-        }
-    }, []) // Only run once on mount
+        // Focus editor
+        view.focus()
 
-    // Update editor content when code prop changes (file switch)
-    useEffect(() => {
-        if (viewRef.current && code !== undefined) {
-            const currentContent = viewRef.current.state.doc.toString()
-            if (currentContent !== code) {
-                isUpdatingRef.current = true
-                viewRef.current.dispatch({
-                    changes: {
-                        from: 0,
-                        to: currentContent.length,
-                        insert: code || ''
-                    }
-                })
-                isUpdatingRef.current = false
+        return () => {
+            if (viewRef.current) {
+                viewRef.current.destroy()
+                viewRef.current = null
             }
         }
-    }, [code]) // Re-run when code changes
+    }, [activeFile]) // Recreate editor when file changes
+
+    // Update content when code prop changes (but file stays same)
+    useEffect(() => {
+        if (!viewRef.current) return
+
+        const currentContent = viewRef.current.state.doc.toString()
+        // Only update if content is actually different and this wasn't triggered by our own change
+        if (code !== undefined && currentContent !== code && code !== initialCodeRef.current) {
+            const view = viewRef.current
+            view.dispatch({
+                changes: {
+                    from: 0,
+                    to: currentContent.length,
+                    insert: code || ''
+                }
+            })
+        }
+        initialCodeRef.current = code
+    }, [code])
 
     // Get display filename
     const displayName = activeFile ? activeFile.split('/').pop() : 'main.tex'
@@ -305,10 +398,10 @@ function Editor({ code, onChange, onCollaboratorsChange, activeFile }) {
                         {displayName}
                     </button>
                 </div>
-                <div className="editor-panel__status">
-                    <span className="text-muted" style={{ fontSize: '0.7rem', opacity: 0.6 }}>
-                        Ctrl+Space for suggestions
-                    </span>
+                <div className="editor-panel__shortcuts">
+                    <span className="shortcut-hint" title="Bold">Ctrl+B</span>
+                    <span className="shortcut-hint" title="Italic">Ctrl+I</span>
+                    <span className="shortcut-hint" title="Save & Compile">Ctrl+S</span>
                 </div>
             </div>
             <div className="editor-panel__content" ref={editorRef}></div>

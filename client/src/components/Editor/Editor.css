@@ -1,3 +1,5 @@
+/* Editor Panel Styles */
+
 .editor-panel__status {
     display: flex;
     align-items: center;
@@ -9,28 +11,89 @@
     animation: none;
 }
 
-/* Yjs collaboration cursor styles */
-.yRemoteSelection {
-    background-color: var(--user-color, rgba(99, 102, 241, 0.3));
+/* Keyboard shortcuts display */
+.editor-panel__shortcuts {
+    display: flex;
+    align-items: center;
+    gap: 6px;
 }
 
-.yRemoteSelectionHead {
-    position: absolute;
-    border-left: 2px solid var(--user-color, #6366f1);
-    height: 100%;
-}
-
-.yRemoteSelectionHead::after {
-    content: attr(data-name);
-    position: absolute;
-    top: -18px;
-    left: 0;
+.shortcut-hint {
+    display: inline-flex;
+    align-items: center;
     padding: 2px 6px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
     border-radius: 4px;
-    font-size: 10px;
-    font-weight: 600;
-    color: white;
-    background: var(--user-color, #6366f1);
-    white-space: nowrap;
-    z-index: 10;
+    font-size: 0.65rem;
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--text-muted);
+    cursor: default;
+    user-select: none;
+}
+
+.shortcut-hint:hover {
+    background: var(--accent-light);
+    color: var(--accent);
+    border-color: var(--accent);
+}
+
+/* Hide shortcuts on small screens */
+@media (max-width: 1200px) {
+    .editor-panel__shortcuts {
+        display: none;
+    }
+}
+
+/* Autocomplete tooltip styling */
+.cm-tooltip.cm-tooltip-autocomplete {
+    background: var(--bg-panel) !important;
+    border: 1px solid var(--border-color) !important;
+    border-radius: 8px !important;
+    box-shadow: var(--shadow-lg) !important;
+    overflow: hidden;
+}
+
+.cm-tooltip.cm-tooltip-autocomplete>ul {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.8rem;
+    max-height: 300px;
+}
+
+.cm-tooltip.cm-tooltip-autocomplete>ul>li {
+    padding: 6px 12px !important;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.cm-tooltip.cm-tooltip-autocomplete>ul>li[aria-selected] {
+    background: var(--accent-light) !important;
+    color: var(--accent) !important;
+}
+
+.cm-completionIcon {
+    font-size: 0.9em;
+    opacity: 0.6;
+}
+
+.cm-completionLabel {
+    flex: 1;
+}
+
+.cm-completionDetail {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin-left: 8px;
+}
+
+/* Completion info panel */
+.cm-completionInfo {
+    padding: 10px 12px !important;
+    background: var(--bg-secondary) !important;
+    border-left: 1px solid var(--border-color) !important;
+    font-family: inherit !important;
+    font-size: 0.75rem !important;
+    color: var(--text-secondary) !important;
+    max-width: 250px;
 }
