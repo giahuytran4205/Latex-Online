@@ -254,6 +254,94 @@ function FileTree({ files, activeFile, onFileSelect, onAddFile, onDeleteFile, on
 
     const folderInputRef = useRef(null)
 
+    // Drag & Drop handlers
+    const [isDragging, setIsDragging] = useState(false)
+
+    const handleDragEnter = (e) => {
+        e.preventDefault()
+        e.stopPropagation()
+        setIsDragging(true)
+    }
+
+    const handleDragLeave = (e) => {
+        e.preventDefault()
+        e.stopPropagation()
+        // Only disable if leaving the main container
+        if (e.currentTarget.contains(e.relatedTarget)) return
+        setIsDragging(false)
+    }
+
+    const handleDragOver = (e) => {
+        e.preventDefault()
+        e.stopPropagation()
+        setIsDragging(true)
+    }
+
+    const traverseFileTree = async (item, path = '') => {
+        if (item.isFile) {
+            return new Promise((resolve, reject) => {
+                item.file(async (file) => {
+                    try {
+                        const content = await readFileContent(file)
+                        // Preserve full path relative to drop root
+                        const fullPath = path + file.name
+                        if (onUploadFile) {
+                            await onUploadFile(fullPath, content)
+                        }
+                        resolve({ success: true })
+                    } catch (e) {
+                        console.error('Failed to read file:', e)
+                        resolve({ success: false })
+                    }
+                })
+            })
+        } else if (item.isDirectory) {
+            const dirReader = item.createReader()
+            const entries = await new Promise((resolve) => {
+                const results = []
+                const readNext = () => {
+                    dirReader.readEntries((entryList) => {
+                        if (entryList.length === 0) {
+                            resolve(results)
+                        } else {
+                            results.push(...entryList)
+                            readNext()
+                        }
+                    })
+                }
+                readNext()
+            })
+
+            // Recursively traverse
+            const promises = entries.map(entry => traverseFileTree(entry, path + item.name + '/'))
+            return Promise.all(promises)
+        }
+    }
+
+    const handleDrop = async (e) => {
+        e.preventDefault()
+        e.stopPropagation()
+        setIsDragging(false)
+
+        const items = e.dataTransfer.items
+        if (!items) return
+
+        let count = 0
+        const promises = []
+
+        for (let i = 0; i < items.length; i++) {
+            const item = items[i].webkitGetAsEntry ? items[i].webkitGetAsEntry() : null
+            if (item) {
+                promises.push(traverseFileTree(item))
+                count++
+            }
+        }
+
+        if (count > 0) {
+            await Promise.all(promises)
+        }
+    }
+
     const readFileContent = (file) => {
         return new Promise((resolve, reject) => {
             const reader = new FileReader()
@@ -370,7 +458,23 @@ function FileTree({ files, activeFile, onFileSelect, onAddFile, onDeleteFile, on
     }
 
     return (
-        <aside className="sidebar">
+        <aside
+            className={`sidebar ${isDragging ? 'file-tree--dragging' : ''}`}
+            onDragEnter={handleDragEnter}
+            onDragLeave={handleDragLeave}
+            onDragOver={handleDragOver}
+            onDrop={handleDrop}
+        >
+            {isDragging && (
+                <div className="file-tree__drop-overlay">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+                        <polyline points="12,10 12,16" />
+                        <polyline points="9,13 12,10 15,13" />
+                    </svg>
+                    <p>Drop files or folders here</p>
+                </div>
+            )}
             <div className="sidebar__header">
                 <span>FILES</span>
                 <div className="sidebar__actions">
