@@ -3,6 +3,7 @@ import './FileTree.css'
 
 function FileTree({ files, activeFile, onFileSelect, onAddFile, onDeleteFile, onRenameFile, onUploadFile, onDuplicateFile }) {
     const [isAdding, setIsAdding] = useState(false)
+    const [selectedFiles, setSelectedFiles] = useState(new Set())
     const [addType, setAddType] = useState('file') // 'file' or 'folder'
     const [addPath, setAddPath] = useState('') // Parent path for new item
     const [newFileName, setNewFileName] = useState('')
@@ -158,19 +159,25 @@ function FileTree({ files, activeFile, onFileSelect, onAddFile, onDeleteFile, on
         }
     }
 
-    const handleContextMenu = (e, item) => {
-        e.preventDefault()
-        e.stopPropagation()
-        setContextMenu({
-            x: e.clientX,
-            y: e.clientY,
-            item: item
-        })
-    }
 
-    const handleDelete = () => {
+
+    const handleDelete = async () => {
         if (contextMenu && onDeleteFile) {
-            onDeleteFile(contextMenu.item.path)
+            // If the context item is in selection, delete all selected
+            const itemsToDelete = selectedFiles.has(contextMenu.item.path)
+                ? Array.from(selectedFiles)
+                : [contextMenu.item.path]
+
+            const message = itemsToDelete.length > 1
+                ? `Are you sure you want to delete ${itemsToDelete.length} items?`
+                : `Are you sure you want to delete ${contextMenu.item.name}?`
+
+            if (window.confirm(message)) {
+                for (const path of itemsToDelete) {
+                    await onDeleteFile(path)
+                }
+                setSelectedFiles(new Set())
+            }
         }
         setContextMenu(null)
     }
@@ -228,11 +235,7 @@ function FileTree({ files, activeFile, onFileSelect, onAddFile, onDeleteFile, on
         for (const file of uploadedFiles) {
             try {
                 // Use webkitRelativePath if available (folder upload), otherwise just filename
-                const relativePath = file.webkitRelativePath || file.name
-                // Remove leading folder name for folder uploads (e.g., "myfolder/file.tex" -> "file.tex" or keep structure)
-                const uploadPath = relativePath.includes('/')
-                    ? relativePath.split('/').slice(1).join('/') || file.name
-                    : file.name
+                const uploadPath = file.webkitRelativePath || file.name
 
                 const content = await readFileContent(file)
                 if (onUploadFile) {
@@ -392,18 +395,56 @@ function FileTree({ files, activeFile, onFileSelect, onAddFile, onDeleteFile, on
         setContextMenu(null)
     }
 
+    const handleItemClick = (e, item) => {
+        e.stopPropagation()
+
+        if (e.ctrlKey || e.metaKey || e.shiftKey) {
+            const newSelected = new Set(selectedFiles)
+            if (newSelected.has(item.path)) {
+                newSelected.delete(item.path)
+            } else {
+                newSelected.add(item.path)
+            }
+            setSelectedFiles(newSelected)
+        } else {
+            setSelectedFiles(new Set([item.path]))
+            if (item.type === 'folder') {
+                toggleFolder(item.path)
+            } else {
+                onFileSelect(item.path)
+            }
+        }
+    }
+
+    const handleContextMenu = (e, item) => {
+        e.preventDefault()
+        e.stopPropagation()
+
+        // If right-clicking item not in selection, start new selection
+        if (!selectedFiles.has(item.path)) {
+            setSelectedFiles(new Set([item.path]))
+        }
+
+        setContextMenu({
+            x: e.clientX,
+            y: e.clientY,
+            item: item
+        })
+    }
+
     const renderItem = (item, depth = 0) => {
         const isFolder = item.type === 'folder'
         const isExpanded = expandedFolders.has(item.path)
         const isActive = activeFile === item.path
+        const isSelected = selectedFiles.has(item.path)
         const isRenaming = renaming === item.path
 
         return (
             <div key={item.path || 'root'} className="file-tree__node">
                 <div
-                    className={`file-tree__item ${isActive ? 'file-tree__item--active' : ''} ${isFolder ? 'file-tree__item--folder' : ''}`}
+                    className={`file-tree__item ${isActive ? 'file-tree__item--active' : ''} ${isSelected ? 'file-tree__item--selected' : ''} ${isFolder ? 'file-tree__item--folder' : ''}`}
                     style={{ paddingLeft: `${12 + depth * 16}px` }}
-                    onClick={() => isFolder ? toggleFolder(item.path) : onFileSelect(item.path)}
+                    onClick={(e) => handleItemClick(e, item)}
                     onContextMenu={(e) => handleContextMenu(e, item)}
                 >
                     {isFolder && (

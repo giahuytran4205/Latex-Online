@@ -27,6 +27,16 @@
     border-left-color: var(--accent);
 }
 
+.file-tree__item--selected {
+    background-color: rgba(59, 130, 246, 0.15);
+    /* Light blue tint */
+}
+
+.file-tree__item--active.file-tree__item--selected {
+    background-color: var(--bg-active);
+    /* Active takes precedence or blends? Active is stronger usually */
+}
+
 .file-tree__item--folder {
     font-weight: 500;
 }
