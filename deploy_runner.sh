@@ -26,53 +26,21 @@ cd server
 npm install --production
 cd ..
 
-# 4. Restart Server
-echo "🔄 [Runner] Restarting server..."
+# 4. Restart Server with PM2
+echo "🔄 [Runner] Restarting server via PM2..."
 
-# Find PIDs to kill (excluding self and other irrelevant processes)
-# We use pgrep to find the node process.
-# We explicitly exclude the current script's PID to be safe.
-CURRENT_PID=$$
-PIDS=$(pgrep -f "node server/index.js" | grep -v grep | grep -v "$CURRENT_PID" || echo "")
-
-if [ -n "$PIDS" ]; then
-    PIDS_CLEAN=$(echo "$PIDS" | tr '\n' ' ')
-    echo "🛑 [Runner] Stopping existing server (PIDs: $PIDS_CLEAN)..."
-    for PID in $PIDS_CLEAN; do
-        # Verify it's not our parent or us
-        if [ "$PID" != "$CURRENT_PID" ] && [ "$PID" != "$PPID" ]; then
-             kill "$PID" 2>/dev/null || true
-        fi
-    done
-    sleep 3
+# Ensure PM2 is installed globally
+if ! command -v pm2 &> /dev/null; then
+    echo "� [Runner] Installing PM2..."
+    npm install -g pm2
 fi
 
-echo "🧹 [Runner] Ensuring port 3000 is free..."
-if command -v fuser &> /dev/null; then
-    fuser -k 3000/tcp 2>/dev/null || true
-else
-    # Fallback to lsof if fuser is missing (Termux sometimes)
-    PIDS_PORT=$(lsof -t -i:3000 2>/dev/null || echo "")
-    if [ -n "$PIDS_PORT" ]; then
-         kill -9 $PIDS_PORT 2>/dev/null || true
-    fi
-fi
-sleep 2
+# Start or Reload
+# This handles both first-time start and zero-downtime reloads
+pm2 startOrReload ecosystem.config.cjs
 
-# Launch
-echo "▶️  [Runner] Launching new server process..."
-nohup node server/index.js > "$LOG_FILE" 2>&1 &
-NEW_PID=$!
+# Save list
+pm2 save
 
-echo "✅ [Runner] Server launched with PID $NEW_PID"
-sleep 2
-
-# Verify
-if ps -p "$NEW_PID" > /dev/null; then
-   echo "✅ [Runner] Process is running."
-   exit 0
-else
-   echo "❌ [Runner] Process died immediately. Check logs."
-   cat "$LOG_FILE"
-   exit 1
-fi
+echo "✅ [Runner] Deployment complete! Server managed by PM2."
+pm2 list

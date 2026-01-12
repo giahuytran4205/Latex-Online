@@ -59,7 +59,7 @@ jobs:
             fi
             
             # 2. Execute Runner
-            echo "� [Deploy] Executing deployment runner..."
+            echo " [Deploy] Executing deployment runner..."
             chmod +x deploy_runner.sh
             # Execute directly in current shell info
             ./deploy_runner.sh
