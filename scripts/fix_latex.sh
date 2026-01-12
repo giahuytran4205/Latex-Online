@@ -1,97 +1,103 @@
 #!/bin/bash
-echo "🔧 Starting LaTeX Environment Repair..."
+echo "🔧 Starting LaTeX Environment Repair (Aggressive Mode)..."
 
-# 1. Check/Install binaries
-echo "📦 Checking TeX Live binaries..."
-if command -v pdflatex &> /dev/null; then
-    echo "✅ pdflatex is already installed."
-else
-    echo "⚠️  pdflatex not found. Installing texlive-bin..."
-    pkg install -y texlive-bin
-fi
-
-# 2. Source the improved detection logic
-setup_latex_env() {
-    export PATH="/data/data/com.termux/files/usr/bin:/data/data/com.termux/files/usr/bin/texlive:$PATH"
-    
-    # Reset variables
-    unset TEXMFROOT
-    unset TEXMFDIST
-    unset PERL5LIB
-    
-    echo "🔍 probing TeX Live paths..."
-    
-    if command -v kpsewhich &> /dev/null; then
-        VAL_ROOT=$(kpsewhich -var-value=TEXMFROOT)
-        VAL_DIST=$(kpsewhich -var-value=TEXMFDIST)
-        if [ -n "$VAL_ROOT" ]; then
-            export TEXMFROOT="$VAL_ROOT"
-            export TEXMFDIST="$VAL_DIST"
-            echo "   ✅ Found via kpsewhich: $TEXMFROOT"
-        fi
-    fi
-    
-    # If kpsewhich failed or gave empty results, search manually
-    if [ -z "$TEXMFROOT" ]; then
-        TEXLIVE_BASE="/data/data/com.termux/files/usr/share/texlive"
-        if [ -d "$TEXLIVE_BASE" ]; then
-            for YEAR_DIR in $(ls "$TEXLIVE_BASE" 2>/dev/null | grep -E "^20[0-9]{2}" | sort -r); do
-                CANDIDATE="$TEXLIVE_BASE/$YEAR_DIR"
-                if [ -d "$CANDIDATE/texmf-dist" ]; then
-                    echo "   ✅ Found valid TeX root: $CANDIDATE"
-                    export TEXMFROOT="$CANDIDATE"
-                    export TEXMFDIST="$CANDIDATE/texmf-dist"
-                    break
-                fi
-            done
-        fi
-    fi
-
-    # CRITICAL: Fix Perl Library Paths
-    if [ -n "$TEXMFROOT" ]; then
-        # Find where mktexlsr.pl actually is
-        # It's usually in texmf-dist/scripts/texlive/mktexlsr.pl
-        MKTEXLSR_PATH=$(find "$TEXMFROOT" "$TEXMFDIST" -name "mktexlsr.pl" 2>/dev/null | head -n 1)
-        
-        if [ -n "$MKTEXLSR_PATH" ]; then
-            MKTEXLSR_DIR=$(dirname "$MKTEXLSR_PATH")
-            # We also need 'tlpkg' which is often in TEXMFROOT/tlpkg
-            export PERL5LIB="$TEXMFROOT/tlpkg:$MKTEXLSR_DIR"
-            echo "✅ PERL5LIB set to: $PERL5LIB"
-        else
-            echo "❌ Could not find mktexlsr.pl inside $TEXMFROOT"
-            echo "   Trying global search..."
-            MKTEXLSR_PATH=$(find /data/data/com.termux/files/usr -name "mktexlsr.pl" 2>/dev/null | head -n 1)
-            if [ -n "$MKTEXLSR_PATH" ]; then
-                 MKTEXLSR_DIR=$(dirname "$MKTEXLSR_PATH")
-                 export PERL5LIB="$MKTEXLSR_DIR"
-                 echo "   ✅ Found at $MKTEXLSR_PATH, PERL5LIB=$PERL5LIB"
-            fi
-        fi
+# Function to check if a directory looks like a valid TexLive root
+is_valid_root() {
+    if [ -d "$1/texmf-dist" ] && [ -d "$1/tlpkg" ]; then
+        return 0
     else
-        echo "❌ Could not verify TEXMFROOT"
+        return 1
     fi
 }
 
-setup_latex_env
+# 1. SEARCH FOR VALID ROOT
+echo "🔍 Searching for valid TeX Live root..."
+TEXLIVE_BASE="/data/data/com.termux/files/usr/share/texlive"
+REAL_ROOT=""
 
-# 3. Test Dependencies
-echo "🔍 Checking missing dependencies..."
-if ! command -v touch &> /dev/null; then pkg install -y coreutils; fi
-
-# 4. Rebuild formats
-echo "⚙️  Rebuilding formats..."
-# Capture output to see error if it fails
-fmtutil-sys --all > fmt.log 2>&1 || fmtutil --all > fmt.log 2>&1
-
-if [ $? -eq 0 ]; then
-    echo "✅ Formats built successfully."
-else
-    echo "❌ Format build failed. Log:"
-    cat fmt.log | tail -n 20
+# Check manual search first (Trust file system over kpsewhich for now)
+if [ -d "$TEXLIVE_BASE" ]; then
+    # Sort to ensure we check all likely years
+    for YEAR_DIR in $(ls "$TEXLIVE_BASE" 2>/dev/null | grep -E "^20[0-9]{2}" | sort -r); do
+        CANDIDATE="$TEXLIVE_BASE/$YEAR_DIR"
+        if is_valid_root "$CANDIDATE"; then
+            echo "   ✅ Found valid root on disk: $CANDIDATE"
+            REAL_ROOT="$CANDIDATE"
+            break
+        elif [ -d "$CANDIDATE" ]; then
+             echo "   ⚠️  Skipping broken/empty dir: $CANDIDATE"
+        fi
+    done
 fi
 
-# 5. Final Verify
-echo "🔍 Final Verification:"
-pdflatex --version | head -n 1
-kpsewhich pdflatex.fmt
+# Fallback/Check against kpsewhich
+if command -v kpsewhich &> /dev/null; then
+    KPSE_ROOT=$(kpsewhich -var-value=TEXMFROOT)
+    echo "   ℹ️  kpsewhich reports: $KPSE_ROOT"
+    
+    # If we haven't found a root yet, try kpsewhich's suggestion
+    if [ -z "$REAL_ROOT" ]; then
+        if is_valid_root "$KPSE_ROOT"; then
+            REAL_ROOT="$KPSE_ROOT"
+        else
+            echo "   ⚠️  kpsewhich path seems invalid/empty."
+        fi
+    fi
+fi
+
+if [ -z "$REAL_ROOT" ]; then
+    echo "❌ CRITICAL: Could not find any valid TeX Live root in $TEXLIVE_BASE"
+    echo "   Listing base dir content:"
+    ls -l "$TEXLIVE_BASE"
+    exit 1
+fi
+
+# 2. EXPORT PATHS
+export TEXMFROOT="$REAL_ROOT"
+export TEXMFDIST="$REAL_ROOT/texmf-dist"
+export TEXMFLOCAL="$REAL_ROOT/texmf-local"
+export TEXMFSYSVAR="$REAL_ROOT/texmf-var"
+export TEXMFSYSCONFIG="$REAL_ROOT/texmf-config"
+
+echo "   Exported TEXMFROOT=$TEXMFROOT"
+
+# 3. SETUP PERL5LIB
+echo "🔍 configuring perl libraries..."
+MKTEXLSR_PATH=$(find "$TEXMFROOT" "$TEXMFDIST" -name "mktexlsr.pl" 2>/dev/null | head -n 1)
+
+if [ -z "$MKTEXLSR_PATH" ]; then 
+    echo "   ⚠️  mktexlsr.pl not found in root. Searching global..."
+    MKTEXLSR_PATH=$(find /data/data/com.termux/files/usr -name "mktexlsr.pl" 2>/dev/null | head -n 1)
+fi
+
+if [ -n "$MKTEXLSR_PATH" ]; then
+    MKTEXLSR_DIR=$(dirname "$MKTEXLSR_PATH")
+    # Include both tlpkg and the script dir
+    export PERL5LIB="$TEXMFROOT/tlpkg:$MKTEXLSR_DIR"
+    echo "   ✅ Found $MKTEXLSR_PATH"
+    echo "   ✅ PERL5LIB=$PERL5LIB"
+else
+    echo "❌ FATAL: Could not find mktexlsr.pl anywhere."
+fi
+
+# 4. FIX FORMATS
+echo "⚙️  Rebuilding formats..."
+# We explicitly pass the environment variables to fmtutil
+fmtutil-sys --all --cnffile "$TEXMFDIST/web2c/fmtutil.cnf" > fmt.log 2>&1
+
+if [ $? -eq 0 ]; then
+    echo "🎉 SUCCESS: Formats rebuilt!"
+    kpsewhich pdflatex.fmt
+else
+    echo "❌ FAILURE: fmtutil-sys failed."
+    echo "--- LAST 20 LINES OF LOG ---"
+    tail -n 20 fmt.log
+    echo "----------------------------"
+    
+    # Emergency fallback
+    echo "⚠️ Trying fallback manual format generation..."
+    pdflatex -ini -jobname=pdflatex -progname=pdflatex -etex pdflatex.ini > fallback.log 2>&1
+    if [ $? -eq 0 ]; then
+         echo "   ✅ Manual partial generation worked? (Unlikely to be fully functional but trying)"
+    fi
+fi
