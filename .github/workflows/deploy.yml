@@ -1,4 +1,4 @@
-name: Deploy to Termux Server
+name: Deploy to Termux Server (Pull Mode)
 
 on:
   push:
@@ -6,48 +6,9 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: Install client dependencies
-        working-directory: ./client
-        run: npm install
-
-      - name: Build client
-        working-directory: ./client
-        run: npm run build
-
-      - name: Create deployment package
-        run: |
-          mkdir -p deploy
-          cp -r client/dist deploy/client-dist
-          cp -r server deploy/server
-          tar -czvf latex-online.tar.gz deploy
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: latex-online-package
-          path: latex-online.tar.gz
-
   deploy:
-    needs: build
     runs-on: ubuntu-latest
     steps:
-      - name: Download artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: latex-online-package
-
-      # Connect to Tailscale network
       - name: Setup Tailscale
         uses: tailscale/github-action@v2
         with:
@@ -55,104 +16,75 @@ jobs:
           oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
           tags: tag:ci
 
-      - name: Stop old server
+      - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.0.0
         with:
           host: ${{ secrets.TERMUX_HOST }}
           port: ${{ secrets.TERMUX_PORT }}
           username: ${{ secrets.TERMUX_USER }}
           key: ${{ secrets.TERMUX_SSH_KEY }}
-          script_stop: false
+          script_stop: true
           script: |
-            echo "Stopping old server on port 3000..."
-            fuser -k 3000/tcp 2>/dev/null || echo "No process on port 3000"
-            sleep 2
-            echo "Preparing directory..."
-            mkdir -p /data/data/com.termux/files/home/latex-online
-            cd /data/data/com.termux/files/home/latex-online
-            rm -rf client server deploy *.tar.gz 2>/dev/null || true
-            echo "Ready for deployment"
+            echo "🚀 Starting Pull-Based Deployment..."
+            
+            # Configuration
+            REPO_URL="https://github.com/giahuytran4205/Latex-Online.git"
+            PROJECT_DIR="/data/data/com.termux/files/home/latex-online"
+            
+            # Ensure proper environment
+            export PATH=$PATH:/data/data/com.termux/files/usr/bin
+            
+            # Ensure git is installed
+            if ! command -v git &> /dev/null; then
+                echo "Installing git..."
+                pkg install -y git
+            fi
 
-      - name: Copy files to server
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.TERMUX_HOST }}
-          port: ${{ secrets.TERMUX_PORT }}
-          username: ${{ secrets.TERMUX_USER }}
-          key: ${{ secrets.TERMUX_SSH_KEY }}
-          source: "latex-online.tar.gz"
-          target: "/data/data/com.termux/files/home/latex-online"
-          debug: true
-
-      - name: Extract and Start Server
-        uses: appleboy/ssh-action@v1.0.0
-        with:
-          host: ${{ secrets.TERMUX_HOST }}
-          port: ${{ secrets.TERMUX_PORT }}
-          username: ${{ secrets.TERMUX_USER }}
-          key: ${{ secrets.TERMUX_SSH_KEY }}
-          script_stop: false
-          script: |
-            echo "Deploying to clean directory..."
-            # Create a fresh directory for the new version
-            TERMUX_HOME="/data/data/com.termux/files/home"
-            DEPLOY_DIR="$TERMUX_HOME/latex-online"
-            
-            # Ensure deploy dir exists
-            mkdir -p "$DEPLOY_DIR"
-            cd "$DEPLOY_DIR"
-            
-            echo "Extracting archive..."
-            
-            # Backup node_modules to speed up deploy
-            if [ -d "server/node_modules" ]; then
-                echo "Backing up node_modules..."
-                mv server/node_modules ./node_modules_backup
+            # 1. Update Codebase
+            if [ -d "$PROJECT_DIR/.git" ]; then
+                echo "📥 Pulling latest changes..."
+                cd "$PROJECT_DIR"
+                git reset --hard
+                git pull
+            else
+                echo "✨ Cloning repository..."
+                rm -rf "$PROJECT_DIR"
+                git clone "$REPO_URL" "$PROJECT_DIR"
+                cd "$PROJECT_DIR"
             fi
             
-            # Clean old files
-            rm -rf client server deploy *.tar.gz 2>/dev/null || true
-
-            tar -xzvf latex-online.tar.gz
-            
-            # Move files to correct structure
-            if [ -d "deploy" ]; then
-                mkdir -p client
-                mv deploy/client-dist client/dist
-                mv deploy/server ./server
-                rm -rf deploy
+            # 2. Build Client
+            echo "📦 Building Client..."
+            cd client
+            # Only install if package.json changed or node_modules missing (optimization)
+            if [ ! -d "node_modules" ] || [ $(git diff --name-only HEAD@{1} HEAD | grep "client/package.json") ]; then
+                npm install
+            else
+                echo "Skipping npm install for client (no changes detected)"
             fi
+            npm run build
             
-            # Restore node_modules
-            if [ -d "node_modules_backup" ]; then
-                echo "Restoring node_modules..."
-                mkdir -p server/node_modules
-                mv node_modules_backup/* server/node_modules/
-                rm -rf node_modules_backup
-            fi
+            # 3. Setup Server
+            echo "🔧 Setting up Server..."
+            cd ../server
+            npm install --production
             
-            # Check structure
-            echo "Structure check:"
-            ls -R | head -n 20
-            
-            echo "Installing dependencies..."
-            cd server
-            npm install --production --no-audit --no-fund
-            
-            echo "Restarting server..."
-            # Stop old server
-            fuser -k 3000/tcp 2>/dev/null || true
+            # 4. Restart Server
+            echo "🔄 Restarting Server..."
+            # Stop existing process safely
+            pkill -f "node index.js" || true
             sleep 2
             
-            # Start new server. IMPORTANT: CD into directory first to set valid CWD
-            # Using bash -c to spawn independent process
+            # Start new process
             nohup node index.js > ../server.log 2>&1 &
-            SERVER_PID=$!
-            disown $SERVER_PID
-            echo "Server launched with PID $SERVER_PID"
             
+            # Verification
             sleep 5
-            # Basic health check
-            curl -s http://localhost:3000/api/health || echo "Server starting..."
-            curl -s http://localhost:3000/api/health && echo " - OK!" || echo "Starting..."
-            echo "Deployment complete!"
+            PID=$(pgrep -f "node index.js")
+            if [ -n "$PID" ]; then
+                echo "✅ Server started with PID $PID"
+            else
+                echo "❌ Server failed to start. checking logs:"
+                tail -n 20 ../server.log
+                exit 1
+            fi
