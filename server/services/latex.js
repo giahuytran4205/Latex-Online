@@ -13,23 +13,17 @@ const __dirname = dirname(__filename)
 const TEMP_DIR = join(__dirname, '../temp')
 const PROJECTS_DIR = join(__dirname, '../../projects')
 
-// Termux pdflatex path
-const TERMUX_BIN = '/data/data/com.termux/files/usr/bin'
-
-// Ensure temp directory exists
-if (!existsSync(TEMP_DIR)) {
-    mkdirSync(TEMP_DIR, { recursive: true })
-}
-
 /**
- * Get the full path to a LaTeX engine
+ * Get the command for a LaTeX engine
+ * We rely on the system PATH to find the executable
  */
-function getEnginePath(engine) {
-    const termuxPath = join(TERMUX_BIN, engine)
-    if (existsSync(termuxPath)) {
-        return termuxPath
+function getEngineCommand(engine) {
+    // Whitelist allowed engines for security
+    const allowed = ['pdflatex', 'xelatex', 'lualatex']
+    if (allowed.includes(engine)) {
+        return engine
     }
-    return engine
+    return 'pdflatex'
 }
 
 /**
@@ -67,12 +61,12 @@ export async function compileLatex(projectId = 'default-project', engine = 'pdfl
             writeFileSync(join(workDir, `${filename}.tex`), '', 'utf-8')
         }
 
-        const enginePath = getEnginePath(engine)
-        console.log(`[LaTeX] Compiling project ${projectId} with ${enginePath}`)
+        const engineCmd = getEngineCommand(engine)
+        console.log(`[LaTeX] Compiling project ${projectId} with ${engineCmd}`)
 
         // Run LaTeX engine
         const texFile = join(workDir, `${filename}.tex`)
-        const result = await runLatexEngine(enginePath, texFile, workDir)
+        const result = await runLatexEngine(engineCmd, texFile, workDir)
 
         // Check PDF
         const generatedPdf = join(workDir, `${filename}.pdf`)
@@ -120,10 +114,7 @@ function runLatexEngine(enginePath, texFile, workDir) {
         const proc = spawn(enginePath, args, {
             cwd: workDir,
             timeout: 120000,
-            env: {
-                ...process.env,
-                PATH: `${TERMUX_BIN}:${process.env.PATH || ''}`
-            }
+            env: process.env // Use current process environment directly
         })
 
         let stdout = ''
