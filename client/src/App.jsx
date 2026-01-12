@@ -55,6 +55,8 @@ function App() {
     // Load file content when active file changes
     useEffect(() => {
         if (!activeFileName) return
+        // Don't try to load folder content
+        if (activeFileName.endsWith('/')) return
 
         const fetchContent = async () => {
             try {
@@ -62,6 +64,8 @@ function App() {
                 setCode(data.content)
             } catch (err) {
                 console.error('Failed to load file content:', err)
+                // If file doesn't exist yet (new file), set empty content
+                setCode('')
             }
         }
         fetchContent()
@@ -283,6 +287,7 @@ function App() {
                         code={code}
                         onChange={setCode}
                         onCollaboratorsChange={setCollaborators}
+                        activeFile={activeFileName}
                     />
 
                     <div className="resize-handle resize-handle--editor" onMouseDown={handleMouseDown('editor')} />

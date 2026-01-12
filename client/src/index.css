@@ -682,11 +682,18 @@ body {
   flex-direction: column;
   height: 0;
   overflow: hidden;
-  transition: height 0.2s ease;
 }
 
 .console-wrapper--open {
   height: var(--console-height, 200px);
+}
+
+/* Disable all transitions during resize for smooth performance */
+.app.resizing .console-wrapper,
+.app.resizing .main-content,
+.app.resizing .editor-panel,
+.app.resizing .preview-panel {
+  transition: none !important;
 }
 
 .console {
