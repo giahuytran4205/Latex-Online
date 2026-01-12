@@ -86,8 +86,11 @@ nginx -s reload 2>/dev/null || nginx &
 
 echo "🚀 Restarting Backend via PM2..."
 
-# SAFETY: Clear port 3000 if it's not held by SSH
-PORT=3000
+# 💣 Aggressive cleanup
+pm2 kill || true
+
+# SAFETY: Clear port 3005 if it's not held by SSH
+PORT=3005
 PIDS=$(lsof -t -i:$PORT 2>/dev/null || echo "")
 if [ -n "$PIDS" ]; then
     for PID in $PIDS; do
@@ -101,7 +104,7 @@ if [ -n "$PIDS" ]; then
     done
 fi
 
-# Clean PM2 state
+# Clean PM2 state (redundant but safe after kill)
 pm2 delete latex-api 2>/dev/null || true
 
 # Start with dynamically found TeX paths

@@ -4,7 +4,7 @@ module.exports = {
         script: "./server/index.js",
         env: {
             NODE_ENV: "production",
-            PORT: 3000,
+            PORT: 3005,
             // Paths will be injected by the deploy script or found at runtime
         },
         autorestart: true,
