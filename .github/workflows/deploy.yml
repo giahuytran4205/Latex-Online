@@ -35,7 +35,7 @@ jobs:
             PROJECT_DIR="/data/data/com.termux/files/home/latex-online"
             
             # Ensure proper environment
-            export PATH="$PATH:/data/data/com.termux/files/usr/bin:/data/data/com.termux/files/usr/bin/texlive"
+            export PATH="$PATH:/data/data/com.termux/files/usr/bin/texlive"
             
             # Ensure git is installed
             if ! command -v git &> /dev/null; then
