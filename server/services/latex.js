@@ -1,6 +1,6 @@
 import { spawn } from 'child_process'
-import { writeFileSync, mkdirSync, existsSync, readFileSync, unlinkSync } from 'fs'
-import { join, dirname, basename } from 'path'
+import { writeFileSync, mkdirSync, existsSync, readFileSync } from 'fs'
+import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
 import { v4 as uuidv4 } from 'uuid'
 
@@ -9,17 +9,29 @@ const __dirname = dirname(__filename)
 
 const TEMP_DIR = join(__dirname, '../temp')
 
+// Termux pdflatex path
+const TERMUX_BIN = '/data/data/com.termux/files/usr/bin'
+
 // Ensure temp directory exists
 if (!existsSync(TEMP_DIR)) {
     mkdirSync(TEMP_DIR, { recursive: true })
 }
 
 /**
+ * Get the full path to a LaTeX engine
+ */
+function getEnginePath(engine) {
+    // Try Termux path first
+    const termuxPath = join(TERMUX_BIN, engine)
+    if (existsSync(termuxPath)) {
+        return termuxPath
+    }
+    // Fall back to just the engine name (rely on PATH)
+    return engine
+}
+
+/**
  * Compile LaTeX code using specified engine
- * @param {string} code - LaTeX source code
- * @param {string} engine - 'pdflatex' | 'xelatex' | 'lualatex'
- * @param {string} filename - Output filename (without extension)
- * @returns {Promise<{success: boolean, pdfPath: string|null, logs: string, errors: string[]}>}
  */
 export async function compileLatex(code, engine = 'pdflatex', filename = 'main') {
     const jobId = uuidv4().substring(0, 8)
@@ -34,16 +46,24 @@ export async function compileLatex(code, engine = 'pdflatex', filename = 'main')
 
         // Write LaTeX source
         writeFileSync(texFile, code, 'utf-8')
+        console.log(`[LaTeX] Wrote ${code.length} bytes to ${texFile}`)
+
+        // Get engine path
+        const enginePath = getEnginePath(engine)
+        console.log(`[LaTeX] Using engine: ${enginePath}`)
 
         // Run LaTeX engine
-        const result = await runLatexEngine(engine, texFile, workDir)
+        const result = await runLatexEngine(enginePath, texFile, workDir)
 
         // Check if PDF was generated
         const generatedPdf = join(workDir, `${filename}.pdf`)
+        console.log(`[LaTeX] Checking for PDF at: ${generatedPdf}`)
+
         if (existsSync(generatedPdf)) {
             // Copy to temp root for serving
             const pdfContent = readFileSync(generatedPdf)
             writeFileSync(pdfPath, pdfContent)
+            console.log(`[LaTeX] PDF generated: ${pdfFile} (${pdfContent.length} bytes)`)
 
             return {
                 success: true,
@@ -52,6 +72,7 @@ export async function compileLatex(code, engine = 'pdflatex', filename = 'main')
                 errors: parseErrors(result.stdout + result.stderr),
             }
         } else {
+            console.log(`[LaTeX] No PDF generated. Exit code: ${result.code}`)
             return {
                 success: false,
                 pdfPath: null,
@@ -60,24 +81,21 @@ export async function compileLatex(code, engine = 'pdflatex', filename = 'main')
             }
         }
     } catch (error) {
+        console.error(`[LaTeX] Error:`, error)
         return {
             success: false,
             pdfPath: null,
             logs: error.message,
             errors: [error.message],
         }
-    } finally {
-        // Cleanup work directory (optional - keep for debugging)
-        // cleanupDir(workDir)
     }
 }
 
 /**
  * Run LaTeX engine as child process
  */
-function runLatexEngine(engine, texFile, workDir) {
+function runLatexEngine(enginePath, texFile, workDir) {
     return new Promise((resolve, reject) => {
-        // Engine-specific arguments
         const args = [
             '-interaction=nonstopmode',
             '-halt-on-error',
@@ -86,23 +104,15 @@ function runLatexEngine(engine, texFile, workDir) {
             texFile,
         ]
 
-        // For xelatex/lualatex, might need additional args
-        if (engine === 'xelatex' || engine === 'lualatex') {
-            args.unshift('-shell-escape')
-        }
+        console.log(`[LaTeX] Spawning: ${enginePath} ${args.join(' ')}`)
 
-        console.log(`[LaTeX] Running: ${engine} ${args.join(' ')}`)
-
-        // Include common PATH locations for Termux and Linux
-        const env = {
-            ...process.env,
-            PATH: `${process.env.PATH}:/data/data/com.termux/files/usr/bin:/usr/bin:/usr/local/bin:/usr/texbin`
-        }
-
-        const proc = spawn(engine, args, {
+        const proc = spawn(enginePath, args, {
             cwd: workDir,
-            env: env,
-            timeout: 120000, // 120 second timeout
+            timeout: 120000,
+            env: {
+                ...process.env,
+                PATH: `${TERMUX_BIN}:${process.env.PATH || ''}`
+            }
         })
 
         let stdout = ''
@@ -117,13 +127,12 @@ function runLatexEngine(engine, texFile, workDir) {
         })
 
         proc.on('close', (code) => {
-            console.log(`[LaTeX] Process exited with code ${code}`)
-            console.log(`[LaTeX] stdout length: ${stdout.length}, stderr length: ${stderr.length}`)
+            console.log(`[LaTeX] Exit code: ${code}, stdout: ${stdout.length} bytes`)
             resolve({ code, stdout, stderr })
         })
 
         proc.on('error', (err) => {
-            console.error(`[LaTeX] Spawn error:`, err)
+            console.error(`[LaTeX] Spawn error:`, err.message)
             reject(err)
         })
     })
@@ -137,11 +146,9 @@ function parseErrors(log) {
     const lines = log.split('\n')
 
     for (const line of lines) {
-        // Match LaTeX error patterns
         if (line.startsWith('!') || line.includes('Error:') || line.includes('Fatal error')) {
             errors.push(line.trim())
         }
-        // Match file:line:error pattern
         const match = line.match(/^(.+):(\d+): (.+)$/)
         if (match) {
             errors.push(`Line ${match[2]}: ${match[3]}`)
@@ -149,16 +156,4 @@ function parseErrors(log) {
     }
 
     return errors
-}
-
-/**
- * Cleanup directory
- */
-function cleanupDir(dir) {
-    try {
-        const fs = require('fs')
-        fs.rmSync(dir, { recursive: true, force: true })
-    } catch (e) {
-        console.error('Cleanup failed:', e)
-    }
 }
