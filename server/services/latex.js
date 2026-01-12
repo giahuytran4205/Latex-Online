@@ -39,7 +39,8 @@ export async function compileLatex(projectId = 'default-project', engine = 'pdfl
     const projectDir = join(PROJECTS_DIR, projectId)
 
     // Output paths
-    const pdfFile = `${jobId}-${filename}.pdf`
+    // Use simple filename to avoid url encoding issues
+    const pdfFile = `${jobId}.pdf`
     const pdfPath = join(TEMP_DIR, pdfFile)
 
     try {
@@ -75,6 +76,7 @@ export async function compileLatex(projectId = 'default-project', engine = 'pdfl
         if (existsSync(generatedPdf)) {
             const pdfContent = readFileSync(generatedPdf)
             writeFileSync(pdfPath, pdfContent)
+            console.log(`[LaTeX] Successfully copied to ${pdfPath}`)
             return {
                 success: true,
                 pdfPath: pdfFile,

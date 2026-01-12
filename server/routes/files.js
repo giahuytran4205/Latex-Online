@@ -27,12 +27,18 @@ router.get('/temp/:filename', (req, res) => {
         const { filename } = req.params
         const filePath = join(TEMP_DIR, filename)
 
+        console.log(`[Files] Request for temp file: ${filename}`)
+
         if (!existsSync(filePath)) {
+            console.error(`[Files] File not found: ${filePath}`)
             return res.status(404).json({ error: 'File not found' })
         }
 
+        console.log(`[Files] Serving: ${filePath}`)
+        res.setHeader('Content-Type', 'application/pdf')
         res.sendFile(filePath)
     } catch (err) {
+        console.error(`[Files] Error serving file: ${err.message}`)
         res.status(500).json({ error: err.message })
     }
 })
