@@ -26,8 +26,14 @@ export PERL5LIB="$TEXMFROOT/tlpkg:$TEXMFDIST/scripts/texlive"
 # 2. INSTALL SYSTEM DEPENDENCIES
 echo "📦 Updating system packages..."
 pkg update -y || true
-echo "📦 Installing nginx, nodejs, pm2, lsof..."
-pkg install -y nginx nodejs pm2 lsof
+echo "📦 Installing nginx, nodejs, lsof..."
+pkg install -y nginx nodejs lsof
+
+# PM2 is installed via npm, not pkg
+if ! command -v pm2 &> /dev/null; then
+    echo "📦 Installing PM2 globally..."
+    npm install -g pm2
+fi
 
 # 3. BUILD APPLICATION
 cd "$PROJECT_DIR"
