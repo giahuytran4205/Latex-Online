@@ -188,6 +188,10 @@ function runLatexEngine(enginePath, texFile, workDir) {
                 TEXMFROOT: '/data/data/com.termux/files/usr/share/texlive/2025.0',
                 TEXMFDIST: '/data/data/com.termux/files/usr/share/texlive/2025.0/texmf-dist',
                 TEXMFLOCAL: '/data/data/com.termux/files/usr/share/texlive/texmf-local',
+                TEXMFSYSVAR: '/data/data/com.termux/files/usr/share/texlive/2025.0/texmf-var',
+                TEXMFSYSCONFIG: '/data/data/com.termux/files/usr/share/texlive/2025.0/texmf-config',
+                // Critical for Perl scripts used by TeX Live
+                PERL5LIB: '/data/data/com.termux/files/usr/share/texlive/2025.0/tlpkg:/data/data/com.termux/files/usr/share/texlive/2025.0/texmf-dist/scripts/texlive',
             }
         })
 
