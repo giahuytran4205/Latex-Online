@@ -213,35 +213,72 @@ function FileTree({ files, activeFile, onFileSelect, onAddFile, onDeleteFile, on
         fileInputRef.current?.click()
     }
 
+    const handleUploadFolderClick = () => {
+        folderInputRef.current?.click()
+    }
+
     const handleFileUpload = async (e) => {
         const uploadedFiles = e.target.files
         if (!uploadedFiles || uploadedFiles.length === 0) return
 
+        const totalFiles = uploadedFiles.length
+        let uploaded = 0
+        let failed = 0
+
         for (const file of uploadedFiles) {
             try {
+                // Use webkitRelativePath if available (folder upload), otherwise just filename
+                const relativePath = file.webkitRelativePath || file.name
+                // Remove leading folder name for folder uploads (e.g., "myfolder/file.tex" -> "file.tex" or keep structure)
+                const uploadPath = relativePath.includes('/')
+                    ? relativePath.split('/').slice(1).join('/') || file.name
+                    : file.name
+
                 const content = await readFileContent(file)
                 if (onUploadFile) {
-                    await onUploadFile(file.name, content)
+                    await onUploadFile(uploadPath, content)
                 }
+                uploaded++
             } catch (err) {
                 console.error('Failed to upload file:', err)
-                alert(`Failed to upload ${file.name}`)
+                failed++
             }
         }
+
+        if (failed > 0) {
+            alert(`Upload complete: ${uploaded} successful, ${failed} failed`)
+        }
+
         e.target.value = ''
     }
+
+    const folderInputRef = useRef(null)
 
     const readFileContent = (file) => {
         return new Promise((resolve, reject) => {
             const reader = new FileReader()
             reader.onload = () => resolve(reader.result)
             reader.onerror = reject
-            const textExtensions = ['tex', 'bib', 'txt', 'sty', 'cls', 'md', 'json', 'xml', 'html', 'css', 'js']
+
+            // Text file extensions
+            const textExtensions = ['tex', 'bib', 'txt', 'sty', 'cls', 'md', 'json', 'xml', 'html', 'css', 'js', 'bbl', 'aux', 'log', 'out', 'toc', 'lof', 'lot']
             const ext = file.name.split('.').pop().toLowerCase()
+
             if (textExtensions.includes(ext)) {
                 reader.readAsText(file)
             } else {
-                reader.readAsDataURL(file)
+                // For binary files (images, PDFs), use ArrayBuffer and convert to base64
+                reader.readAsArrayBuffer(file)
+                reader.onload = () => {
+                    const buffer = reader.result
+                    const bytes = new Uint8Array(buffer)
+                    let binary = ''
+                    for (let i = 0; i < bytes.byteLength; i++) {
+                        binary += String.fromCharCode(bytes[i])
+                    }
+                    const base64 = 'data:' + file.type + ';base64,' + btoa(binary)
+                    resolve(base64)
+                }
             }
         })
     }
@@ -350,6 +387,17 @@ function FileTree({ files, activeFile, onFileSelect, onAddFile, onDeleteFile, on
                     </button>
                     <button
                         className="btn btn--icon btn--tiny"
+                        title="Upload folder"
+                        onClick={handleUploadFolderClick}
+                    >
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+                            <polyline points="12,10 12,16" />
+                            <polyline points="9,13 12,10 15,13" />
+                        </svg>
+                    </button>
+                    <button
+                        className="btn btn--icon btn--tiny"
                         title="New folder"
                         onClick={() => handleNewFolder('')}
                     >
@@ -372,11 +420,21 @@ function FileTree({ files, activeFile, onFileSelect, onAddFile, onDeleteFile, on
                         </svg>
                     </button>
                 </div>
+                {/* Hidden file inputs */}
                 <input
                     ref={fileInputRef}
                     type="file"
                     multiple
-                    accept=".tex,.bib,.sty,.cls,.txt,.png,.jpg,.jpeg,.pdf,.eps,.svg"
+                    accept="*"
+                    style={{ display: 'none' }}
+                    onChange={handleFileUpload}
+                />
+                <input
+                    ref={folderInputRef}
+                    type="file"
+                    webkitdirectory=""
+                    directory=""
+                    multiple
                     style={{ display: 'none' }}
                     onChange={handleFileUpload}
                 />

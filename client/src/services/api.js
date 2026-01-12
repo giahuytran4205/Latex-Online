@@ -41,11 +41,11 @@ export async function saveFile(projectId = DEFAULT_PROJECT, filename, content) {
     return response.json()
 }
 
-export async function createFile(projectId = DEFAULT_PROJECT, filename, content = '') {
+export async function createFile(projectId = DEFAULT_PROJECT, filename, content = '', overwrite = false) {
     const response = await fetch(`${API_BASE}/files/${projectId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ filename, content }),
+        body: JSON.stringify({ filename, content, overwrite }),
     })
     if (!response.ok) throw new Error('Failed to create file')
     return response.json()

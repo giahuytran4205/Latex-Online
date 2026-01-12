@@ -164,7 +164,16 @@ router.put('/:projectId/:filename', (req, res) => {
             mkdirSync(parentDir, { recursive: true })
         }
 
-        writeFileSync(filePath, content)
+        // Check if content is base64 encoded binary (starts with data:)
+        if (typeof content === 'string' && content.startsWith('data:')) {
+            // Extract base64 data after the comma
+            const base64Data = content.split(',')[1]
+            const buffer = Buffer.from(base64Data, 'base64')
+            writeFileSync(filePath, buffer)
+        } else {
+            // Regular text file
+            writeFileSync(filePath, content || '')
+        }
 
         res.json({ success: true, filename: decodedFilename })
     } catch (err) {
@@ -176,7 +185,7 @@ router.put('/:projectId/:filename', (req, res) => {
 router.post('/:projectId', (req, res) => {
     try {
         const { projectId } = req.params
-        const { filename, content = '' } = req.body
+        const { filename, content = '', overwrite = false } = req.body
 
         if (!filename) return res.status(400).json({ error: 'Filename required' })
 
@@ -186,7 +195,7 @@ router.post('/:projectId', (req, res) => {
         // Check if it's a folder (ends with /)
         const isFolder = filename.endsWith('/')
 
-        if (existsSync(filePath)) {
+        if (existsSync(filePath) && !overwrite) {
             return res.status(400).json({ error: isFolder ? 'Folder already exists' : 'File already exists' })
         }
 
@@ -199,8 +208,15 @@ router.post('/:projectId', (req, res) => {
             if (!existsSync(parentDir)) {
                 mkdirSync(parentDir, { recursive: true })
             }
-            // Create file
-            writeFileSync(filePath, content)
+
+            // Check if content is base64 encoded binary
+            if (typeof content === 'string' && content.startsWith('data:')) {
+                const base64Data = content.split(',')[1]
+                const buffer = Buffer.from(base64Data, 'base64')
+                writeFileSync(filePath, buffer)
+            } else {
+                writeFileSync(filePath, content || '')
+            }
         }
 
         res.json({ success: true, filename })

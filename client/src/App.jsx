@@ -198,20 +198,17 @@ function App() {
 
     const handleUploadFile = async (filename, content) => {
         try {
-            // First try to create the file
-            await createFile('default-project', filename, content)
+            // Create file with overwrite option for upload scenarios
+            await createFile('default-project', filename, content, true)
             await loadFiles()
+            // Clear cache for this file in case it was cached
+            if (fileCacheRef.current.has(filename)) {
+                fileCacheRef.current.delete(filename)
+            }
             return true
         } catch (err) {
-            // If file exists, try to save/overwrite
-            try {
-                await saveFile('default-project', filename, content)
-                await loadFiles()
-                return true
-            } catch (saveErr) {
-                alert('Failed to upload file: ' + saveErr.message)
-                return false
-            }
+            console.error('Failed to upload file:', err)
+            return false
         }
     }
 
