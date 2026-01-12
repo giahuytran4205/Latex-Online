@@ -94,12 +94,17 @@ jobs:
             # 4. Restart Server
             echo "🔄 Restarting Server..."
             # Stop existing process safely
-            # Using specific PID check to avoid killing the wrong process (or self if misidentified)
-            EXISTING_PID=$(pgrep -f "node index.js" || echo "")
-            if [ -n "$EXISTING_PID" ]; then
-                echo "Stopping existing server (PID $EXISTING_PID)..."
-                kill $EXISTING_PID || true
-                # Wait for it to die
+            # Be ultra-specific: finding node process with index.js, but excluding our own deployment script if checking full path
+            # We explicitly ignore the grep/pgrep process itself
+            PIDS=$(pgrep -f "node index.js" | grep -v $$ || echo "")
+            
+            if [ -n "$PIDS" ]; then
+                # Replace newlines with spaces for kill command
+                PIDS_ONELINE=$(echo "$PIDS" | tr '\n' ' ')
+                echo "Stopping PIDs: $PIDS_ONELINE"
+                for PID in $PIDS; do
+                    kill $PID 2>/dev/null || true
+                done
                 sleep 2
             fi
             
