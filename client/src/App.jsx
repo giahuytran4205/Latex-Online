@@ -170,7 +170,7 @@ function App() {
 
     const handleDeleteFile = async (filename) => {
         if (filename === 'main.tex') return false
-        if (!confirm(`Delete ${filename}?`)) return false
+
 
         try {
             await deleteFile('default-project', filename)
