@@ -40,13 +40,35 @@ fi
 pm2 delete latex-online-server 2>/dev/null || true
 
 echo "🧹 [Runner] Ensuring port 3000 is free..."
-if command -v fuser &> /dev/null; then
-    fuser -k 3000/tcp 2>/dev/null || true
+
+# Find process holding port 3000
+# We use lsof to get PID and Command name to avoid killing sshd (if user is using reverse forward)
+if command -v lsof &> /dev/null; then
+    # Output format: PID COMMAND
+    lsof -i:3000 -F pc | while read -r line; do
+        # Simple parser for lsof -F output
+        if [[ $line =~ ^p([0-9]+) ]]; then
+            PID=${BASH_REMATCH[1]}
+        elif [[ $line =~ ^c(.+) ]]; then
+            CMD=${BASH_REMATCH[1]}
+            
+            # Logic: If we have both PID and CMD
+            if [ -n "$PID" ] && [ -n "$CMD" ]; then
+                if [[ "$CMD" == *"sshd"* ]]; then
+                    echo "⚠️ [Runner] Port 3000 is held by sshd (likely your connection). SKIPPING kill."
+                else
+                    echo "🔪 [Runner] Killing $CMD (PID $PID) on port 3000..."
+                    kill -9 $PID 2>/dev/null || true
+                fi
+                # Reset for next entry
+                PID=""
+                CMD=""
+            fi
+        fi
+    done
 else
-    PIDS_PORT=$(lsof -t -i:3000 2>/dev/null || echo "")
-    if [ -n "$PIDS_PORT" ]; then
-         kill -9 $PIDS_PORT 2>/dev/null || true
-    fi
+    # Fallback if lsof fails/missing (though strictly we prefer lsof now)
+    fuser -k 3000/tcp 2>/dev/null || true
 fi
 
 # Wait loop for port to be actually free
