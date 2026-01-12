@@ -4,7 +4,7 @@ import Preview from './components/Preview/Preview'
 import Toolbar from './components/Toolbar/Toolbar'
 import FileTree from './components/FileTree/FileTree'
 import Console from './components/Console/Console'
-import { compileLatex, getFiles, getFileContent, saveFile, createFile, deleteFile, renameFile } from './services/api'
+import { compileLatex, getFiles, getFileContent, saveFile, createFile, deleteFile, renameFile, duplicateFile } from './services/api'
 
 // Debounce helper
 const useDebounce = (value, delay) => {
@@ -215,6 +215,21 @@ function App() {
         }
     }
 
+    const handleDuplicateFile = async (filename) => {
+        try {
+            const result = await duplicateFile('default-project', filename)
+            await loadFiles()
+            // Select the new duplicated file
+            if (result.newFilename) {
+                setActiveFileName(result.newFilename)
+            }
+            return true
+        } catch (err) {
+            alert('Failed to duplicate file: ' + err.message)
+            return false
+        }
+    }
+
     const handleCompile = useCallback(async () => {
         setIsCompiling(true)
         setLogs('')
@@ -326,6 +341,7 @@ function App() {
                 onDeleteFile={handleDeleteFile}
                 onRenameFile={handleRenameFile}
                 onUploadFile={handleUploadFile}
+                onDuplicateFile={handleDuplicateFile}
             />
 
             <div className="resize-handle resize-handle--sidebar" onMouseDown={handleMouseDown('sidebar')} />

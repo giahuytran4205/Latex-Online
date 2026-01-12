@@ -68,3 +68,23 @@ export async function renameFile(projectId = DEFAULT_PROJECT, oldName, newName) 
     if (!response.ok) throw new Error('Failed to rename file')
     return response.json()
 }
+
+export async function duplicateFile(projectId = DEFAULT_PROJECT, filename) {
+    const response = await fetch(`${API_BASE}/files/${projectId}/duplicate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filename }),
+    })
+    if (!response.ok) throw new Error('Failed to duplicate file')
+    return response.json()
+}
+
+export async function moveFile(projectId = DEFAULT_PROJECT, oldPath, newPath) {
+    const response = await fetch(`${API_BASE}/files/${projectId}/move`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ oldPath, newPath }),
+    })
+    if (!response.ok) throw new Error('Failed to move file')
+    return response.json()
+}

@@ -250,6 +250,76 @@ router.post('/:projectId/rename', (req, res) => {
             return res.status(400).json({ error: 'Destination exists' })
         }
 
+        // Create parent directory if needed
+        const parentDir = dirname(newPath)
+        if (!existsSync(parentDir)) {
+            mkdirSync(parentDir, { recursive: true })
+        }
+
+        renameSync(oldPath, newPath)
+        res.json({ success: true })
+    } catch (err) {
+        res.status(500).json({ error: err.message })
+    }
+})
+
+// Duplicate file
+router.post('/:projectId/duplicate', (req, res) => {
+    try {
+        const { projectId } = req.params
+        const { filename } = req.body
+        const projectPath = getProjectPath(projectId)
+        const srcPath = join(projectPath, filename)
+
+        if (!existsSync(srcPath)) {
+            return res.status(404).json({ error: 'File not found' })
+        }
+
+        // Generate new name with -copy suffix
+        const ext = extname(filename)
+        const base = filename.slice(0, -ext.length || undefined)
+        let newName = `${base}-copy${ext}`
+        let counter = 1
+
+        while (existsSync(join(projectPath, newName))) {
+            counter++
+            newName = `${base}-copy${counter}${ext}`
+        }
+
+        const destPath = join(projectPath, newName)
+
+        // Copy file content
+        const content = readFileSync(srcPath)
+        writeFileSync(destPath, content)
+
+        res.json({ success: true, newFilename: newName })
+    } catch (err) {
+        res.status(500).json({ error: err.message })
+    }
+})
+
+// Move file (change path)
+router.post('/:projectId/move', (req, res) => {
+    try {
+        const { projectId } = req.params
+        const { oldPath: oldName, newPath: newName } = req.body
+        const projectPath = getProjectPath(projectId)
+        const oldPath = join(projectPath, oldName)
+        const newPath = join(projectPath, newName)
+
+        if (!existsSync(oldPath)) {
+            return res.status(404).json({ error: 'File not found' })
+        }
+        if (existsSync(newPath)) {
+            return res.status(400).json({ error: 'Destination exists' })
+        }
+
+        // Create parent directory if needed
+        const parentDir = dirname(newPath)
+        if (!existsSync(parentDir)) {
+            mkdirSync(parentDir, { recursive: true })
+        }
+
         renameSync(oldPath, newPath)
         res.json({ success: true })
     } catch (err) {

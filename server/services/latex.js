@@ -1,24 +1,29 @@
 import { spawn } from 'child_process'
-import { writeFileSync, mkdirSync, existsSync, readFileSync, cpSync, readdirSync } from 'fs'
-import fs from 'fs' // Default import for robust usage
-import { join, dirname } from 'path'
+import { writeFileSync, mkdirSync, existsSync, readFileSync, cpSync, readdirSync, statSync, unlinkSync, rmSync } from 'fs'
+import fs from 'fs'
+import { join, dirname, basename } from 'path'
 import { fileURLToPath } from 'url'
 import { v4 as uuidv4 } from 'uuid'
-// Node 18+ is assumed on Termux, so we use fs.cpSync
-// import { ncp } from 'ncp'
+import crypto from 'crypto'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
 
 const TEMP_DIR = join(__dirname, '../temp')
 const PROJECTS_DIR = join(__dirname, '../../projects')
+const CACHE_DIR = join(__dirname, '../cache')
+
+// Ensure directories exist
+mkdirSync(TEMP_DIR, { recursive: true })
+mkdirSync(CACHE_DIR, { recursive: true })
+
+// Cache for project hashes (incremental compilation)
+const projectHashCache = new Map()
 
 /**
  * Get the command for a LaTeX engine
- * We rely on the system PATH to find the executable
  */
 function getEngineCommand(engine) {
-    // Whitelist allowed engines for security
     const allowed = ['pdflatex', 'xelatex', 'lualatex']
     if (allowed.includes(engine)) {
         return engine
@@ -27,76 +32,145 @@ function getEngineCommand(engine) {
 }
 
 /**
- * Compile LaTeX code using specified engine
- * @param {string} projectId - Project ID to verify files from
- * @param {string} engine - 'pdflatex' | 'xelatex' | 'lualatex'
- * @param {string} filename - Main filename (without extension)
- * @param {string} code - Optional override code (legacy support)
+ * Calculate hash of project files for cache invalidation
+ */
+function calculateProjectHash(projectDir) {
+    if (!existsSync(projectDir)) return null
+
+    const files = []
+    const getFilesRecursive = (dir) => {
+        const items = readdirSync(dir)
+        for (const item of items) {
+            if (item.startsWith('.')) continue
+            const fullPath = join(dir, item)
+            const stat = statSync(fullPath)
+            if (stat.isDirectory()) {
+                getFilesRecursive(fullPath)
+            } else {
+                // Include file path, size and mtime in hash
+                files.push(`${fullPath}:${stat.size}:${stat.mtimeMs}`)
+            }
+        }
+    }
+    getFilesRecursive(projectDir)
+
+    // Create hash from all file metadata
+    return crypto.createHash('md5').update(files.sort().join('|')).digest('hex').substring(0, 12)
+}
+
+/**
+ * Get or create work directory for a project (enables incremental compilation)
+ */
+function getProjectWorkDir(projectId) {
+    return join(CACHE_DIR, projectId)
+}
+
+/**
+ * Cleanup old temp files (files older than 1 hour)
+ */
+export function cleanupOldTempFiles() {
+    const maxAge = 60 * 60 * 1000 // 1 hour
+    const now = Date.now()
+
+    try {
+        const items = readdirSync(TEMP_DIR)
+        let cleaned = 0
+
+        for (const item of items) {
+            const itemPath = join(TEMP_DIR, item)
+            try {
+                const stat = statSync(itemPath)
+                if (now - stat.mtimeMs > maxAge) {
+                    if (stat.isDirectory()) {
+                        rmSync(itemPath, { recursive: true, force: true })
+                    } else {
+                        unlinkSync(itemPath)
+                    }
+                    cleaned++
+                }
+            } catch (e) {
+                // Ignore errors on individual files
+            }
+        }
+
+        if (cleaned > 0) {
+            console.log(`[Cleanup] Removed ${cleaned} old temp items`)
+        }
+    } catch (e) {
+        console.error('[Cleanup] Error:', e.message)
+    }
+}
+
+/**
+ * Compile LaTeX code using specified engine with incremental support
  */
 export async function compileLatex(projectId = 'default-project', engine = 'pdflatex', filename = 'main', code = null) {
-    const jobId = uuidv4().substring(0, 8)
-    const workDir = join(TEMP_DIR, jobId)
     const projectDir = join(PROJECTS_DIR, projectId)
+    const workDir = getProjectWorkDir(projectId)
 
-    // Output paths
-    // Use simple filename to avoid url encoding issues
+    // Calculate current project hash
+    const currentHash = calculateProjectHash(projectDir)
+    const cachedHash = projectHashCache.get(projectId)
+    const needsSync = currentHash !== cachedHash
+
+    // Output paths  
+    const jobId = uuidv4().substring(0, 8)
     const pdfFile = `${jobId}.pdf`
     const pdfPath = join(TEMP_DIR, pdfFile)
 
     try {
-        // Create work directory
+        // Create/update work directory
         mkdirSync(workDir, { recursive: true })
 
-        // Copy project files to work directory
-        if (existsSync(projectDir)) {
-            // Use native recursive copy
-            cpSync(projectDir, workDir, { recursive: true })
+        // Sync project files only if changed (incremental)
+        if (needsSync && existsSync(projectDir)) {
+            console.log(`[LaTeX] Syncing project files (hash changed: ${cachedHash} -> ${currentHash})`)
+
+            // Sync files: copy new/modified, keep aux files
+            syncProjectFiles(projectDir, workDir)
+            projectHashCache.set(projectId, currentHash)
+        } else {
+            console.log(`[LaTeX] Using cached work directory (hash: ${currentHash})`)
         }
 
-        // If specific code provided (not saved yet), overwrite main.tex
+        // If specific code provided, overwrite main.tex
         if (code) {
             writeFileSync(join(workDir, `${filename}.tex`), code, 'utf-8')
         } else if (!existsSync(join(workDir, `${filename}.tex`))) {
-            // Create empty main if missing
             writeFileSync(join(workDir, `${filename}.tex`), '', 'utf-8')
         }
 
         const engineCmd = getEngineCommand(engine)
-        console.log(`[LaTeX] Compiling project ${projectId} with ${engineCmd}`)
-        console.log(`[LaTeX] WorkDir: ${workDir}`)
-        console.log(`[LaTeX] TexFile: ${filename}.tex`)
-
-        // Debug: log content of tex file
-        const texFilePath = join(workDir, `${filename}.tex`)
-        if (existsSync(texFilePath)) {
-            const texContent = readFileSync(texFilePath, 'utf-8')
-            console.log(`[LaTeX] Content of ${filename}.tex (first 500 chars):`)
-            console.log(texContent.substring(0, 500))
-        }
+        console.log(`[LaTeX] Compiling ${projectId}/${filename}.tex with ${engineCmd}`)
 
         // Run LaTeX engine
         const texFile = join(workDir, `${filename}.tex`)
         const result = await runLatexEngine(engineCmd, texFile, workDir)
 
-        // Check PDF
-        const generatedPdf = join(workDir, `${filename}.pdf`)
+        // Read log file
         const logFile = join(workDir, `${filename}.log`)
-
-        // Read log file if exists
         let logContent = result.stdout + '\n' + result.stderr
         if (existsSync(logFile)) {
             try {
-                const logData = readFileSync(logFile, 'utf-8')
-                logContent = logData
+                logContent = readFileSync(logFile, 'utf-8')
             } catch (e) {
-                console.error('[LaTeX] Failed to read log file:', e)
+                console.error('[LaTeX] Failed to read log:', e.message)
             }
         }
 
+        // Check for PDF
+        const generatedPdf = join(workDir, `${filename}.pdf`)
+
         if (existsSync(generatedPdf)) {
+            // Copy PDF to temp with unique name
             const pdfContent = readFileSync(generatedPdf)
             writeFileSync(pdfPath, pdfContent)
-            console.log(`[LaTeX] Successfully copied to ${pdfPath}`)
+
+            console.log(`[LaTeX] Success! PDF: ${pdfFile}`)
+
+            // Schedule cleanup of old temp files
+            setTimeout(() => cleanupOldTempFiles(), 5000)
+
             return {
                 success: true,
                 pdfPath: pdfFile,
@@ -104,15 +178,9 @@ export async function compileLatex(projectId = 'default-project', engine = 'pdfl
                 errors: parseErrors(logContent),
             }
         } else {
-            // DEBUG: List files to understand why we missed it
-            const files = fs.readdirSync(workDir);
-            console.error(`[LaTeX] PDF not found at ${generatedPdf}`);
-            console.error(`[LaTeX] Directory contents of ${workDir}:`, files);
-
-            // Extract specific error from log
             const errors = parseErrors(logContent)
             if (errors.length === 0) {
-                errors.push('LaTeX compilation failed - no PDF generated. Check your LaTeX syntax.')
+                errors.push('LaTeX compilation failed - no PDF generated')
             }
 
             return {
@@ -133,6 +201,57 @@ export async function compileLatex(projectId = 'default-project', engine = 'pdfl
     }
 }
 
+/**
+ * Sync project files to work directory (preserves aux files)
+ */
+function syncProjectFiles(srcDir, destDir) {
+    const srcFiles = new Set()
+
+    // Get all source files
+    const getSrcFiles = (dir, base = '') => {
+        const items = readdirSync(dir)
+        for (const item of items) {
+            if (item.startsWith('.')) continue
+            const fullPath = join(dir, item)
+            const relPath = base ? `${base}/${item}` : item
+            const stat = statSync(fullPath)
+
+            if (stat.isDirectory()) {
+                getSrcFiles(fullPath, relPath)
+            } else {
+                srcFiles.add(relPath)
+            }
+        }
+    }
+    getSrcFiles(srcDir)
+
+    // Copy source files
+    for (const relPath of srcFiles) {
+        const srcPath = join(srcDir, relPath)
+        const destPath = join(destDir, relPath)
+
+        // Create parent directory if needed
+        const parentDir = dirname(destPath)
+        if (!existsSync(parentDir)) {
+            mkdirSync(parentDir, { recursive: true })
+        }
+
+        // Check if file needs copying (modified)
+        let needsCopy = true
+        if (existsSync(destPath)) {
+            const srcStat = statSync(srcPath)
+            const destStat = statSync(destPath)
+            if (srcStat.size === destStat.size && srcStat.mtimeMs <= destStat.mtimeMs) {
+                needsCopy = false
+            }
+        }
+
+        if (needsCopy) {
+            cpSync(srcPath, destPath)
+        }
+    }
+}
+
 function runLatexEngine(enginePath, texFile, workDir) {
     return new Promise((resolve, reject) => {
         const args = [
@@ -143,12 +262,11 @@ function runLatexEngine(enginePath, texFile, workDir) {
             texFile,
         ]
 
-        console.log(`[LaTeX] Spawning: ${enginePath} ${args.join(' ')}`)
-        console.log(`[LaTeX] PATH: ${process.env.PATH}`)
+        console.log(`[LaTeX] Running: ${enginePath} ${basename(texFile)}`)
 
         const proc = spawn(enginePath, args, {
             cwd: workDir,
-            timeout: 60000, // Reduced to 60s for faster feedback
+            timeout: 60000,
             env: process.env
         })
 
@@ -156,15 +274,11 @@ function runLatexEngine(enginePath, texFile, workDir) {
         let stderr = ''
 
         proc.stdout.on('data', (d) => {
-            const str = d.toString()
-            // console.log(`[LaTeX STDOUT] ${str}`) // Uncomment for verbose logs
-            stdout += str
+            stdout += d.toString()
         })
 
         proc.stderr.on('data', (d) => {
-            const str = d.toString()
-            console.error(`[LaTeX STDERR] ${str}`)
-            stderr += str
+            stderr += d.toString()
         })
 
         proc.on('close', (code) => {
@@ -182,14 +296,26 @@ function runLatexEngine(enginePath, texFile, workDir) {
 function parseErrors(log) {
     const errors = []
     const lines = log.split('\n')
+
     for (const line of lines) {
-        if (line.startsWith('!') || line.includes('Error:') || line.includes('Fatal error')) {
+        // LaTeX errors start with !
+        if (line.startsWith('!')) {
             errors.push(line.trim())
         }
-        const match = line.match(/^(.+):(\d+): (.+)$/)
+        // File:line: error format
+        else if (line.includes('Error:') || line.includes('Fatal error')) {
+            errors.push(line.trim())
+        }
+        // Standard file:line: message format
+        const match = line.match(/^(.+\.tex):(\d+): (.+)$/)
         if (match) {
             errors.push(`Line ${match[2]}: ${match[3]}`)
         }
     }
-    return errors
+
+    // Deduplicate
+    return [...new Set(errors)]
 }
+
+// Run cleanup on startup
+setTimeout(() => cleanupOldTempFiles(), 10000)
