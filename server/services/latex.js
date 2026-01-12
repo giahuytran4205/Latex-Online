@@ -160,13 +160,18 @@ function runLatexEngine(enginePath, texFile, workDir) {
 
         console.log(`[LaTeX] Spawning: ${enginePath} ${args.join(' ')}`)
 
+        // Determine directory to add to PATH
+        const engineDir = dirname(enginePath)
+        const newPath = `${engineDir}:${TERMUX_BIN}:${process.env.PATH || ''}`
+        console.log(`[LaTeX] Using PATH: ${newPath}`)
+
         const proc = spawn(enginePath, args, {
             cwd: workDir,
             timeout: 120000,
             shell: true, // Enable shell to better resolve PATH
             env: {
                 ...process.env,
-                PATH: `${TERMUX_BIN}:${process.env.PATH || ''}`
+                PATH: newPath
             }
         })
 
