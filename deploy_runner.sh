@@ -10,6 +10,25 @@ echo "🚀 [Runner] Starting deployment runner..."
 # 1. Environment
 export PATH="/data/data/com.termux/files/usr/bin:/data/data/com.termux/files/usr/bin/texlive:$PATH"
 export LC_ALL=C
+# Critical TeX Live Environment Variables
+export TEXMFROOT='/data/data/com.termux/files/usr/share/texlive/2025.0'
+export TEXMFDIST="$TEXMFROOT/texmf-dist"
+export TEXMFLOCAL='/data/data/com.termux/files/usr/share/texlive/texmf-local'
+export TEXMFSYSVAR="$TEXMFROOT/texmf-var"
+export TEXMFSYSCONFIG="$TEXMFROOT/texmf-config"
+export PERL5LIB="$TEXMFROOT/tlpkg:$TEXMFDIST/scripts/texlive"
+
+echo "🔎 [Runner] Debugging TeX Live environment..."
+if [ ! -f "$TEXMFDIST/scripts/texlive/mktexlsr.pl" ]; then
+    echo "⚠️ [Runner] mktexlsr.pl NOT found at expected path!"
+    echo "Searching for mktexlsr.pl..."
+    find /data/data/com.termux/files/usr/share/texlive -name "mktexlsr.pl" 2>/dev/null || echo "Not found."
+else
+    echo "✅ [Runner] mktexlsr.pl found."
+fi
+
+echo "🔨 [Runner] Pre-generating pdflatex format..."
+fmtutil-sys --byfmt pdflatex || echo "⚠️ [Runner] Format generation failed (non-fatal, will try at runtime)"
 
 cd "$PROJECT_DIR"
 
