@@ -66,12 +66,32 @@ export async function compileLatex(projectId = 'default-project', engine = 'pdfl
         console.log(`[LaTeX] WorkDir: ${workDir}`)
         console.log(`[LaTeX] TexFile: ${filename}.tex`)
 
+        // Debug: log content of tex file
+        const texFilePath = join(workDir, `${filename}.tex`)
+        if (existsSync(texFilePath)) {
+            const texContent = readFileSync(texFilePath, 'utf-8')
+            console.log(`[LaTeX] Content of ${filename}.tex (first 500 chars):`)
+            console.log(texContent.substring(0, 500))
+        }
+
         // Run LaTeX engine
         const texFile = join(workDir, `${filename}.tex`)
         const result = await runLatexEngine(engineCmd, texFile, workDir)
 
         // Check PDF
         const generatedPdf = join(workDir, `${filename}.pdf`)
+        const logFile = join(workDir, `${filename}.log`)
+
+        // Read log file if exists
+        let logContent = result.stdout + '\n' + result.stderr
+        if (existsSync(logFile)) {
+            try {
+                const logData = readFileSync(logFile, 'utf-8')
+                logContent = logData
+            } catch (e) {
+                console.error('[LaTeX] Failed to read log file:', e)
+            }
+        }
 
         if (existsSync(generatedPdf)) {
             const pdfContent = readFileSync(generatedPdf)
@@ -80,8 +100,8 @@ export async function compileLatex(projectId = 'default-project', engine = 'pdfl
             return {
                 success: true,
                 pdfPath: pdfFile,
-                logs: result.stdout + '\n' + result.stderr,
-                errors: parseErrors(result.stdout + result.stderr),
+                logs: logContent,
+                errors: parseErrors(logContent),
             }
         } else {
             // DEBUG: List files to understand why we missed it
@@ -89,11 +109,17 @@ export async function compileLatex(projectId = 'default-project', engine = 'pdfl
             console.error(`[LaTeX] PDF not found at ${generatedPdf}`);
             console.error(`[LaTeX] Directory contents of ${workDir}:`, files);
 
+            // Extract specific error from log
+            const errors = parseErrors(logContent)
+            if (errors.length === 0) {
+                errors.push('LaTeX compilation failed - no PDF generated. Check your LaTeX syntax.')
+            }
+
             return {
                 success: false,
                 pdfPath: null,
-                logs: result.stdout + '\n' + result.stderr,
-                errors: parseErrors(result.stdout + result.stderr),
+                logs: logContent,
+                errors: errors,
             }
         }
     } catch (error) {
