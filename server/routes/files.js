@@ -1,5 +1,5 @@
 import express from 'express'
-import { existsSync, readFileSync, writeFileSync, readdirSync, statSync, mkdirSync, unlinkSync, renameSync } from 'fs'
+import { existsSync, readFileSync, writeFileSync, readdirSync, statSync, mkdirSync, unlinkSync, renameSync, rmSync } from 'fs'
 import { join, dirname, extname } from 'path'
 import { fileURLToPath } from 'url'
 
@@ -237,7 +237,6 @@ router.delete('/:projectId/:filename', (req, res) => {
             const stats = statSync(filePath)
             if (stats.isDirectory()) {
                 // Use rmSync for directories (Node 14.14+)
-                const { rmSync } = require('fs')
                 rmSync(filePath, { recursive: true, force: true })
             } else {
                 unlinkSync(filePath)

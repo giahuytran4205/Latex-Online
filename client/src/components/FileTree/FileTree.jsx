@@ -127,6 +127,72 @@ function FileTree({ files, activeFile, onFileSelect, onAddFile, onDeleteFile, on
         }
     }
 
+    const [lastSelectedPath, setLastSelectedPath] = useState(null)
+    const [showConfirm, setShowConfirm] = useState(false)
+    const [confirmMessage, setConfirmMessage] = useState('')
+    const [confirmAction, setConfirmAction] = useState(null)
+
+    // Helper to get flat list of visible items for range selection
+    const visibleItems = useMemo(() => {
+        const items = []
+        const traverse = (nodes) => {
+            const sorted = [...nodes].sort((a, b) => {
+                if (a.type === 'folder' && b.type !== 'folder') return -1
+                if (a.type !== 'folder' && b.type === 'folder') return 1
+                return a.name.localeCompare(b.name)
+            })
+
+            for (const item of sorted) {
+                items.push(item)
+                if (item.type === 'folder' && expandedFolders.has(item.path)) {
+                    traverse(item.children || [])
+                }
+            }
+        }
+        traverse(fileTree.children || [])
+        return items
+    }, [fileTree, expandedFolders])
+
+    const handleNewFile = (initialName = '') => {
+        let path = ''
+        if (selectedFiles.size === 1) {
+            const selected = Array.from(selectedFiles)[0]
+            if (selected.endsWith('/')) {
+                path = selected.slice(0, -1)
+            } else {
+                const parts = selected.split('/')
+                if (parts.length > 1) {
+                    path = parts.slice(0, -1).join('/')
+                }
+            }
+        }
+
+        setAddType('file')
+        setAddPath(path)
+        setIsAdding(true)
+        setNewFileName(initialName)
+    }
+
+    const handleNewFolder = (initialName = '') => {
+        let path = ''
+        if (selectedFiles.size === 1) {
+            const selected = Array.from(selectedFiles)[0]
+            if (selected.endsWith('/')) {
+                path = selected.slice(0, -1)
+            } else {
+                const parts = selected.split('/')
+                if (parts.length > 1) {
+                    path = parts.slice(0, -1).join('/')
+                }
+            }
+        }
+
+        setAddType('folder')
+        setAddPath(path)
+        setIsAdding(true)
+        setNewFileName(initialName)
+    }
+
     const toggleFolder = (path) => {
         const newExpanded = new Set(expandedFolders)
         if (newExpanded.has(path)) {
@@ -138,21 +204,22 @@ function FileTree({ files, activeFile, onFileSelect, onAddFile, onDeleteFile, on
         localStorage.setItem('latex-expanded-folders', JSON.stringify([...newExpanded]))
     }
 
-    const handleAddItem = () => {
-        if (!newFileName.trim()) return
-
-        let filename = newFileName.trim()
-        if (addType === 'file' && !filename.includes('.')) {
-            filename = `${filename}.tex`
-        }
-        if (addType === 'folder' && !filename.endsWith('/')) {
-            filename = `${filename}/`
+    const handleAddItem = async () => {
+        if (!newFileName.trim()) {
+            setIsAdding(false)
+            return
         }
 
-        const fullPath = addPath ? `${addPath}/${filename}` : filename
+        const filename = newFileName.trim()
+        // If it's a folder we are adding
+        const nameToCreate = addType === 'folder'
+            ? (filename.endsWith('/') ? filename : filename + '/')
+            : filename
+
+        const fullPath = addPath ? `${addPath}/${nameToCreate}` : nameToCreate
 
         if (onAddFile) {
-            onAddFile(fullPath)
+            await onAddFile(fullPath)
             setNewFileName('')
             setIsAdding(false)
             setAddPath('')
@@ -170,14 +237,22 @@ function FileTree({ files, activeFile, onFileSelect, onAddFile, onDeleteFile, on
 
             const message = itemsToDelete.length > 1
                 ? `Are you sure you want to delete ${itemsToDelete.length} items?`
-                : `Are you sure you want to delete ${contextMenu.item.name}?`
+                : `Are you sure you want to delete "${contextMenu.item.name}"?`
 
-            if (window.confirm(message)) {
-                for (const path of itemsToDelete) {
-                    await onDeleteFile(path)
+            setConfirmMessage(message)
+            setConfirmAction(() => async () => {
+                try {
+                    for (const path of itemsToDelete) {
+                        await onDeleteFile(path)
+                    }
+                    setSelectedFiles(new Set())
+                } catch (e) {
+                    console.error('Delete failed', e)
+                } finally {
+                    setShowConfirm(false)
                 }
-                setSelectedFiles(new Set())
-            }
+            })
+            setShowConfirm(true)
         }
         setContextMenu(null)
     }
@@ -202,19 +277,7 @@ function FileTree({ files, activeFile, onFileSelect, onAddFile, onDeleteFile, on
         setRenameValue('')
     }
 
-    const handleNewFile = (parentPath = '') => {
-        setAddType('file')
-        setAddPath(parentPath)
-        setIsAdding(true)
-        setContextMenu(null)
-    }
 
-    const handleNewFolder = (parentPath = '') => {
-        setAddType('folder')
-        setAddPath(parentPath)
-        setIsAdding(true)
-        setContextMenu(null)
-    }
 
     const handleUploadClick = () => {
         fileInputRef.current?.click()
@@ -398,16 +461,31 @@ function FileTree({ files, activeFile, onFileSelect, onAddFile, onDeleteFile, on
     const handleItemClick = (e, item) => {
         e.stopPropagation()
 
-        if (e.ctrlKey || e.metaKey || e.shiftKey) {
+        if (e.shiftKey && lastSelectedPath) {
+            const startIdx = visibleItems.findIndex(i => i.path === lastSelectedPath)
+            const endIdx = visibleItems.findIndex(i => i.path === item.path)
+
+            if (startIdx !== -1 && endIdx !== -1) {
+                const start = Math.min(startIdx, endIdx)
+                const end = Math.max(startIdx, endIdx)
+                const range = visibleItems.slice(start, end + 1).map(i => i.path)
+
+                const newSelected = new Set(selectedFiles)
+                range.forEach(path => newSelected.add(path))
+                setSelectedFiles(newSelected)
+            }
+        } else if (e.ctrlKey || e.metaKey) {
             const newSelected = new Set(selectedFiles)
             if (newSelected.has(item.path)) {
                 newSelected.delete(item.path)
             } else {
                 newSelected.add(item.path)
+                setLastSelectedPath(item.path)
             }
             setSelectedFiles(newSelected)
         } else {
             setSelectedFiles(new Set([item.path]))
+            setLastSelectedPath(item.path)
             if (item.type === 'folder') {
                 toggleFolder(item.path)
             } else {
@@ -720,6 +798,18 @@ function FileTree({ files, activeFile, onFileSelect, onAddFile, onDeleteFile, on
                         )}
                     </div>
                 </>
+            )}
+            {showConfirm && (
+                <div className="file-tree__confirm-overlay">
+                    <div className="file-tree__confirm-modal">
+                        <h3>Confirm Action</h3>
+                        <p>{confirmMessage}</p>
+                        <div className="file-tree__confirm-actions">
+                            <button className="btn btn--secondary" onClick={() => setShowConfirm(false)}>Cancel</button>
+                            <button className="btn btn--danger" onClick={confirmAction}>Confirm</button>
+                        </div>
+                    </div>
+                </div>
             )}
         </aside>
     )
