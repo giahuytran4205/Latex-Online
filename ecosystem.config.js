@@ -6,36 +6,52 @@ function getTexEnv() {
     const texBase = '/data/data/com.termux/files/usr/share/texlive';
     const usrBin = '/data/data/com.termux/files/usr/bin';
     let env = {
-        PATH: `${usrBin}:${usrBin}/texlive:${process.env.PATH}`
+        PATH: `${usrBin}:${usrBin}/texlive:${process.env.PATH || ''}`
     };
 
     try {
+        let bestRoot = null;
+
+        // 1. Try to find explicitly correct directory
         if (fs.existsSync(texBase)) {
             const dirs = fs.readdirSync(texBase).sort().reverse();
             for (const dir of dirs) {
-                if (dir.match(/^\d{4}$/) || dir.match(/^\d{4}\.\d+$/)) {
+                // Skip suspiciously explicitly bad names if possible, but trust content check
+                const match = dir.match(/^(\d{4})(\.\d+)?$/);
+                if (match) {
                     const candidate = path.join(texBase, dir);
-                    // Check if critical subdirs exist
-                    if (fs.existsSync(path.join(candidate, 'texmf-dist'))) {
-                        const texRoot = candidate;
-                        const texDist = path.join(texRoot, 'texmf-dist');
-                        const tlPkg = path.join(texRoot, 'tlpkg');
-
-                        // Valid Root Found
-                        env.TEXMFROOT = texRoot;
-                        env.TEXMFDIST = texDist;
-
-                        // Find mktexlsr.pl for PERL5LIB
-                        // Usually at texmf-dist/scripts/texlive/mktexlsr.pl
-                        const scriptPath = path.join(texDist, 'scripts/texlive');
-                        env.PERL5LIB = `${tlPkg}:${scriptPath}`;
-
-                        console.log(`[PM2] Found TeX Live at ${texRoot}`);
+                    // CRITICAL: verify mktexlsr.pl exists here
+                    const mktexlsr = path.join(candidate, 'texmf-dist/scripts/texlive/mktexlsr.pl');
+                    if (fs.existsSync(mktexlsr)) {
+                        console.log(`[PM2] Validated TeX Root: ${candidate}`);
+                        bestRoot = candidate;
                         break;
                     }
                 }
             }
         }
+
+        // 2. Fallback to hardcoded '2025' if detection failed but it exists
+        if (!bestRoot && fs.existsSync(path.join(texBase, '2025/texmf-dist'))) {
+            bestRoot = path.join(texBase, '2025');
+            console.log(`[PM2] Using fallback TeX Root: ${bestRoot}`);
+        }
+
+        // 3. Set Envs if found
+        if (bestRoot) {
+            env.TEXMFROOT = bestRoot;
+            env.TEXMFDIST = path.join(bestRoot, 'texmf-dist');
+            env.TEXMFLOCAL = path.join(bestRoot, 'texmf-local');
+            env.TEXMFSYSVAR = path.join(bestRoot, 'texmf-var');
+            env.TEXMFSYSCONFIG = path.join(bestRoot, 'texmf-config');
+
+            const tlPkg = path.join(bestRoot, 'tlpkg');
+            const scriptPath = path.join(bestRoot, 'texmf-dist/scripts/texlive');
+            env.PERL5LIB = `${tlPkg}:${scriptPath}`;
+        } else {
+            console.warn('[PM2] WARNING: No valid TeX Live root found!');
+        }
+
     } catch (e) {
         console.error('[PM2] Error detecting TeX paths:', e);
     }
