@@ -1,5 +1,5 @@
 import { spawn } from 'child_process'
-import { writeFileSync, mkdirSync, existsSync, readFileSync, cpSync } from 'fs'
+import { writeFileSync, mkdirSync, existsSync, readFileSync, readdirSync } from 'fs'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
 import { v4 as uuidv4 } from 'uuid'
@@ -26,9 +26,22 @@ if (!existsSync(TEMP_DIR)) {
  */
 function getEnginePath(engine) {
     const termuxPath = join(TERMUX_BIN, engine)
-    if (existsSync(termuxPath)) {
+    const exists = existsSync(termuxPath)
+    console.log(`[LaTeX] Checking path: ${termuxPath} (Exists: ${exists})`)
+
+    if (exists) {
         return termuxPath
     }
+
+    // Debug: list directory if not found (to see what is there)
+    if (existsSync(TERMUX_BIN)) {
+        try {
+            const files = readdirSync(TERMUX_BIN)
+            const pdfFiles = files.filter(f => f.includes('latex'))
+            console.log(`[LaTeX] Contents of ${TERMUX_BIN} (matching *latex*):`, pdfFiles.join(', '))
+        } catch (e) { console.error('Error listing bin:', e) }
+    }
+
     return engine
 }
 
@@ -120,6 +133,7 @@ function runLatexEngine(enginePath, texFile, workDir) {
         const proc = spawn(enginePath, args, {
             cwd: workDir,
             timeout: 120000,
+            shell: true, // Enable shell to better resolve PATH
             env: {
                 ...process.env,
                 PATH: `${TERMUX_BIN}:${process.env.PATH || ''}`
