@@ -21,7 +21,7 @@ module.exports = {
             cwd: "./",
             env: {
                 ...commonEnv,
-                PORT: 3000
+                PORT: 3001
             },
             autorestart: true,
             max_memory_restart: "1G",
@@ -32,9 +32,8 @@ module.exports = {
         {
             name: "latex-frontend",
             // We use a simple node script to serve the frontend separately
-            // so the user can manage it as a separate PM2 process
             script: "npx",
-            args: "serve -s client/dist -l 3001",
+            args: "serve -s client/dist -l 3002",
             cwd: "./",
             env: {
                 NODE_ENV: "production"

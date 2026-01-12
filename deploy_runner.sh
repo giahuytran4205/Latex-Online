@@ -94,6 +94,7 @@ PROTECT_SSH_AND_KILL() {
 
 PROTECT_SSH_AND_KILL 3000
 PROTECT_SSH_AND_KILL 3001
+PROTECT_SSH_AND_KILL 3002
 
 # Restart via PM2
 # We delete existing entries to ensure a clean environment reload
