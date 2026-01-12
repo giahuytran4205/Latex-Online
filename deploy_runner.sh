@@ -47,6 +47,18 @@ if [ -n "$PIDS" ]; then
     sleep 3
 fi
 
+echo "🧹 [Runner] Ensuring port 3000 is free..."
+if command -v fuser &> /dev/null; then
+    fuser -k 3000/tcp 2>/dev/null || true
+else
+    # Fallback to lsof if fuser is missing (Termux sometimes)
+    PIDS_PORT=$(lsof -t -i:3000 2>/dev/null || echo "")
+    if [ -n "$PIDS_PORT" ]; then
+         kill -9 $PIDS_PORT 2>/dev/null || true
+    fi
+fi
+sleep 2
+
 # Launch
 echo "▶️  [Runner] Launching new server process..."
 nohup node server/index.js > "$LOG_FILE" 2>&1 &
