@@ -52,20 +52,29 @@ function App() {
         loadFiles()
     }, [])
 
+    // Track last saved file to prevent race conditions
+    const lastSavedFileRef = useRef(activeFileName)
+    const loadingFileRef = useRef(false)
+
     // Load file content when active file changes
     useEffect(() => {
         if (!activeFileName) return
         // Don't try to load folder content
         if (activeFileName.endsWith('/')) return
 
+        loadingFileRef.current = true
         const fetchContent = async () => {
             try {
                 const data = await getFileContent('default-project', activeFileName)
                 setCode(data.content)
+                lastSavedFileRef.current = activeFileName
             } catch (err) {
                 console.error('Failed to load file content:', err)
                 // If file doesn't exist yet (new file), set empty content
                 setCode('')
+                lastSavedFileRef.current = activeFileName
+            } finally {
+                loadingFileRef.current = false
             }
         }
         fetchContent()
@@ -73,7 +82,16 @@ function App() {
 
     // Auto-save effect
     useEffect(() => {
-        if (!activeFileName || isLoading) return
+        // Skip if no active file
+        if (!activeFileName) return
+        // Skip folders
+        if (activeFileName.endsWith('/')) return
+        // Skip if still loading initial content
+        if (isLoading || loadingFileRef.current) return
+        // Skip if the debounced code is for a different file
+        if (lastSavedFileRef.current !== activeFileName) return
+        // Skip empty code (avoid overwriting with empty on file switch)
+        if (!debouncedCode && debouncedCode !== '') return
 
         const save = async () => {
             try {
@@ -82,8 +100,8 @@ function App() {
                 console.error('Auto-save failed:', err)
             }
         }
-        if (debouncedCode) save()
-    }, [debouncedCode, activeFileName])
+        save()
+    }, [debouncedCode])
 
     const loadFiles = async () => {
         try {

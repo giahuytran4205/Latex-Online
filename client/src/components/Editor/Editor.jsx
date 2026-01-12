@@ -1,11 +1,11 @@
-import { useEffect, useRef, useState, useMemo, useCallback } from 'react'
+import { useEffect, useRef, useMemo, useCallback } from 'react'
 import { EditorView, basicSetup } from 'codemirror'
 import { EditorState } from '@codemirror/state'
 import { keymap } from '@codemirror/view'
 import { indentWithTab } from '@codemirror/commands'
 import { StreamLanguage } from '@codemirror/language'
 import { stex } from '@codemirror/legacy-modes/mode/stex'
-import { autocompletion, startCompletion, acceptCompletion } from '@codemirror/autocomplete'
+import { autocompletion, startCompletion, completionStatus, acceptCompletion } from '@codemirror/autocomplete'
 import './Editor.css'
 
 // LaTeX autocomplete data
@@ -15,17 +15,17 @@ const latexCommands = [
     { label: '\\usepackage', type: 'keyword', info: 'Import package', apply: '\\usepackage{}' },
     { label: '\\begin', type: 'keyword', info: 'Begin environment', apply: '\\begin{}' },
     { label: '\\end', type: 'keyword', info: 'End environment', apply: '\\end{}' },
-    { label: '\\title', type: 'keyword', info: 'Document title' },
-    { label: '\\author', type: 'keyword', info: 'Document author' },
-    { label: '\\date', type: 'keyword', info: 'Document date' },
+    { label: '\\title', type: 'keyword', info: 'Document title', apply: '\\title{}' },
+    { label: '\\author', type: 'keyword', info: 'Document author', apply: '\\author{}' },
+    { label: '\\date', type: 'keyword', info: 'Document date', apply: '\\date{}' },
     { label: '\\maketitle', type: 'keyword', info: 'Render title' },
 
     // Sections
     { label: '\\section', type: 'function', info: 'Section heading', apply: '\\section{}' },
     { label: '\\subsection', type: 'function', info: 'Subsection heading', apply: '\\subsection{}' },
     { label: '\\subsubsection', type: 'function', info: 'Subsubsection', apply: '\\subsubsection{}' },
-    { label: '\\paragraph', type: 'function', info: 'Paragraph heading' },
-    { label: '\\chapter', type: 'function', info: 'Chapter heading' },
+    { label: '\\paragraph', type: 'function', info: 'Paragraph heading', apply: '\\paragraph{}' },
+    { label: '\\chapter', type: 'function', info: 'Chapter heading', apply: '\\chapter{}' },
 
     // Text formatting
     { label: '\\textbf', type: 'function', info: 'Bold text', apply: '\\textbf{}' },
@@ -71,8 +71,8 @@ const latexCommands = [
     { label: '\\label', type: 'function', info: 'Create label', apply: '\\label{}' },
     { label: '\\ref', type: 'function', info: 'Reference label', apply: '\\ref{}' },
     { label: '\\cite', type: 'function', info: 'Citation', apply: '\\cite{}' },
-    { label: '\\bibliography', type: 'function', info: 'Bibliography file' },
-    { label: '\\bibliographystyle', type: 'function', info: 'Bibliography style' },
+    { label: '\\bibliography', type: 'function', info: 'Bibliography file', apply: '\\bibliography{}' },
+    { label: '\\bibliographystyle', type: 'function', info: 'Bibliography style', apply: '\\bibliographystyle{}' },
 
     // Figures and tables
     { label: '\\includegraphics', type: 'function', info: 'Include image', apply: '\\includegraphics[width=\\textwidth]{}' },
@@ -85,19 +85,9 @@ const latexCommands = [
     // Spacing
     { label: '\\newline', type: 'keyword', info: 'New line' },
     { label: '\\newpage', type: 'keyword', info: 'New page' },
-    { label: '\\vspace', type: 'function', info: 'Vertical space' },
-    { label: '\\hspace', type: 'function', info: 'Horizontal space' },
+    { label: '\\vspace', type: 'function', info: 'Vertical space', apply: '\\vspace{}' },
+    { label: '\\hspace', type: 'function', info: 'Horizontal space', apply: '\\hspace{}' },
     { label: '\\noindent', type: 'keyword', info: 'No indentation' },
-
-    // Special characters
-    { label: '\\&', type: 'constant', info: 'Ampersand' },
-    { label: '\\%', type: 'constant', info: 'Percent sign' },
-    { label: '\\$', type: 'constant', info: 'Dollar sign' },
-    { label: '\\#', type: 'constant', info: 'Hash sign' },
-    { label: '\\_', type: 'constant', info: 'Underscore' },
-    { label: '\\{', type: 'constant', info: 'Left brace' },
-    { label: '\\}', type: 'constant', info: 'Right brace' },
-    { label: '\\\\', type: 'constant', info: 'Line break' },
 
     // Footnotes
     { label: '\\footnote', type: 'function', info: 'Footnote', apply: '\\footnote{}' },
@@ -115,23 +105,16 @@ const latexEnvironments = [
     { label: 'equation*', info: 'Unnumbered equation' },
     { label: 'align', info: 'Aligned equations' },
     { label: 'align*', info: 'Aligned equations (unnumbered)' },
-    { label: 'gather', info: 'Gathered equations' },
     { label: 'abstract', info: 'Abstract text' },
     { label: 'quote', info: 'Block quote' },
     { label: 'verbatim', info: 'Verbatim text' },
     { label: 'center', info: 'Centered content' },
-    { label: 'flushleft', info: 'Left-aligned' },
-    { label: 'flushright', info: 'Right-aligned' },
     { label: 'minipage', info: 'Mini page' },
     { label: 'array', info: 'Math array' },
     { label: 'matrix', info: 'Matrix' },
     { label: 'pmatrix', info: 'Parentheses matrix' },
     { label: 'bmatrix', info: 'Bracket matrix' },
     { label: 'cases', info: 'Cases/piecewise' },
-    { label: 'proof', info: 'Proof environment' },
-    { label: 'theorem', info: 'Theorem' },
-    { label: 'lemma', info: 'Lemma' },
-    { label: 'definition', info: 'Definition' },
 ]
 
 // LaTeX autocomplete function
@@ -195,7 +178,7 @@ function wrapSelection(view, before, after) {
 function Editor({ code, onChange, onCompile, activeFile }) {
     const editorRef = useRef(null)
     const viewRef = useRef(null)
-    const initialCodeRef = useRef(code)
+    const lastActiveFileRef = useRef(null)
 
     // Create editor theme
     const editorTheme = useMemo(() => EditorView.theme({
@@ -238,10 +221,20 @@ function Editor({ code, onChange, onCompile, activeFile }) {
     }), [])
 
     // Create Overleaf-like keybindings
-    const createKeybindings = useCallback(() => {
+    const createKeybindings = useCallback((onCompileHandler) => {
         return keymap.of([
-            // Tab to indent
-            indentWithTab,
+            // Tab - accept completion if open, otherwise indent
+            {
+                key: 'Tab',
+                run: (view) => {
+                    // Check if autocomplete is active
+                    if (completionStatus(view.state)) {
+                        return acceptCompletion(view)
+                    }
+                    // Otherwise do normal tab (indent)
+                    return indentWithTab.run ? indentWithTab.run(view) : false
+                }
+            },
 
             // Ctrl+Space - Show autocomplete
             {
@@ -268,7 +261,7 @@ function Editor({ code, onChange, onCompile, activeFile }) {
                 run: (view) => wrapSelection(view, '\\underline{', '}')
             },
 
-            // Ctrl+E - Emphasize
+            // Ctrl+E - Emphasize  
             {
                 key: 'Ctrl-e',
                 run: (view) => wrapSelection(view, '\\emph{', '}')
@@ -291,7 +284,7 @@ function Editor({ code, onChange, onCompile, activeFile }) {
                 key: 'Ctrl-s',
                 preventDefault: true,
                 run: () => {
-                    if (onCompile) onCompile()
+                    if (onCompileHandler) onCompileHandler()
                     return true
                 }
             },
@@ -300,44 +293,44 @@ function Editor({ code, onChange, onCompile, activeFile }) {
             {
                 key: 'Ctrl-Enter',
                 run: () => {
-                    if (onCompile) onCompile()
+                    if (onCompileHandler) onCompileHandler()
                     return true
                 }
             },
-
-            // Tab in completion - accept
-            {
-                key: 'Tab',
-                run: acceptCompletion
-            },
         ])
-    }, [onCompile])
+    }, [])
 
-    // Initialize/reinitialize editor when activeFile changes
+    // Create editor when activeFile changes
     useEffect(() => {
         if (!editorRef.current) return
 
-        // Clear previous editor
+        // Check if file actually changed
+        if (activeFile === lastActiveFileRef.current && viewRef.current) {
+            return
+        }
+        lastActiveFileRef.current = activeFile
+
+        // Destroy previous editor
         if (viewRef.current) {
             viewRef.current.destroy()
             viewRef.current = null
         }
 
-        // Clear the container
+        // Clear container
         editorRef.current.innerHTML = ''
 
+        // Create new editor with current code
         const state = EditorState.create({
             doc: code || '',
             extensions: [
                 basicSetup,
-                createKeybindings(),
+                createKeybindings(onCompile),
                 StreamLanguage.define(stex),
                 editorTheme,
                 autocompletion({
                     override: [latexCompletions],
                     activateOnTyping: true,
                     maxRenderedOptions: 15,
-                    defaultKeymap: true,
                 }),
                 EditorView.updateListener.of((update) => {
                     if (update.docChanged) {
@@ -352,36 +345,36 @@ function Editor({ code, onChange, onCompile, activeFile }) {
             parent: editorRef.current,
         })
         viewRef.current = view
-
-        // Focus editor
         view.focus()
 
-        return () => {
-            if (viewRef.current) {
-                viewRef.current.destroy()
-                viewRef.current = null
-            }
-        }
-    }, [activeFile]) // Recreate editor when file changes
+    }, [activeFile, editorTheme, createKeybindings, onCompile])
 
-    // Update content when code prop changes (but file stays same)
+    // Update editor content when code changes from outside (file loaded)
     useEffect(() => {
         if (!viewRef.current) return
 
         const currentContent = viewRef.current.state.doc.toString()
-        // Only update if content is actually different and this wasn't triggered by our own change
-        if (code !== undefined && currentContent !== code && code !== initialCodeRef.current) {
-            const view = viewRef.current
-            view.dispatch({
+
+        // Only update if code is different from what's in editor
+        if (code !== undefined && code !== null && currentContent !== code) {
+            viewRef.current.dispatch({
                 changes: {
                     from: 0,
                     to: currentContent.length,
-                    insert: code || ''
+                    insert: code
                 }
             })
         }
-        initialCodeRef.current = code
     }, [code])
+
+    // Cleanup on unmount
+    useEffect(() => {
+        return () => {
+            if (viewRef.current) {
+                viewRef.current.destroy()
+            }
+        }
+    }, [])
 
     // Get display filename
     const displayName = activeFile ? activeFile.split('/').pop() : 'main.tex'
