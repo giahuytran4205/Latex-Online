@@ -24,8 +24,8 @@ if (!existsSync(TEMP_DIR)) {
 function checkEnvironment() {
     try {
         console.log('[Env] PATH:', process.env.PATH)
-        console.log('[Env] Which pdflatex:', execSync('which pdflatex').toString().trim())
-        console.log('[Env] Termux bin ls:', execSync(`ls -l ${TERMUX_BIN}/pdflatex`).toString().trim())
+        console.log('[Env] Which pdflatex:', execSync('which pdflatex', { cwd: '/' }).toString().trim())
+        console.log('[Env] Termux bin ls:', execSync(`ls -l ${TERMUX_BIN}/pdflatex`, { cwd: '/' }).toString().trim())
     } catch (e) {
         console.error('[Env] Check failed:', e.message)
     }
@@ -39,33 +39,45 @@ const TERMUX_BIN = join(TERMUX_BASE, 'usr/bin')
  * Get the full path to a LaTeX engine
  */
 function getEnginePath(engine) {
-    // List of paths to check (Priority order)
+    // 0. Strongest Force: User confirmed path
+    // We do NOT check existsSync because cwd might be broken, causing FS issues
+    const userConfirmedPath = join(TERMUX_BIN, 'texlive', engine) // .../usr/bin/texlive/pdflatex
+
+    // Check if we are likely on Termux
+    if (process.env.PREFIX && process.env.PREFIX.includes('com.termux')) {
+        console.log(`[LaTeX] Termux detected. Forcing path: ${userConfirmedPath}`)
+        return userConfirmedPath
+    }
+
+    // Also check standard structure if PREFIX missing
+    if (existsSync(TERMUX_BIN)) {
+        console.log(`[LaTeX] Termux bin dir found. Forcing path: ${userConfirmedPath}`)
+        return userConfirmedPath
+    }
+
+    // 1. List of potential paths to check
     const candidates = [
-        join(TERMUX_BIN, 'texlive', engine), // User confirmed path: .../bin/texlive/pdflatex
-        join(TERMUX_BIN, engine),            // Standard path
+        join(TERMUX_BIN, engine), // Standard
         `${TERMUX_BASE}/usr/share/texlive/bin/aarch64-linux/${engine}`,
-        `${TERMUX_BASE}/home/.termux-latex/bin/${engine}`
     ]
 
     // Check candidates
     for (const p of candidates) {
-        if (existsSync(p)) {
-            console.log(`[LaTeX] Found engine at: ${p}`)
-            return p
-        }
+        if (existsSync(p)) return p
     }
 
-    // Deep search fallback as last resort
-    if (existsSync(TERMUX_BIN)) {
-        console.log(`[LaTeX] Path not found in candidates. Deep searching...`)
-        try {
-            const cmd = `find ${TERMUX_BASE}/usr -name ${engine} -type f -path "*/bin/*" 2>/dev/null | head -n 1`
-            const found = execSync(cmd).toString().trim()
-            if (found) {
-                console.log(`[LaTeX] Discovered path: ${found}`)
-                return found
-            }
-        } catch (e) { console.error('Search failed:', e.message) }
+    // 2. Deep search fallback
+    console.log(`[LaTeX] Path not found in candidates. Deep searching...`)
+    try {
+        const cmd = `find ${TERMUX_BASE}/usr -name ${engine} -type f -path "*/bin/*" 2>/dev/null | head -n 1`
+        // Fix getcwd error by setting cwd to root
+        const found = execSync(cmd, { cwd: '/', encoding: 'utf8' }).trim()
+        if (found) {
+            console.log(`[LaTeX] Discovered path: ${found}`)
+            return found
+        }
+    } catch (e) {
+        // Ignore error
     }
 
     console.warn(`[LaTeX] CRITICAL: Not found ${engine}. Returning default.`)

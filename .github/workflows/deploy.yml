@@ -87,25 +87,7 @@ jobs:
       - name: Extract files
         uses: appleboy/ssh-action@v1.0.0
         with:
-          host: ${{ secrets.TERMUX_HOST }}
-          port: ${{ secrets.TERMUX_PORT }}
-          username: ${{ secrets.TERMUX_USER }}
-          key: ${{ secrets.TERMUX_SSH_KEY }}
-          script_stop: false
-          script: |
-            cd /data/data/com.termux/files/home/latex-online
-            echo "Extracting..."
-            tar -xzvf latex-online.tar.gz
-            mkdir -p client
-            mv deploy/client-dist client/dist
-            mv deploy/server ./server
-            rm -rf deploy latex-online.tar.gz
-            echo "Installing dependencies..."
-            cd server
-            npm install --production --no-audit --no-fund
-            echo "Files ready"
-
-      - name: Start server
+      - name: Extract and Start Server
         uses: appleboy/ssh-action@v1.0.0
         with:
           host: ${{ secrets.TERMUX_HOST }}
@@ -114,17 +96,48 @@ jobs:
           key: ${{ secrets.TERMUX_SSH_KEY }}
           script_stop: false
           script: |
-            cd /data/data/com.termux/files/home/latex-online/server
+            echo "Deploying to clean directory..."
+            # Create a fresh directory for the new version
+            TERMUX_HOME="/data/data/com.termux/files/home"
+            DEPLOY_DIR="$TERMUX_HOME/latex-online"
             
-            # Kill existing server
+            # Ensure deploy dir exists
+            mkdir -p "$DEPLOY_DIR"
+            cd "$DEPLOY_DIR"
+            
+            echo "Extracting archive..."
+            tar -xzvf $TERMUX_HOME/latex-online.tar.gz
+            
+            # Move files to correct structure (handle potential nesting)
+            if [ -d "deploy" ]; then
+                mkdir -p client
+                mv deploy/client-dist client/dist
+                mv deploy/server ./server
+                rm -rf deploy
+            fi
+            
+            # Check structure
+            echo "Structure check:"
+            ls -R | head -n 20
+            
+            echo "Installing dependencies..."
+            cd server
+            npm install --production --no-audit --no-fund
+            
+            echo "Restarting server..."
+            # Stop old server
             fuser -k 3000/tcp 2>/dev/null || true
             sleep 2
             
-            # Start server using bash
-            chmod +x start.sh 2>/dev/null || true
-            bash -c 'nohup node index.js > ../server.log 2>&1 &'
+            # Start new server. IMPORTANT: CD into directory first to set valid CWD
+            # Using bash -c to spawn independent process
+            nohup node index.js > ../server.log 2>&1 &
+            SERVER_PID=$!
+            disown $SERVER_PID
+            echo "Server launched with PID $SERVER_PID"
             
-            sleep 3
-            echo "Checking server..."
+            sleep 5
+            # Basic health check
+            curl -s http://localhost:3000/api/health || echo "Server starting..."
             curl -s http://localhost:3000/api/health && echo " - OK!" || echo "Starting..."
             echo "Deployment complete!"
