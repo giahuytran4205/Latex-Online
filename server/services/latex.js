@@ -1,4 +1,4 @@
-import { spawn } from 'child_process'
+import { spawn, execSync } from 'child_process'
 import { writeFileSync, mkdirSync, existsSync, readFileSync, readdirSync } from 'fs'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
@@ -21,28 +21,35 @@ if (!existsSync(TEMP_DIR)) {
     mkdirSync(TEMP_DIR, { recursive: true })
 }
 
+// Add helper to check execution environment
+function checkEnvironment() {
+    try {
+        console.log('[Env] PATH:', process.env.PATH)
+        console.log('[Env] Which pdflatex:', execSync('which pdflatex').toString().trim())
+        console.log('[Env] Termux bin ls:', execSync(`ls -l ${TERMUX_BIN}/pdflatex`).toString().trim())
+    } catch (e) {
+        console.error('[Env] Check failed:', e.message)
+    }
+}
+
 /**
  * Get the full path to a LaTeX engine
  */
 function getEnginePath(engine) {
-    const termuxPath = join(TERMUX_BIN, engine)
-    const exists = existsSync(termuxPath)
-    console.log(`[LaTeX] Checking path: ${termuxPath} (Exists: ${exists})`)
+    // Force absolute path on Termux
+    const absolutePath = join(TERMUX_BIN, engine)
 
-    if (exists) {
-        return termuxPath
+    // We will verify existance, but default to absolute path on Termux
+    // because relative 'pdflatex' is clearly failing
+    if (existsSync(absolutePath)) {
+        console.log(`[LaTeX] Found engine at: ${absolutePath}`)
+        return absolutePath
     }
 
-    // Debug: list directory if not found (to see what is there)
-    if (existsSync(TERMUX_BIN)) {
-        try {
-            const files = readdirSync(TERMUX_BIN)
-            const pdfFiles = files.filter(f => f.includes('latex'))
-            console.log(`[LaTeX] Contents of ${TERMUX_BIN} (matching *latex*):`, pdfFiles.join(', '))
-        } catch (e) { console.error('Error listing bin:', e) }
-    }
-
-    return engine
+    console.warn(`[LaTeX] Warning: ${absolutePath} not found. Fallback to "${engine}"`)
+    // Even if existsSync fails (permission?), let's try absolute path if we are on Termux
+    // This assumes the code runs on Termux.
+    return absolutePath
 }
 
 /**
@@ -53,6 +60,9 @@ function getEnginePath(engine) {
  * @param {string} code - Optional override code (legacy support)
  */
 export async function compileLatex(projectId = 'default-project', engine = 'pdflatex', filename = 'main', code = null) {
+    // Run env check once per compile (for debugging)
+    checkEnvironment()
+
     const jobId = uuidv4().substring(0, 8)
     const workDir = join(TEMP_DIR, jobId)
     const projectDir = join(PROJECTS_DIR, projectId)
