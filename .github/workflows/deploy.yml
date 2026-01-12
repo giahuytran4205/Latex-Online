@@ -83,9 +83,14 @@ jobs:
             PIDS=$(pgrep -f "node server/index.js" | grep -v grep || echo "")
             
             if [ -n "$PIDS" ]; then
-                echo "🛑 [Deploy] Stopping existing server (PIDs: $PIDS)..."
-                # Use Kill -15 (SIGTERM) first
-                echo "$PIDS" | xargs kill || true
+                # Replace newlines with spaces
+                PIDS_CLEAN=$(echo "$PIDS" | tr '\n' ' ')
+                echo "🛑 [Deploy] Stopping existing server (PIDs: $PIDS_CLEAN)..."
+                
+                # Iterate and kill explicitly
+                for PID in $PIDS_CLEAN; do
+                    kill $PID 2>/dev/null || true
+                done
                 sleep 2
             else
                 echo "ℹ️  [Deploy] No existing server process found."
