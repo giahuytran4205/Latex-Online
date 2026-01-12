@@ -61,6 +61,8 @@ export async function compileLatex(projectId = 'default-project', engine = 'pdfl
 
         const engineCmd = getEngineCommand(engine)
         console.log(`[LaTeX] Compiling project ${projectId} with ${engineCmd}`)
+        console.log(`[LaTeX] WorkDir: ${workDir}`)
+        console.log(`[LaTeX] TexFile: ${filename}.tex`)
 
         // Run LaTeX engine
         const texFile = join(workDir, `${filename}.tex`)
@@ -108,18 +110,28 @@ function runLatexEngine(enginePath, texFile, workDir) {
         ]
 
         console.log(`[LaTeX] Spawning: ${enginePath} ${args.join(' ')}`)
+        console.log(`[LaTeX] PATH: ${process.env.PATH}`)
 
         const proc = spawn(enginePath, args, {
             cwd: workDir,
-            timeout: 120000,
-            env: process.env // Use current process environment directly
+            timeout: 60000, // Reduced to 60s for faster feedback
+            env: process.env
         })
 
         let stdout = ''
         let stderr = ''
 
-        proc.stdout.on('data', (d) => stdout += d.toString())
-        proc.stderr.on('data', (d) => stderr += d.toString())
+        proc.stdout.on('data', (d) => {
+            const str = d.toString()
+            // console.log(`[LaTeX STDOUT] ${str}`) // Uncomment for verbose logs
+            stdout += str
+        })
+
+        proc.stderr.on('data', (d) => {
+            const str = d.toString()
+            console.error(`[LaTeX STDERR] ${str}`)
+            stderr += str
+        })
 
         proc.on('close', (code) => {
             console.log(`[LaTeX] Exit code: ${code}`)
@@ -127,7 +139,7 @@ function runLatexEngine(enginePath, texFile, workDir) {
         })
 
         proc.on('error', (err) => {
-            console.error(`[LaTeX] Spawn error:`, err.message)
+            console.error(`[LaTeX] Spawn error:`, err)
             reject(err)
         })
     })
