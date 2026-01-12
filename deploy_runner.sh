@@ -9,43 +9,24 @@ mkdir -p "$LOG_DIR"
 
 echo "🚀 [Deploy] Starting robust deployment..."
 
-# 1. Environment Setup (The most important part for LaTeX)
+# 1. Environment Setup
 export PATH="/data/data/com.termux/files/usr/bin:/data/data/com.termux/files/usr/bin/texlive:$PATH"
 export LC_ALL=C
 
-echo "🔎 [Deploy] Locating TeX Live environment..."
+echo "🔎 [Deploy] Setting up TeX environment..."
+# Detect year dynamically but efficiently
 TEXLIVE_BASE="/data/data/com.termux/files/usr/share/texlive"
-if [ -d "$TEXLIVE_BASE" ]; then
-    # Dynamically find the year directory (2024, 2025, etc.)
-    YEAR_DIR=$(find "$TEXLIVE_BASE" -maxdepth 1 -name "20*" -type d | sort -r | head -n 1)
-    if [ -n "$YEAR_DIR" ]; then
-        echo "✅ Detected TeX Live Root: $YEAR_DIR"
-        export TEXMFROOT="$YEAR_DIR"
-        export TEXMFDIST="$TEXMFROOT/texmf-dist"
-        export TEXMFLOCAL="$TEXLIVE_BASE/texmf-local"
-        export TEXMFSYSVAR="$TEXMFROOT/texmf-var"
-        export TEXMFSYSCONFIG="$TEXMFROOT/texmf-config"
-        
-        # Build PERL5LIB dynamically
-        MKTEXLSR_PL=$(find "$TEXMFDIST" -name "mktexlsr.pl" | head -n 1 || echo "")
-        if [ -n "$MKTEXLSR_PL" ]; then
-            PERL_SCRIPT_DIR=$(dirname "$MKTEXLSR_PL")
-            TLPKG_DIR="$TEXMFROOT/tlpkg"
-            export PERL5LIB="$TLPKG_DIR:$PERL_SCRIPT_DIR"
-            echo "✅ Setup PERL5LIB: $PERL5LIB"
-        fi
-    fi
-fi
+TL_YEAR=$(ls "$TEXLIVE_BASE" 2>/dev/null | grep -E "^20[0-9]{2}" | sort -r | head -n 1 || echo "2025.0")
 
-# Ensure critical tools are present
+export TEXMFROOT="$TEXLIVE_BASE/$TL_YEAR"
+export TEXMFDIST="$TEXMFROOT/texmf-dist"
+export PERL5LIB="$TEXMFROOT/tlpkg:$TEXMFDIST/scripts/texlive"
+
+echo "✅ Environment: TEXMFROOT=$TEXMFROOT"
+
+# Ensure PM2 is present
 if ! command -v pm2 &> /dev/null; then
-    echo "📦 [Deploy] Installing PM2..."
     npm install -g pm2
-fi
-
-if ! command -v lsof &> /dev/null; then
-    echo "📦 [Deploy] Installing lsof..."
-    pkg install -y lsof
 fi
 
 # 2. Build and Prep
@@ -53,64 +34,30 @@ cd "$PROJECT_DIR"
 
 echo "📥 [Deploy] Building Client..."
 cd client
-npm install
+npm install --no-audit --no-fund --quiet
 npm run build
 cd ..
 
 echo "🔨 [Deploy] Building Server..."
 cd server
-npm install --production
+npm install --production --no-audit --no-fund --quiet
 cd ..
 
-echo "🔨 [Deploy] Pre-generating LaTeX format files..."
-# This prevents runtime errors in the web app
-fmtutil-sys --byfmt pdflatex || echo "⚠️ Warning: fmtutil-sys failed, but continuing..."
+echo "🔨 [Deploy] Pre-generating LaTeX format..."
+fmtutil-sys --byfmt pdflatex || true
 
-# 3. Process Management (SSH SAFETY FIRST)
-echo "🔄 [Deploy] Updating PM2 processes..."
+# 3. Process Management (SAFE RESTART)
+echo "🔄 [Deploy] Restarting via PM2..."
 
-# We use a surgical approach to avoid killing SSH
-# 1. We ONLY target port 3000 (Backend) and 3001 (Frontend)
-# 2. We EXPLICITLY skip any process related to 'sshd'
-PROTECT_SSH_AND_KILL() {
-    PORT=$1
-    echo "🧹 [Port $PORT] Checking for existing processes..."
-    PIDS=$(lsof -t -i:$PORT 2>/dev/null || echo "")
-    if [ -n "$PIDS" ]; then
-        for PID in $PIDS; do
-            # Verify process name to avoid killing sshd
-            CMD=$(ps -p $PID -o comm= 2>/dev/null || echo "unknown")
-            if [[ "$CMD" == *"sshd"* ]]; then
-                echo "⚠️ [Port $PORT] Found sshd (PID $PID), SKIPPING."
-            else
-                echo "🔪 [Port $PORT] Killing $CMD (PID $PID)..."
-                kill -9 $PID 2>/dev/null || true
-            fi
-        done
-    else
-        echo "✅ [Port $PORT] Already free."
-    fi
-}
-
-PROTECT_SSH_AND_KILL 3000
-PROTECT_SSH_AND_KILL 3001
-PROTECT_SSH_AND_KILL 3002
-
-# Restart via PM2
-# We delete existing entries to ensure a clean environment reload
+# SAFETY: Instead of killing ports (which hits SSH), we use PM2 exclusively.
+# If there's a zombie process, the user should kill it once manually.
+# From now on, PM2 will manage everything.
 pm2 delete latex-backend 2>/dev/null || true
 pm2 delete latex-frontend 2>/dev/null || true
 
-# Start everything fresh using the ecosystem file
+# Start fresh
 pm2 start ecosystem.config.cjs --update-env
 pm2 save
 
-echo "🎉 [Deploy] SUCCESS!"
-echo "--------------------------------------------------"
-echo "Management commands:"
-echo "  pm2 list          # Check status"
-echo "  pm2 logs          # View all logs"
-echo "  pm2 logs latex-backend"
-echo "  pm2 logs latex-frontend"
-echo "--------------------------------------------------"
+echo "🎉 [Deploy] SUCCESS! Web app running on port 3001."
 pm2 list
