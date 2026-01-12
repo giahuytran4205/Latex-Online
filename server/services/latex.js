@@ -5,7 +5,7 @@ import { fileURLToPath } from 'url'
 import { v4 as uuidv4 } from 'uuid'
 // Use ncp for recursive copy if fs.cpSync is not available (Node < 16.7)
 // But we assume Node 18+ on Termux
-import { ncp } from 'ncp'
+import ncp from 'ncp'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
