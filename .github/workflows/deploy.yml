@@ -64,9 +64,8 @@ jobs:
           key: ${{ secrets.TERMUX_SSH_KEY }}
           script_stop: false
           script: |
-            echo "Stopping old server..."
-            pkill -f "node index.js" || true
-            pkill -f "node /data/data/com.termux/files/home/latex-online" || true
+            echo "Stopping old server on port 3000..."
+            fuser -k 3000/tcp 2>/dev/null || echo "No process on port 3000"
             sleep 2
             echo "Preparing directory..."
             mkdir -p /data/data/com.termux/files/home/latex-online
