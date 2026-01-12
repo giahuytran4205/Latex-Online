@@ -91,27 +91,39 @@ function runLatexEngine(engine, texFile, workDir) {
             args.unshift('-shell-escape')
         }
 
-        const process = spawn(engine, args, {
+        console.log(`[LaTeX] Running: ${engine} ${args.join(' ')}`)
+
+        // Include common PATH locations for Termux and Linux
+        const env = {
+            ...process.env,
+            PATH: `${process.env.PATH}:/data/data/com.termux/files/usr/bin:/usr/bin:/usr/local/bin:/usr/texbin`
+        }
+
+        const proc = spawn(engine, args, {
             cwd: workDir,
-            timeout: 60000, // 60 second timeout
+            env: env,
+            timeout: 120000, // 120 second timeout
         })
 
         let stdout = ''
         let stderr = ''
 
-        process.stdout.on('data', (data) => {
+        proc.stdout.on('data', (data) => {
             stdout += data.toString()
         })
 
-        process.stderr.on('data', (data) => {
+        proc.stderr.on('data', (data) => {
             stderr += data.toString()
         })
 
-        process.on('close', (code) => {
+        proc.on('close', (code) => {
+            console.log(`[LaTeX] Process exited with code ${code}`)
+            console.log(`[LaTeX] stdout length: ${stdout.length}, stderr length: ${stderr.length}`)
             resolve({ code, stdout, stderr })
         })
 
-        process.on('error', (err) => {
+        proc.on('error', (err) => {
+            console.error(`[LaTeX] Spawn error:`, err)
             reject(err)
         })
     })
