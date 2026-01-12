@@ -13,8 +13,7 @@ const __dirname = dirname(__filename)
 const TEMP_DIR = join(__dirname, '../temp')
 const PROJECTS_DIR = join(__dirname, '../../projects')
 
-// Termux pdflatex path
-const TERMUX_BIN = '/data/data/com.termux/files/usr/bin'
+// Termux pdflatex path (defined later)
 
 // Ensure temp directory exists
 if (!existsSync(TEMP_DIR)) {
@@ -32,24 +31,22 @@ function checkEnvironment() {
     }
 }
 
+// Hardcode Termux Bin Path
+const TERMUX_BIN = '/data/data/com.termux/files/usr/bin'
+
 /**
  * Get the full path to a LaTeX engine
  */
 function getEnginePath(engine) {
-    // Force absolute path on Termux
-    const absolutePath = join(TERMUX_BIN, engine)
-
-    // We will verify existance, but default to absolute path on Termux
-    // because relative 'pdflatex' is clearly failing
-    if (existsSync(absolutePath)) {
-        console.log(`[LaTeX] Found engine at: ${absolutePath}`)
-        return absolutePath
+    // If we are on a system that looks like Termux (has the bin dir), force absolute path
+    if (existsSync(TERMUX_BIN)) {
+        const absPath = join(TERMUX_BIN, engine)
+        console.log(`[LaTeX] Force using absolute path for Termux: ${absPath}`)
+        return absPath
     }
 
-    console.warn(`[LaTeX] Warning: ${absolutePath} not found. Fallback to "${engine}"`)
-    // Even if existsSync fails (permission?), let's try absolute path if we are on Termux
-    // This assumes the code runs on Termux.
-    return absolutePath
+    // Fallback for local dev
+    return engine
 }
 
 /**
@@ -91,7 +88,7 @@ export async function compileLatex(projectId = 'default-project', engine = 'pdfl
         }
 
         const enginePath = getEnginePath(engine)
-        console.log(`[LaTeX] Compiling project ${projectId} with ${enginePath}`)
+        console.log(`[LaTeX] Compiling project ${projectId} with enginePath: "${enginePath}"`)
 
         // Run LaTeX engine
         const texFile = join(workDir, `${filename}.tex`)
