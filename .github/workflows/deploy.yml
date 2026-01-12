@@ -103,7 +103,7 @@ jobs:
             cd "$DEPLOY_DIR"
             
             echo "Extracting archive..."
-            tar -xzvf $TERMUX_HOME/latex-online.tar.gz
+            tar -xzvf latex-online.tar.gz
             
             # Move files to correct structure (handle potential nesting)
             if [ -d "deploy" ]; then
