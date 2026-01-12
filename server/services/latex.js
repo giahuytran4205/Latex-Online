@@ -3,9 +3,8 @@ import { writeFileSync, mkdirSync, existsSync, readFileSync, cpSync } from 'fs'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
 import { v4 as uuidv4 } from 'uuid'
-// Use ncp for recursive copy if fs.cpSync is not available (Node < 16.7)
-// But we assume Node 18+ on Termux
-import { ncp } from 'ncp'
+// Node 18+ is assumed on Termux, so we use fs.cpSync
+// import { ncp } from 'ncp'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -48,9 +47,8 @@ export async function compileLatex(projectId = 'default-project', engine = 'pdfl
 
         // Copy project files to work directory
         if (existsSync(projectDir)) {
-            await new Promise((resolve, reject) => {
-                ncp(projectDir, workDir, (err) => err ? reject(err) : resolve())
-            })
+            // Use native recursive copy
+            cpSync(projectDir, workDir, { recursive: true })
         }
 
         // If specific code provided (not saved yet), overwrite main.tex
