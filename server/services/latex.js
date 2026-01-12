@@ -45,8 +45,8 @@ function getEnginePath(engine) {
 
     // Check if we are likely on Termux
     if (process.env.PREFIX && process.env.PREFIX.includes('com.termux')) {
-        console.log(`[LaTeX] Termux detected. Forcing path: ${userConfirmedPath}`)
-        return userConfirmedPath
+        console.log(`[LaTeX] Termux detected. Using PATH for engine: ${engine}`)
+        return engine
     }
 
     // Also check standard structure if PREFIX missing
