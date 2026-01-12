@@ -1,11 +1,11 @@
 const API_BASE = '/api'
 const DEFAULT_PROJECT = 'default-project'
 
-export async function compileLatex({ code, engine, filename }) {
+export async function compileLatex({ code, engine, filename, projectId = DEFAULT_PROJECT }) {
     const response = await fetch(`${API_BASE}/compile`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code, engine, filename }),
+        body: JSON.stringify({ projectId, code, engine, filename }),
     })
     if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
     return response.json()
