@@ -8,7 +8,12 @@ export async function compileLatex({ code, engine, filename, projectId = DEFAULT
         body: JSON.stringify({ projectId, code, engine, filename }),
     })
     if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
-    return response.json()
+    const data = await response.json()
+    // Map server's 'pdf' field to client's expected 'pdfUrl'
+    return {
+        ...data,
+        pdfUrl: data.pdf
+    }
 }
 
 export async function getFiles(projectId = DEFAULT_PROJECT) {
