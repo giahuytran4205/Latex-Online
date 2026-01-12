@@ -52,9 +52,18 @@ function App() {
         loadFiles()
     }, [])
 
-    // Track last saved file to prevent race conditions
+    // File content cache - avoid refetching
+    const fileCacheRef = useRef(new Map())
     const lastSavedFileRef = useRef(activeFileName)
     const loadingFileRef = useRef(false)
+    const prevActiveFileRef = useRef(null)
+
+    // Save current content to cache before switching files
+    const saveToCache = useCallback((filename, content) => {
+        if (filename && content !== undefined) {
+            fileCacheRef.current.set(filename, content)
+        }
+    }, [])
 
     // Load file content when active file changes
     useEffect(() => {
@@ -62,25 +71,49 @@ function App() {
         // Don't try to load folder content
         if (activeFileName.endsWith('/')) return
 
+        // Save current file to cache before switching
+        if (prevActiveFileRef.current && prevActiveFileRef.current !== activeFileName) {
+            saveToCache(prevActiveFileRef.current, code)
+        }
+        prevActiveFileRef.current = activeFileName
+
+        // Check cache first
+        if (fileCacheRef.current.has(activeFileName)) {
+            const cachedContent = fileCacheRef.current.get(activeFileName)
+            setCode(cachedContent)
+            lastSavedFileRef.current = activeFileName
+            return
+        }
+
+        // Fetch from server
         loadingFileRef.current = true
         const fetchContent = async () => {
             try {
                 const data = await getFileContent('default-project', activeFileName)
                 setCode(data.content)
+                saveToCache(activeFileName, data.content)
                 lastSavedFileRef.current = activeFileName
             } catch (err) {
                 console.error('Failed to load file content:', err)
                 // If file doesn't exist yet (new file), set empty content
                 setCode('')
+                saveToCache(activeFileName, '')
                 lastSavedFileRef.current = activeFileName
             } finally {
                 loadingFileRef.current = false
             }
         }
         fetchContent()
-    }, [activeFileName])
+    }, [activeFileName, saveToCache])
 
-    // Auto-save effect
+    // Update cache when code changes
+    useEffect(() => {
+        if (activeFileName && !activeFileName.endsWith('/')) {
+            saveToCache(activeFileName, code)
+        }
+    }, [code, activeFileName, saveToCache])
+
+    // Auto-save effect (debounced)
     useEffect(() => {
         // Skip if no active file
         if (!activeFileName) return
@@ -90,8 +123,6 @@ function App() {
         if (isLoading || loadingFileRef.current) return
         // Skip if the debounced code is for a different file
         if (lastSavedFileRef.current !== activeFileName) return
-        // Skip empty code (avoid overwriting with empty on file switch)
-        if (!debouncedCode && debouncedCode !== '') return
 
         const save = async () => {
             try {

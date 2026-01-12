@@ -47,32 +47,23 @@ const latexCommands = [
     { label: '\\beta', type: 'constant', info: 'Greek beta' },
     { label: '\\gamma', type: 'constant', info: 'Greek gamma' },
     { label: '\\delta', type: 'constant', info: 'Greek delta' },
-    { label: '\\epsilon', type: 'constant', info: 'Greek epsilon' },
     { label: '\\theta', type: 'constant', info: 'Greek theta' },
     { label: '\\lambda', type: 'constant', info: 'Greek lambda' },
-    { label: '\\mu', type: 'constant', info: 'Greek mu' },
     { label: '\\pi', type: 'constant', info: 'Greek pi' },
     { label: '\\sigma', type: 'constant', info: 'Greek sigma' },
     { label: '\\omega', type: 'constant', info: 'Greek omega' },
-    { label: '\\partial', type: 'constant', info: 'Partial derivative' },
-    { label: '\\nabla', type: 'constant', info: 'Nabla/gradient' },
     { label: '\\times', type: 'constant', info: 'Multiplication' },
     { label: '\\cdot', type: 'constant', info: 'Dot product' },
     { label: '\\leq', type: 'constant', info: 'Less or equal' },
     { label: '\\geq', type: 'constant', info: 'Greater or equal' },
     { label: '\\neq', type: 'constant', info: 'Not equal' },
-    { label: '\\approx', type: 'constant', info: 'Approximately' },
     { label: '\\rightarrow', type: 'constant', info: 'Right arrow' },
-    { label: '\\leftarrow', type: 'constant', info: 'Left arrow' },
     { label: '\\Rightarrow', type: 'constant', info: 'Double right arrow' },
-    { label: '\\Leftrightarrow', type: 'constant', info: 'Double arrow' },
 
     // References
     { label: '\\label', type: 'function', info: 'Create label', apply: '\\label{}' },
     { label: '\\ref', type: 'function', info: 'Reference label', apply: '\\ref{}' },
     { label: '\\cite', type: 'function', info: 'Citation', apply: '\\cite{}' },
-    { label: '\\bibliography', type: 'function', info: 'Bibliography file', apply: '\\bibliography{}' },
-    { label: '\\bibliographystyle', type: 'function', info: 'Bibliography style', apply: '\\bibliographystyle{}' },
 
     // Figures and tables
     { label: '\\includegraphics', type: 'function', info: 'Include image', apply: '\\includegraphics[width=\\textwidth]{}' },
@@ -85,8 +76,6 @@ const latexCommands = [
     // Spacing
     { label: '\\newline', type: 'keyword', info: 'New line' },
     { label: '\\newpage', type: 'keyword', info: 'New page' },
-    { label: '\\vspace', type: 'function', info: 'Vertical space', apply: '\\vspace{}' },
-    { label: '\\hspace', type: 'function', info: 'Horizontal space', apply: '\\hspace{}' },
     { label: '\\noindent', type: 'keyword', info: 'No indentation' },
 
     // Footnotes
@@ -100,21 +89,9 @@ const latexEnvironments = [
     { label: 'tabular', info: 'Tabular data' },
     { label: 'itemize', info: 'Bulleted list' },
     { label: 'enumerate', info: 'Numbered list' },
-    { label: 'description', info: 'Description list' },
     { label: 'equation', info: 'Numbered equation' },
-    { label: 'equation*', info: 'Unnumbered equation' },
     { label: 'align', info: 'Aligned equations' },
-    { label: 'align*', info: 'Aligned equations (unnumbered)' },
-    { label: 'abstract', info: 'Abstract text' },
-    { label: 'quote', info: 'Block quote' },
-    { label: 'verbatim', info: 'Verbatim text' },
     { label: 'center', info: 'Centered content' },
-    { label: 'minipage', info: 'Mini page' },
-    { label: 'array', info: 'Math array' },
-    { label: 'matrix', info: 'Matrix' },
-    { label: 'pmatrix', info: 'Parentheses matrix' },
-    { label: 'bmatrix', info: 'Bracket matrix' },
-    { label: 'cases', info: 'Cases/piecewise' },
 ]
 
 // LaTeX autocomplete function
@@ -178,7 +155,15 @@ function wrapSelection(view, before, after) {
 function Editor({ code, onChange, onCompile, activeFile }) {
     const editorRef = useRef(null)
     const viewRef = useRef(null)
-    const lastActiveFileRef = useRef(null)
+    const onChangeRef = useRef(onChange)
+    const onCompileRef = useRef(onCompile)
+    const isInternalChange = useRef(false)
+
+    // Keep refs updated
+    useEffect(() => {
+        onChangeRef.current = onChange
+        onCompileRef.current = onCompile
+    }, [onChange, onCompile])
 
     // Create editor theme
     const editorTheme = useMemo(() => EditorView.theme({
@@ -209,122 +194,51 @@ function Editor({ code, onChange, onCompile, activeFile }) {
             border: '1px solid var(--border-color)',
             borderRadius: '6px',
         },
-        '.cm-tooltip-autocomplete': {
-            '& > ul > li': {
-                padding: '4px 8px',
-            },
-            '& > ul > li[aria-selected]': {
-                backgroundColor: 'var(--accent-light)',
-                color: 'var(--accent)',
-            },
+        '.cm-tooltip-autocomplete > ul > li[aria-selected]': {
+            backgroundColor: 'var(--accent-light)',
+            color: 'var(--accent)',
         },
     }), [])
 
-    // Create Overleaf-like keybindings
-    const createKeybindings = useCallback((onCompileHandler) => {
-        return keymap.of([
-            // Tab - accept completion if open, otherwise indent
-            {
-                key: 'Tab',
-                run: (view) => {
-                    // Check if autocomplete is active
-                    if (completionStatus(view.state)) {
-                        return acceptCompletion(view)
-                    }
-                    // Otherwise do normal tab (indent)
-                    return indentWithTab.run ? indentWithTab.run(view) : false
+    // Create keybindings
+    const keybindings = useMemo(() => keymap.of([
+        // Tab - accept completion if open, otherwise indent
+        {
+            key: 'Tab',
+            run: (view) => {
+                if (completionStatus(view.state)) {
+                    return acceptCompletion(view)
                 }
-            },
+                return indentWithTab.run ? indentWithTab.run(view) : false
+            }
+        },
+        { key: 'Ctrl-Space', run: startCompletion },
+        { key: 'Ctrl-b', run: (view) => wrapSelection(view, '\\textbf{', '}') },
+        { key: 'Ctrl-i', run: (view) => wrapSelection(view, '\\textit{', '}') },
+        { key: 'Ctrl-u', preventDefault: true, run: (view) => wrapSelection(view, '\\underline{', '}') },
+        { key: 'Ctrl-e', run: (view) => wrapSelection(view, '\\emph{', '}') },
+        { key: 'Ctrl-m', run: (view) => wrapSelection(view, '$', '$') },
+        { key: 'Ctrl-Shift-m', run: (view) => wrapSelection(view, '\\[\n', '\n\\]') },
+        {
+            key: 'Ctrl-s',
+            preventDefault: true,
+            run: () => { onCompileRef.current?.(); return true }
+        },
+        {
+            key: 'Ctrl-Enter',
+            run: () => { onCompileRef.current?.(); return true }
+        },
+    ]), [])
 
-            // Ctrl+Space - Show autocomplete
-            {
-                key: 'Ctrl-Space',
-                run: startCompletion
-            },
-
-            // Ctrl+B - Bold
-            {
-                key: 'Ctrl-b',
-                run: (view) => wrapSelection(view, '\\textbf{', '}')
-            },
-
-            // Ctrl+I - Italic
-            {
-                key: 'Ctrl-i',
-                run: (view) => wrapSelection(view, '\\textit{', '}')
-            },
-
-            // Ctrl+U - Underline
-            {
-                key: 'Ctrl-u',
-                preventDefault: true,
-                run: (view) => wrapSelection(view, '\\underline{', '}')
-            },
-
-            // Ctrl+E - Emphasize  
-            {
-                key: 'Ctrl-e',
-                run: (view) => wrapSelection(view, '\\emph{', '}')
-            },
-
-            // Ctrl+M - Math mode
-            {
-                key: 'Ctrl-m',
-                run: (view) => wrapSelection(view, '$', '$')
-            },
-
-            // Ctrl+Shift+M - Display math
-            {
-                key: 'Ctrl-Shift-m',
-                run: (view) => wrapSelection(view, '\\[\n', '\n\\]')
-            },
-
-            // Ctrl+S - Save and compile
-            {
-                key: 'Ctrl-s',
-                preventDefault: true,
-                run: () => {
-                    if (onCompileHandler) onCompileHandler()
-                    return true
-                }
-            },
-
-            // Ctrl+Enter - Compile
-            {
-                key: 'Ctrl-Enter',
-                run: () => {
-                    if (onCompileHandler) onCompileHandler()
-                    return true
-                }
-            },
-        ])
-    }, [])
-
-    // Create editor when activeFile changes
+    // Initialize editor ONCE
     useEffect(() => {
-        if (!editorRef.current) return
+        if (!editorRef.current || viewRef.current) return
 
-        // Check if file actually changed
-        if (activeFile === lastActiveFileRef.current && viewRef.current) {
-            return
-        }
-        lastActiveFileRef.current = activeFile
-
-        // Destroy previous editor
-        if (viewRef.current) {
-            viewRef.current.destroy()
-            viewRef.current = null
-        }
-
-        // Clear container
-        editorRef.current.innerHTML = ''
-
-        // Create new editor with current code
         const state = EditorState.create({
             doc: code || '',
             extensions: [
                 basicSetup,
-                createKeybindings(onCompile),
+                keybindings,
                 StreamLanguage.define(stex),
                 editorTheme,
                 autocompletion({
@@ -333,8 +247,8 @@ function Editor({ code, onChange, onCompile, activeFile }) {
                     maxRenderedOptions: 15,
                 }),
                 EditorView.updateListener.of((update) => {
-                    if (update.docChanged) {
-                        onChange(update.state.doc.toString())
+                    if (update.docChanged && !isInternalChange.current) {
+                        onChangeRef.current?.(update.state.doc.toString())
                     }
                 }),
             ],
@@ -345,36 +259,32 @@ function Editor({ code, onChange, onCompile, activeFile }) {
             parent: editorRef.current,
         })
         viewRef.current = view
-        view.focus()
 
-    }, [activeFile, editorTheme, createKeybindings, onCompile])
+        return () => {
+            view.destroy()
+            viewRef.current = null
+        }
+    }, [editorTheme, keybindings])
 
-    // Update editor content when code changes from outside (file loaded)
+    // Update content when code prop changes (fast update, no recreate)
     useEffect(() => {
         if (!viewRef.current) return
 
         const currentContent = viewRef.current.state.doc.toString()
 
-        // Only update if code is different from what's in editor
-        if (code !== undefined && code !== null && currentContent !== code) {
+        // Only update if actually different
+        if (code !== currentContent) {
+            isInternalChange.current = true
             viewRef.current.dispatch({
                 changes: {
                     from: 0,
                     to: currentContent.length,
-                    insert: code
+                    insert: code || ''
                 }
             })
+            isInternalChange.current = false
         }
     }, [code])
-
-    // Cleanup on unmount
-    useEffect(() => {
-        return () => {
-            if (viewRef.current) {
-                viewRef.current.destroy()
-            }
-        }
-    }, [])
 
     // Get display filename
     const displayName = activeFile ? activeFile.split('/').pop() : 'main.tex'
