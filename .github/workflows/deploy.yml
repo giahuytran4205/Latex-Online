@@ -43,14 +43,11 @@ jobs:
             if [ -d "$PROJECT_DIR" ]; then
                 echo "📥 [Deploy] Pulling latest code..."
                 cd "$PROJECT_DIR"
-                
-                # Check if it is a git repo
                 if [ -d ".git" ]; then
                      git reset --hard
                      git pull
                 else
                      echo "⚠️ [Deploy] Directory exists but not a git repo. Re-cloning..."
-                     cd ..
                      rm -rf "$PROJECT_DIR"
                      git clone "$REPO_URL" "$PROJECT_DIR"
                      cd "$PROJECT_DIR"
@@ -61,56 +58,8 @@ jobs:
                 cd "$PROJECT_DIR"
             fi
             
-            # 2. Build Client
-            echo "📦 [Deploy] Building client..."
-            cd client
-            npm install || { echo "❌ Client install failed"; exit 1; }
-            npm run build || { echo "❌ Client build failed"; exit 1; }
-            cd ..
-            
-            # 3. Setup Server
-            echo "🔧 [Deploy] Installing server dependencies..."
-            cd server
-            npm install --production || { echo "❌ Server install failed"; exit 1; }
-            cd .. # Back to root
-            
-            # 4. Restart Server
-            echo "🔄 [Deploy] Restarting server..."
-            
-            # Kill ONLY the specific node process running our server entry point
-            # matched by 'node server/index.js'
-            # We ignore the grep process itself
-            PIDS=$(pgrep -f "node server/index.js" | grep -v grep || echo "")
-            
-            if [ -n "$PIDS" ]; then
-                # Replace newlines with spaces
-                PIDS_CLEAN=$(echo "$PIDS" | tr '\n' ' ')
-                echo "🛑 [Deploy] Stopping existing server (PIDs: $PIDS_CLEAN)..."
-                
-                # Iterate and kill explicitly
-                for PID in $PIDS_CLEAN; do
-                    kill $PID 2>/dev/null || true
-                done
-                sleep 2
-            else
-                echo "ℹ️  [Deploy] No existing server process found."
-            fi
-            
-            # Start the server
-            echo "▶️  [Deploy] Launching new server process..."
-            nohup node server/index.js > "$LOG_FILE" 2>&1 &
-            
-            # 5. Verification
-            sleep 3
-            NEW_PID=$(pgrep -f "node server/index.js" | grep -v grep | head -n 1)
-            
-            if [ -n "$NEW_PID" ]; then
-                echo "✅ [Deploy] Server started successfully! (PID: $NEW_PID)"
-                echo "📜 [Deploy] Tail of server log:"
-                tail -n 10 "$LOG_FILE"
-            else
-                echo "❌ [Deploy] Server failed to start."
-                echo "📜 [Deploy] Full server log:"
-                cat "$LOG_FILE"
-                exit 1
-            fi
+            # 2. Execute Runner
+            echo "� [Deploy] Executing deployment runner..."
+            chmod +x deploy_runner.sh
+            # Execute directly in current shell info
+            ./deploy_runner.sh
