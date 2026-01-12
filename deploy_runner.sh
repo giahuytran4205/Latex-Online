@@ -48,7 +48,16 @@ else
          kill -9 $PIDS_PORT 2>/dev/null || true
     fi
 fi
-sleep 2
+
+# Wait loop for port to be actually free
+echo "⏳ [Runner] Waiting for port 3000 to clear..."
+for i in {1..10}; do
+    if ! lsof -i:3000 >/dev/null 2>&1; then
+        echo "✅ [Runner] Port 3000 is free."
+        break
+    fi
+    sleep 1
+done
 
 pm2 start ecosystem.config.cjs
 
