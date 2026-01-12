@@ -183,7 +183,11 @@ function runLatexEngine(enginePath, texFile, workDir) {
             shell: true, // Enable shell to better resolve PATH
             env: {
                 ...process.env,
-                PATH: newPath
+                PATH: newPath,
+                // Critical for Termux: Explicitly set TeX environment variables
+                TEXMFROOT: '/data/data/com.termux/files/usr/share/texlive/2025.0',
+                TEXMFDIST: '/data/data/com.termux/files/usr/share/texlive/2025.0/texmf-dist',
+                TEXMFLOCAL: '/data/data/com.termux/files/usr/share/texlive/texmf-local',
             }
         })
 
