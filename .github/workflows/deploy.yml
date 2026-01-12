@@ -92,14 +92,15 @@ jobs:
             npm install --production
             
             # 4. Restart Server
+            # Restart Server logic - updated for correct path
+            
             echo "🔄 Restarting Server..."
+            
             # Stop existing process safely
-            # Be ultra-specific: finding node process with index.js, but excluding our own deployment script if checking full path
-            # We explicitly ignore the grep/pgrep process itself
-            PIDS=$(pgrep -f "node index.js" | grep -v $$ || echo "")
+            # Match strict pattern "node server/index.js"
+            PIDS=$(pgrep -f "node server/index.js" | grep -v $$ || echo "")
             
             if [ -n "$PIDS" ]; then
-                # Replace newlines with spaces for kill command
                 PIDS_ONELINE=$(echo "$PIDS" | tr '\n' ' ')
                 echo "Stopping PIDs: $PIDS_ONELINE"
                 for PID in $PIDS; do
@@ -108,12 +109,13 @@ jobs:
                 sleep 2
             fi
             
-            # Start new process
-            nohup node index.js > ../server.log 2>&1 &
+            # Start new process from ROOT directory to keep paths consistent
+            # The server expects to be run either from root or internal, but let's stick to root now that we corrected paths
+            nohup node server/index.js > server.log 2>&1 &
             
             # Verification
             sleep 5
-            PID=$(pgrep -f "node index.js")
+            PID=$(pgrep -f "node server/index.js")
             if [ -n "$PID" ]; then
                 echo "✅ Server started with PID $PID"
             else
