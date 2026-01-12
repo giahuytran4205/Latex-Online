@@ -23,30 +23,55 @@ export TEXMFROOT="$TEXLIVE_BASE/$TL_YEAR"
 export TEXMFDIST="$TEXMFROOT/texmf-dist"
 export PERL5LIB="$TEXMFROOT/tlpkg:$TEXMFDIST/scripts/texlive"
 
-# 2. INSTALL SYSTEM DEPENDENCIES (Silent)
-pkg install -y nginx nodejs pm2 lsof > /dev/null 2>&1 || true
+# 2. INSTALL SYSTEM DEPENDENCIES
+echo "📦 Updating system packages..."
+pkg update -y || true
+echo "📦 Installing nginx, nodejs, pm2, lsof..."
+pkg install -y nginx nodejs pm2 lsof
 
 # 3. BUILD APPLICATION
 cd "$PROJECT_DIR"
 
 echo "📦 Building Frontend..."
 cd client
-npm install --quiet
+npm install
 npm run build
 cd ..
 
 echo "🔧 Setting up Backend..."
 cd server
-npm install --production --quiet
+npm install --production
 cd ..
 
 # 4. CONFIGURE NGINX
 echo "⚙️  Configuring Nginx Reverse Proxy..."
+MAIN_NGINX_CONF="/data/data/com.termux/files/usr/etc/nginx/nginx.conf"
+
+# Create a default nginx.conf if it doesn't exist
+if [ ! -f "$MAIN_NGINX_CONF" ]; then
+    echo "⚠️  nginx.conf missing, creating default..."
+    mkdir -p "$(dirname "$MAIN_NGINX_CONF")"
+    cat > "$MAIN_NGINX_CONF" <<EOF
+worker_processes  1;
+events {
+    worker_connections  1024;
+}
+http {
+    include       mime.types;
+    default_type  application/octet-stream;
+    sendfile        on;
+    keepalive_timeout  65;
+    include $NGINX_CONF_DIR/*.conf;
+}
+EOF
+fi
+
 cp "$PROJECT_DIR/nginx/latex-online.conf" "$NGINX_CONF_DIR/latex-online.conf"
-# Ensure nginx main config includes conf.d
-if ! grep -q "include $NGINX_CONF_DIR/*.conf;" /data/data/com.termux/files/usr/etc/nginx/nginx.conf; then
-    # Simple injection into http block - usually towards the end
-    sed -i '/http {/a \    include '"$NGINX_CONF_DIR"'/*.conf;' /data/data/com.termux/files/usr/etc/nginx/nginx.conf
+
+# Ensure nginx main config includes our conf.d
+if ! grep -q "include $NGINX_CONF_DIR/*.conf;" "$MAIN_NGINX_CONF"; then
+    echo "🔗 Linking conf.d to main nginx.conf..."
+    sed -i '/http {/a \    include '"$NGINX_CONF_DIR"'/*.conf;' "$MAIN_NGINX_CONF"
 fi
 
 # 5. RESTART SERVICES
