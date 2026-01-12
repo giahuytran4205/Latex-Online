@@ -43,6 +43,7 @@ ssh -p $PORT $USER@$SERVER << 'ENDSSH'
     cd latex-online
     rm -rf client server
     tar -xzvf ~/latex-online.tar.gz
+    mkdir -p client
     mv deploy/client-dist client/dist
     mv deploy/server .
     rm -rf deploy ~/latex-online.tar.gz
