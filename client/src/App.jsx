@@ -4,56 +4,16 @@ import Preview from './components/Preview/Preview'
 import Toolbar from './components/Toolbar/Toolbar'
 import FileTree from './components/FileTree/FileTree'
 import Console from './components/Console/Console'
-import { compileLatex } from './services/api'
+import { compileLatex, getFiles, getFileContent, saveFile, createFile, deleteFile, renameFile } from './services/api'
 
-const DEFAULT_FILES = {
-    'main.tex': `\\documentclass{article}
-\\usepackage[utf8]{inputenc}
-\\usepackage{amsmath}
-\\usepackage{graphicx}
-
-\\title{Welcome to LaTeX Online}
-\\author{Your Name}
-\\date{\\today}
-
-\\begin{document}
-
-\\maketitle
-
-\\section{Introduction}
-This is a collaborative LaTeX editor similar to Overleaf.
-You can write your documents here and compile them to PDF.
-
-\\section{Math Example}
-Here's a beautiful equation:
-\\begin{equation}
-  E = mc^2
-\\end{equation}
-
-And the quadratic formula:
-\\begin{equation}
-  x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}
-\\end{equation}
-
-\\section{Features}
-\\begin{itemize}
-  \\item Real-time collaboration with Yjs
-  \\item Multiple LaTeX engines: pdflatex, xelatex, lualatex
-  \\item Dark and light themes
-  \\item Mobile-friendly interface
-\\end{itemize}
-
-\\end{document}
-`,
-    'references.bib': `@article{einstein1905,
-  author = {Albert Einstein},
-  title = {On the Electrodynamics of Moving Bodies},
-  journal = {Annalen der Physik},
-  year = {1905},
-  volume = {17},
-  pages = {891--921}
-}
-`
+// Debounce helper
+const useDebounce = (value, delay) => {
+    const [debouncedValue, setDebouncedValue] = useState(value)
+    useEffect(() => {
+        const handler = setTimeout(() => setDebouncedValue(value), delay)
+        return () => clearTimeout(handler)
+    }, [value, delay])
+    return debouncedValue
 }
 
 function App() {
@@ -63,119 +23,136 @@ function App() {
         return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
     })
     const [engine, setEngine] = useState('pdflatex')
-    const [files, setFiles] = useState(() => {
-        const saved = localStorage.getItem('latex-files')
-        return saved ? JSON.parse(saved) : DEFAULT_FILES
-    })
-    const [activeFile, setActiveFile] = useState('main.tex')
+
+    // File state
+    const [files, setFiles] = useState([])
+    const [activeFileName, setActiveFileName] = useState('main.tex')
+    const [code, setCode] = useState('')
+    const [isLoading, setIsLoading] = useState(true)
+
     const [pdfUrl, setPdfUrl] = useState(null)
     const [logs, setLogs] = useState('')
     const [isCompiling, setIsCompiling] = useState(false)
     const [consoleOpen, setConsoleOpen] = useState(false)
     const [collaborators, setCollaborators] = useState([])
 
-    // Resizable panels
-    const [sidebarWidth, setSidebarWidth] = useState(() => {
-        const saved = localStorage.getItem('latex-sidebar-width')
-        return saved ? parseInt(saved) : 200
-    })
-    const [editorWidth, setEditorWidth] = useState(() => {
-        const saved = localStorage.getItem('latex-editor-width')
-        return saved ? parseInt(saved) : 50 // percentage
-    })
+    // Auto-save logic
+    const debouncedCode = useDebounce(code, 1000)
+
+    // Resizable panels state
+    const [sidebarWidth, setSidebarWidth] = useState(() => parseInt(localStorage.getItem('latex-sidebar-width') || '200'))
+    const [editorWidth, setEditorWidth] = useState(() => parseInt(localStorage.getItem('latex-editor-width') || '50'))
     const [isResizing, setIsResizing] = useState(null)
     const appRef = useRef(null)
 
-    // Get current file content
-    const code = files[activeFile] || ''
-
-    // Update file content
-    const setCode = useCallback((newCode) => {
-        setFiles(prev => ({
-            ...prev,
-            [activeFile]: newCode
-        }))
-    }, [activeFile])
-
-    // Save files to localStorage
+    // Initial load
     useEffect(() => {
-        localStorage.setItem('latex-files', JSON.stringify(files))
-    }, [files])
+        loadFiles()
+    }, [])
 
-    // Apply theme
+    // Load file content when active file changes
     useEffect(() => {
-        if (theme === 'system') {
-            const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches
-            document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light')
-        } else {
-            document.documentElement.setAttribute('data-theme', theme)
+        if (!activeFileName) return
+
+        const fetchContent = async () => {
+            try {
+                const data = await getFileContent('default-project', activeFileName)
+                setCode(data.content)
+            } catch (err) {
+                console.error('Failed to load file content:', err)
+            }
         }
-        localStorage.setItem('latex-theme', theme)
-    }, [theme])
+        fetchContent()
+    }, [activeFileName])
 
-    // Add new file
-    const handleAddFile = useCallback((filename) => {
-        if (!filename || files[filename]) return false
+    // Auto-save effect
+    useEffect(() => {
+        if (!activeFileName || isLoading) return
 
-        let content = ''
-        if (filename.endsWith('.tex')) {
-            content = `% ${filename}\n\\section{New Section}\n\n`
-        } else if (filename.endsWith('.bib')) {
-            content = `% Bibliography file: ${filename}\n`
-        } else {
-            content = `% ${filename}\n`
+        const save = async () => {
+            try {
+                await saveFile('default-project', activeFileName, debouncedCode)
+            } catch (err) {
+                console.error('Auto-save failed:', err)
+            }
         }
+        if (debouncedCode) save()
+    }, [debouncedCode, activeFileName])
 
-        setFiles(prev => ({ ...prev, [filename]: content }))
-        setActiveFile(filename)
-        return true
-    }, [files])
+    const loadFiles = async () => {
+        try {
+            setIsLoading(true)
+            const data = await getFiles('default-project')
+            setFiles(data.files)
 
-    // Delete file
-    const handleDeleteFile = useCallback((filename) => {
-        if (filename === 'main.tex') return false // Can't delete main.tex
-
-        setFiles(prev => {
-            const newFiles = { ...prev }
-            delete newFiles[filename]
-            return newFiles
-        })
-
-        if (activeFile === filename) {
-            setActiveFile('main.tex')
+            // If main.tex exists and no active file, select it
+            if (!activeFileName && data.files.find(f => f.name === 'main.tex')) {
+                setActiveFileName('main.tex')
+            }
+        } catch (err) {
+            console.error('Failed to load files:', err)
+            setLogs('Error: Failed to connect to server')
+            setConsoleOpen(true)
+        } finally {
+            setIsLoading(false)
         }
-        return true
-    }, [activeFile])
+    }
 
-    // Rename file
-    const handleRenameFile = useCallback((oldName, newName) => {
-        if (!newName || files[newName] || oldName === 'main.tex') return false
-
-        setFiles(prev => {
-            const content = prev[oldName]
-            const newFiles = { ...prev }
-            delete newFiles[oldName]
-            newFiles[newName] = content
-            return newFiles
-        })
-
-        if (activeFile === oldName) {
-            setActiveFile(newName)
+    const handleAddFile = async (filename) => {
+        try {
+            await createFile('default-project', filename)
+            await loadFiles()
+            setActiveFileName(filename)
+            return true
+        } catch (err) {
+            alert('Failed to create file: ' + err.message)
+            return false
         }
-        return true
-    }, [files, activeFile])
+    }
 
-    // Compile LaTeX
+    const handleDeleteFile = async (filename) => {
+        if (filename === 'main.tex') return false
+        if (!confirm(`Delete ${filename}?`)) return false
+
+        try {
+            await deleteFile('default-project', filename)
+            await loadFiles()
+            if (activeFileName === filename) setActiveFileName('main.tex')
+            return true
+        } catch (err) {
+            alert('Failed to delete file')
+            return false
+        }
+    }
+
+    const handleRenameFile = async (oldName, newName) => {
+        if (oldName === 'main.tex') return false
+        try {
+            await renameFile('default-project', oldName, newName)
+            await loadFiles()
+            if (activeFileName === oldName) setActiveFileName(newName)
+            return true
+        } catch (err) {
+            alert('Failed to rename file')
+            return false
+        }
+    }
+
     const handleCompile = useCallback(async () => {
         setIsCompiling(true)
         setLogs('')
         setConsoleOpen(true)
 
+        // Save current file first
         try {
+            if (activeFileName) {
+                await saveFile('default-project', activeFileName, code)
+            }
+
             const result = await compileLatex({
-                code: files['main.tex'] || code,
+                code: '',
                 engine,
-                filename: 'main.tex'
+                filename: 'main'
             })
 
             if (result.success) {
@@ -189,21 +166,18 @@ function App() {
         } finally {
             setIsCompiling(false)
         }
-    }, [files, code, engine])
+    }, [code, engine, activeFileName])
 
-    // Keyboard shortcut for compile
+    // Apply theme
     useEffect(() => {
-        const handleKeyDown = (e) => {
-            if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-                e.preventDefault()
-                handleCompile()
-            }
-        }
-        window.addEventListener('keydown', handleKeyDown)
-        return () => window.removeEventListener('keydown', handleKeyDown)
-    }, [handleCompile])
+        document.documentElement.setAttribute('data-theme', theme === 'system'
+            ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+            : theme
+        )
+        localStorage.setItem('latex-theme', theme)
+    }, [theme])
 
-    // Handle resize
+    // Resize handlers
     const handleMouseDown = useCallback((type) => (e) => {
         e.preventDefault()
         setIsResizing(type)
@@ -211,41 +185,30 @@ function App() {
 
     useEffect(() => {
         if (!isResizing) return
-
         const handleMouseMove = (e) => {
-            if (!appRef.current) return
-
             if (isResizing === 'sidebar') {
                 const newWidth = Math.max(150, Math.min(400, e.clientX))
                 setSidebarWidth(newWidth)
-                localStorage.setItem('latex-sidebar-width', newWidth.toString())
-            } else if (isResizing === 'editor') {
+            } else if (isResizing === 'editor' && appRef.current) {
                 const rect = appRef.current.getBoundingClientRect()
                 const contentWidth = rect.width - sidebarWidth
                 const x = e.clientX - sidebarWidth
                 const percent = Math.max(30, Math.min(70, (x / contentWidth) * 100))
                 setEditorWidth(percent)
-                localStorage.setItem('latex-editor-width', percent.toString())
             }
         }
-
         const handleMouseUp = () => {
             setIsResizing(null)
+            localStorage.setItem('latex-sidebar-width', sidebarWidth)
+            localStorage.setItem('latex-editor-width', editorWidth)
         }
-
         document.addEventListener('mousemove', handleMouseMove)
         document.addEventListener('mouseup', handleMouseUp)
         return () => {
             document.removeEventListener('mousemove', handleMouseMove)
             document.removeEventListener('mouseup', handleMouseUp)
         }
-    }, [isResizing, sidebarWidth])
-
-    // Get file list for FileTree
-    const fileList = Object.keys(files).map(name => ({
-        name,
-        type: name.split('.').pop()
-    }))
+    }, [isResizing, sidebarWidth, editorWidth])
 
     return (
         <div
@@ -268,19 +231,15 @@ function App() {
             />
 
             <FileTree
-                files={fileList}
-                activeFile={activeFile}
-                onFileSelect={setActiveFile}
+                files={files}
+                activeFile={activeFileName}
+                onFileSelect={setActiveFileName}
                 onAddFile={handleAddFile}
                 onDeleteFile={handleDeleteFile}
                 onRenameFile={handleRenameFile}
             />
 
-            {/* Sidebar resize handle */}
-            <div
-                className="resize-handle resize-handle--sidebar"
-                onMouseDown={handleMouseDown('sidebar')}
-            />
+            <div className="resize-handle resize-handle--sidebar" onMouseDown={handleMouseDown('sidebar')} />
 
             <Editor
                 code={code}
@@ -288,11 +247,7 @@ function App() {
                 onCollaboratorsChange={setCollaborators}
             />
 
-            {/* Editor/Preview resize handle */}
-            <div
-                className="resize-handle resize-handle--editor"
-                onMouseDown={handleMouseDown('editor')}
-            />
+            <div className="resize-handle resize-handle--editor" onMouseDown={handleMouseDown('editor')} />
 
             <Preview pdfUrl={pdfUrl} />
 

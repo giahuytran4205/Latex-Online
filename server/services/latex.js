@@ -1,13 +1,17 @@
 import { spawn } from 'child_process'
-import { writeFileSync, mkdirSync, existsSync, readFileSync } from 'fs'
+import { writeFileSync, mkdirSync, existsSync, readFileSync, cpSync } from 'fs'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
 import { v4 as uuidv4 } from 'uuid'
+// Use ncp for recursive copy if fs.cpSync is not available (Node < 16.7)
+// But we assume Node 18+ on Termux
+import { ncp } from 'ncp'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
 
 const TEMP_DIR = join(__dirname, '../temp')
+const PROJECTS_DIR = join(__dirname, '../../projects')
 
 // Termux pdflatex path
 const TERMUX_BIN = '/data/data/com.termux/files/usr/bin'
@@ -21,22 +25,26 @@ if (!existsSync(TEMP_DIR)) {
  * Get the full path to a LaTeX engine
  */
 function getEnginePath(engine) {
-    // Try Termux path first
     const termuxPath = join(TERMUX_BIN, engine)
     if (existsSync(termuxPath)) {
         return termuxPath
     }
-    // Fall back to just the engine name (rely on PATH)
     return engine
 }
 
 /**
  * Compile LaTeX code using specified engine
+ * @param {string} projectId - Project ID to verify files from
+ * @param {string} engine - 'pdflatex' | 'xelatex' | 'lualatex'
+ * @param {string} filename - Main filename (without extension)
+ * @param {string} code - Optional override code (legacy support)
  */
-export async function compileLatex(code, engine = 'pdflatex', filename = 'main') {
+export async function compileLatex(projectId = 'default-project', engine = 'pdflatex', filename = 'main', code = null) {
     const jobId = uuidv4().substring(0, 8)
     const workDir = join(TEMP_DIR, jobId)
-    const texFile = join(workDir, `${filename}.tex`)
+    const projectDir = join(PROJECTS_DIR, projectId)
+
+    // Output paths
     const pdfFile = `${jobId}-${filename}.pdf`
     const pdfPath = join(TEMP_DIR, pdfFile)
 
@@ -44,27 +52,34 @@ export async function compileLatex(code, engine = 'pdflatex', filename = 'main')
         // Create work directory
         mkdirSync(workDir, { recursive: true })
 
-        // Write LaTeX source
-        writeFileSync(texFile, code, 'utf-8')
-        console.log(`[LaTeX] Wrote ${code.length} bytes to ${texFile}`)
+        // Copy project files to work directory
+        if (existsSync(projectDir)) {
+            await new Promise((resolve, reject) => {
+                ncp(projectDir, workDir, (err) => err ? reject(err) : resolve())
+            })
+        }
 
-        // Get engine path
+        // If specific code provided (not saved yet), overwrite main.tex
+        if (code) {
+            writeFileSync(join(workDir, `${filename}.tex`), code, 'utf-8')
+        } else if (!existsSync(join(workDir, `${filename}.tex`))) {
+            // Create empty main if missing
+            writeFileSync(join(workDir, `${filename}.tex`), '', 'utf-8')
+        }
+
         const enginePath = getEnginePath(engine)
-        console.log(`[LaTeX] Using engine: ${enginePath}`)
+        console.log(`[LaTeX] Compiling project ${projectId} with ${enginePath}`)
 
         // Run LaTeX engine
+        const texFile = join(workDir, `${filename}.tex`)
         const result = await runLatexEngine(enginePath, texFile, workDir)
 
-        // Check if PDF was generated
+        // Check PDF
         const generatedPdf = join(workDir, `${filename}.pdf`)
-        console.log(`[LaTeX] Checking for PDF at: ${generatedPdf}`)
 
         if (existsSync(generatedPdf)) {
-            // Copy to temp root for serving
             const pdfContent = readFileSync(generatedPdf)
             writeFileSync(pdfPath, pdfContent)
-            console.log(`[LaTeX] PDF generated: ${pdfFile} (${pdfContent.length} bytes)`)
-
             return {
                 success: true,
                 pdfPath: pdfFile,
@@ -72,7 +87,6 @@ export async function compileLatex(code, engine = 'pdflatex', filename = 'main')
                 errors: parseErrors(result.stdout + result.stderr),
             }
         } else {
-            console.log(`[LaTeX] No PDF generated. Exit code: ${result.code}`)
             return {
                 success: false,
                 pdfPath: null,
@@ -91,9 +105,6 @@ export async function compileLatex(code, engine = 'pdflatex', filename = 'main')
     }
 }
 
-/**
- * Run LaTeX engine as child process
- */
 function runLatexEngine(enginePath, texFile, workDir) {
     return new Promise((resolve, reject) => {
         const args = [
@@ -118,16 +129,11 @@ function runLatexEngine(enginePath, texFile, workDir) {
         let stdout = ''
         let stderr = ''
 
-        proc.stdout.on('data', (data) => {
-            stdout += data.toString()
-        })
-
-        proc.stderr.on('data', (data) => {
-            stderr += data.toString()
-        })
+        proc.stdout.on('data', (d) => stdout += d.toString())
+        proc.stderr.on('data', (d) => stderr += d.toString())
 
         proc.on('close', (code) => {
-            console.log(`[LaTeX] Exit code: ${code}, stdout: ${stdout.length} bytes`)
+            console.log(`[LaTeX] Exit code: ${code}`)
             resolve({ code, stdout, stderr })
         })
 
@@ -138,13 +144,9 @@ function runLatexEngine(enginePath, texFile, workDir) {
     })
 }
 
-/**
- * Parse LaTeX log for errors
- */
 function parseErrors(log) {
     const errors = []
     const lines = log.split('\n')
-
     for (const line of lines) {
         if (line.startsWith('!') || line.includes('Error:') || line.includes('Fatal error')) {
             errors.push(line.trim())
@@ -154,6 +156,5 @@ function parseErrors(log) {
             errors.push(`Line ${match[2]}: ${match[3]}`)
         }
     }
-
     return errors
 }

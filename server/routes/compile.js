@@ -4,46 +4,36 @@ import { compileLatex } from '../services/latex.js'
 const router = express.Router()
 
 router.post('/', async (req, res) => {
-    const { code, engine = 'pdflatex', filename = 'main.tex' } = req.body
-
-    if (!code) {
-        return res.status(400).json({
-            success: false,
-            error: 'No LaTeX code provided',
-        })
-    }
-
-    // Validate engine
-    const validEngines = ['pdflatex', 'xelatex', 'lualatex']
-    if (!validEngines.includes(engine)) {
-        return res.status(400).json({
-            success: false,
-            error: `Invalid engine. Must be one of: ${validEngines.join(', ')}`,
-        })
-    }
-
     try {
-        console.log(`[Compile] Starting compilation with ${engine}...`)
-        const startTime = Date.now()
+        const { code, engine, filename } = req.body
+        // Use default project ID for now, in future retrieve from auth/session
+        const projectId = 'default-project'
 
-        const result = await compileLatex(code, engine, filename)
+        // Note: We ignore 'code' param in favor of persisted files for multi-file support
+        // unless 'code' is provided explicitly for single-file compile without save
 
-        const compilationTime = Date.now() - startTime
-        console.log(`[Compile] Completed in ${compilationTime}ms`)
+        const result = await compileLatex(projectId, engine || 'pdflatex', filename || 'main', code)
 
-        res.json({
-            success: result.success,
-            pdfUrl: result.pdfPath ? `/api/files/output/${result.pdfPath}` : null,
-            logs: result.logs,
-            errors: result.errors,
-            compilationTime,
-        })
+        if (result.success) {
+            // Return URL to PDF
+            res.json({
+                success: true,
+                pdfUrl: `/api/files/output/${result.pdfPath}`,
+                logs: result.logs
+            })
+        } else {
+            res.json({
+                success: false,
+                logs: result.logs,
+                errors: result.errors
+            })
+        }
     } catch (error) {
-        console.error('[Compile] Error:', error)
+        console.error('Compilation error:', error)
         res.status(500).json({
             success: false,
-            error: error.message,
-            logs: error.logs || '',
+            logs: error.message,
+            errors: [error.message]
         })
     }
 })
