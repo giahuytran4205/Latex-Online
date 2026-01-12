@@ -1,4 +1,4 @@
-name: Deploy to Termux Server (Pull Mode)
+name: Deploy to Termux
 
 on:
   push:
@@ -23,103 +23,89 @@ jobs:
           port: ${{ secrets.TERMUX_PORT }}
           username: ${{ secrets.TERMUX_USER }}
           key: ${{ secrets.TERMUX_SSH_KEY }}
-          script_stop: false
+          script_stop: true # Fail immediately if any command errors
           script: |
-            set -e
-            set -x # Enable debug logging
-            
-            echo "🚀 Starting Pull-Based Deployment..."
-            
-            # Configuration
-            REPO_URL="https://github.com/giahuytran4205/Latex-Online.git"
+            # --- Configuration ---
             PROJECT_DIR="/data/data/com.termux/files/home/latex-online"
+            REPO_URL="https://github.com/giahuytran4205/Latex-Online.git"
+            LOG_FILE="$PROJECT_DIR/server.log"
             
-            # Ensure proper environment
-            export PATH="$PATH:/data/data/com.termux/files/usr/bin/texlive"
+            # --- Environment Setup ---
+            # Set PATH to include Termux bins and TeX Live
+            export PATH="/data/data/com.termux/files/usr/bin:/data/data/com.termux/files/usr/bin/texlive:$PATH"
+            # Explicitly set locale to avoid perl warnings
+            export LC_ALL=C
             
-            # Ensure git is installed
-            if ! command -v git &> /dev/null; then
-                echo "Installing git..."
-                pkg install -y git || { echo "Failed to install git"; exit 1; }
-            fi
-
+            echo "🚀 [Deploy] Starting deployment..."
+            echo "📂 [Deploy] Project Directory: $PROJECT_DIR"
+            
             # 1. Update Codebase
-            SHOULD_INSTALL_CLIENT=false
-            
-            if [ -d "$PROJECT_DIR/.git" ]; then
-                echo "📥 Pulling latest changes..."
+            if [ -d "$PROJECT_DIR" ]; then
+                echo "📥 [Deploy] Pulling latest code..."
                 cd "$PROJECT_DIR"
-                git reset --hard
-                # Capture current commit to compare later
-                OLD_HEAD=$(git rev-parse HEAD)
-                git pull
-                NEW_HEAD=$(git rev-parse HEAD)
                 
-                # Check if client/package.json changed between old and new head
-                if [ "$OLD_HEAD" != "$NEW_HEAD" ]; then
-                    if git diff --name-only "$OLD_HEAD" "$NEW_HEAD" | grep -q "client/package.json"; then
-                        SHOULD_INSTALL_CLIENT=true
-                    fi
+                # Check if it is a git repo
+                if [ -d ".git" ]; then
+                     git reset --hard
+                     git pull
+                else
+                     echo "⚠️ [Deploy] Directory exists but not a git repo. Re-cloning..."
+                     cd ..
+                     rm -rf "$PROJECT_DIR"
+                     git clone "$REPO_URL" "$PROJECT_DIR"
+                     cd "$PROJECT_DIR"
                 fi
             else
-                echo "✨ Cloning repository..."
-                rm -rf "$PROJECT_DIR"
-                git clone "$REPO_URL" "$PROJECT_DIR" || { echo "Git clone failed. Is the repo private?"; exit 1; }
+                echo "✨ [Deploy] Cloning new repository..."
+                git clone "$REPO_URL" "$PROJECT_DIR"
                 cd "$PROJECT_DIR"
-                SHOULD_INSTALL_CLIENT=true
             fi
             
             # 2. Build Client
-            echo "📦 Building Client..."
+            echo "📦 [Deploy] Building client..."
             cd client
-            
-            if [ ! -d "node_modules" ]; then
-                SHOULD_INSTALL_CLIENT=true
-            fi
-            
-            if [ "$SHOULD_INSTALL_CLIENT" = true ]; then
-                echo "Installing client dependencies..."
-                npm install
-            else
-                echo "Skipping npm install for client (no changes detected)"
-            fi
-            
-            npm run build
+            npm install || { echo "❌ Client install failed"; exit 1; }
+            npm run build || { echo "❌ Client build failed"; exit 1; }
+            cd ..
             
             # 3. Setup Server
-            echo "🔧 Setting up Server..."
-            cd ../server
-            npm install --production
+            echo "🔧 [Deploy] Installing server dependencies..."
+            cd server
+            npm install --production || { echo "❌ Server install failed"; exit 1; }
+            cd .. # Back to root
             
             # 4. Restart Server
-            # Restart Server logic - updated for correct path
+            echo "🔄 [Deploy] Restarting server..."
             
-            echo "🔄 Restarting Server..."
-            
-            # Stop existing process safely
-            # Match strict pattern "node server/index.js"
-            PIDS=$(pgrep -f "node server/index.js" | grep -v $$ || echo "")
+            # Kill ONLY the specific node process running our server entry point
+            # matched by 'node server/index.js'
+            # We ignore the grep process itself
+            PIDS=$(pgrep -f "node server/index.js" | grep -v grep || echo "")
             
             if [ -n "$PIDS" ]; then
-                PIDS_ONELINE=$(echo "$PIDS" | tr '\n' ' ')
-                echo "Stopping PIDs: $PIDS_ONELINE"
-                for PID in $PIDS; do
-                    kill $PID 2>/dev/null || true
-                done
+                echo "🛑 [Deploy] Stopping existing server (PIDs: $PIDS)..."
+                # Use Kill -15 (SIGTERM) first
+                echo "$PIDS" | xargs kill || true
                 sleep 2
+            else
+                echo "ℹ️  [Deploy] No existing server process found."
             fi
             
-            # Start new process from ROOT directory to keep paths consistent
-            # The server expects to be run either from root or internal, but let's stick to root now that we corrected paths
-            nohup node server/index.js > server.log 2>&1 &
+            # Start the server
+            echo "▶️  [Deploy] Launching new server process..."
+            nohup node server/index.js > "$LOG_FILE" 2>&1 &
             
-            # Verification
-            sleep 5
-            PID=$(pgrep -f "node server/index.js")
-            if [ -n "$PID" ]; then
-                echo "✅ Server started with PID $PID"
+            # 5. Verification
+            sleep 3
+            NEW_PID=$(pgrep -f "node server/index.js" | grep -v grep | head -n 1)
+            
+            if [ -n "$NEW_PID" ]; then
+                echo "✅ [Deploy] Server started successfully! (PID: $NEW_PID)"
+                echo "📜 [Deploy] Tail of server log:"
+                tail -n 10 "$LOG_FILE"
             else
-                echo "❌ Server failed to start. checking logs:"
-                tail -n 20 ../server.log
+                echo "❌ [Deploy] Server failed to start."
+                echo "📜 [Deploy] Full server log:"
+                cat "$LOG_FILE"
                 exit 1
             fi
