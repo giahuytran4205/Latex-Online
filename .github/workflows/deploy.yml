@@ -1,4 +1,4 @@
-name: Deploy to Termux
+name: Premium Pull-Based Deployment
 
 on:
   push:
@@ -9,57 +9,34 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Setup Tailscale
+      - name: Tailscale Connection
         uses: tailscale/github-action@v2
         with:
           oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
           oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
           tags: tag:ci
 
-      - name: Deploy via SSH
+      - name: remote SSH deployment
         uses: appleboy/ssh-action@v1.0.0
         with:
           host: ${{ secrets.TERMUX_HOST }}
           port: ${{ secrets.TERMUX_PORT }}
           username: ${{ secrets.TERMUX_USER }}
           key: ${{ secrets.TERMUX_SSH_KEY }}
-          script_stop: true # Fail immediately if any command errors
           script: |
-            # --- Configuration ---
             PROJECT_DIR="/data/data/com.termux/files/home/latex-online"
             REPO_URL="https://github.com/giahuytran4205/Latex-Online.git"
-            LOG_FILE="$PROJECT_DIR/server.log"
             
-            # --- Environment Setup ---
-            # Set PATH to include Termux bins and TeX Live
-            export PATH="/data/data/com.termux/files/usr/bin:/data/data/com.termux/files/usr/bin/texlive:$PATH"
-            # Explicitly set locale to avoid perl warnings
-            export LC_ALL=C
-            
-            echo "🚀 [Deploy] Starting deployment..."
-            echo "📂 [Deploy] Project Directory: $PROJECT_DIR"
-            
-            # 1. Update Codebase
+            # Sync code
             if [ -d "$PROJECT_DIR" ]; then
-                echo "📥 [Deploy] Pulling latest code..."
                 cd "$PROJECT_DIR"
-                if [ -d ".git" ]; then
-                     git reset --hard
-                     git pull
-                else
-                     echo "⚠️ [Deploy] Directory exists but not a git repo. Re-cloning..."
-                     rm -rf "$PROJECT_DIR"
-                     git clone "$REPO_URL" "$PROJECT_DIR"
-                     cd "$PROJECT_DIR"
-                fi
+                git reset --hard
+                git pull
             else
-                echo "✨ [Deploy] Cloning new repository..."
                 git clone "$REPO_URL" "$PROJECT_DIR"
                 cd "$PROJECT_DIR"
             fi
             
-            # 2. Execute Runner
-            echo " [Deploy] Executing deployment runner..."
-            chmod +x deploy_runner.sh
-            # Execute directly in current shell info
-            ./deploy_runner.sh
+            # Execute the smart deployment runner
+            chmod +x scripts/deploy.sh
+            ./scripts/deploy.sh
