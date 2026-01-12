@@ -1,115 +1,115 @@
 #!/bin/bash
+# DO NOT REMOVE - This script is used by GitHub Actions and manual deployments
 set -e
 
-# Configuration
 PROJECT_DIR="/data/data/com.termux/files/home/latex-online"
-LOG_FILE="$PROJECT_DIR/server.log"
+LOG_DIR="$PROJECT_DIR/logs"
 
-echo "🚀 [Runner] Starting deployment runner..."
+mkdir -p "$LOG_DIR"
 
-# 1. Environment
-echo "🔎 [Runner] Debugging and fixing TeX Live environment..."
+echo "🚀 [Deploy] Starting robust deployment..."
 
-# 1. Find the true location of mktexlsr.pl and TLUtils.pm to build PERL5LIB
+# 1. Environment Setup (The most important part for LaTeX)
+export PATH="/data/data/com.termux/files/usr/bin:/data/data/com.termux/files/usr/bin/texlive:$PATH"
+export LC_ALL=C
+
+echo "🔎 [Deploy] Locating TeX Live environment..."
 TEXLIVE_BASE="/data/data/com.termux/files/usr/share/texlive"
-MKTEXLSR_PATH=$(find "$TEXLIVE_BASE" -name "mktexlsr.pl" 2>/dev/null | head -n 1)
-TLUTILS_PATH=$(find "$TEXLIVE_BASE" -name "TLUtils.pm" 2>/dev/null | head -n 1)
-
-if [ -n "$MKTEXLSR_PATH" ] && [ -n "$TLUTILS_PATH" ]; then
-    echo "✅ Found mktexlsr.pl at: $MKTEXLSR_PATH"
-    
-    # Extract directories
-    SCRIPT_DIR=$(dirname "$MKTEXLSR_PATH")
-    TLPKG_DIR=$(dirname "$(dirname "$TLUTILS_PATH")") # TLUtils is usually in tlpkg/TeXLive/TLUtils.pm
-    
-    # Export PERL5LIB
-    export PERL5LIB="$TLPKG_DIR:$SCRIPT_DIR"
-    echo "🔗 Set PERL5LIB to: $PERL5LIB"
-    
-    # Also update other vars based on this root if possible, but standard paths are usually okay.
-    # We insist on running fmtutil-sys with this PERL5LIB
-    echo "🔨 [Runner] Generating pdflatex format..."
-    fmtutil-sys --byfmt pdflatex || echo "❌ Format generation failed."
-else
-    echo "❌ [Runner] Could not find mktexlsr.pl or TLUtils.pm. TeX Live installation might be broken."
-    echo "Attempting to install 'texlive-bin' again..."
-    pkg install -y texlive-bin || true
+if [ -d "$TEXLIVE_BASE" ]; then
+    # Dynamically find the year directory (2024, 2025, etc.)
+    YEAR_DIR=$(find "$TEXLIVE_BASE" -maxdepth 1 -name "20*" -type d | sort -r | head -n 1)
+    if [ -n "$YEAR_DIR" ]; then
+        echo "✅ Detected TeX Live Root: $YEAR_DIR"
+        export TEXMFROOT="$YEAR_DIR"
+        export TEXMFDIST="$TEXMFROOT/texmf-dist"
+        export TEXMFLOCAL="$TEXLIVE_BASE/texmf-local"
+        export TEXMFSYSVAR="$TEXMFROOT/texmf-var"
+        export TEXMFSYSCONFIG="$TEXMFROOT/texmf-config"
+        
+        # Build PERL5LIB dynamically
+        MKTEXLSR_PL=$(find "$TEXMFDIST" -name "mktexlsr.pl" | head -n 1 || echo "")
+        if [ -n "$MKTEXLSR_PL" ]; then
+            PERL_SCRIPT_DIR=$(dirname "$MKTEXLSR_PL")
+            TLPKG_DIR="$TEXMFROOT/tlpkg"
+            export PERL5LIB="$TLPKG_DIR:$PERL_SCRIPT_DIR"
+            echo "✅ Setup PERL5LIB: $PERL5LIB"
+        fi
+    fi
 fi
 
+# Ensure critical tools are present
+if ! command -v pm2 &> /dev/null; then
+    echo "📦 [Deploy] Installing PM2..."
+    npm install -g pm2
+fi
+
+if ! command -v lsof &> /dev/null; then
+    echo "📦 [Deploy] Installing lsof..."
+    pkg install -y lsof
+fi
+
+# 2. Build and Prep
 cd "$PROJECT_DIR"
 
-# 2. Build Client
-echo "📦 [Runner] Building client..."
+echo "📥 [Deploy] Building Client..."
 cd client
 npm install
 npm run build
 cd ..
 
-# 3. Server Deps
-echo "🔧 [Runner] Installing server dependencies..."
+echo "🔨 [Deploy] Building Server..."
 cd server
 npm install --production
 cd ..
 
-# 4. Restart Server with PM2
-echo "🔄 [Runner] Restarting server via PM2..."
+echo "🔨 [Deploy] Pre-generating LaTeX format files..."
+# This prevents runtime errors in the web app
+fmtutil-sys --byfmt pdflatex || echo "⚠️ Warning: fmtutil-sys failed, but continuing..."
 
-# Ensure PM2 is installed globally
-if ! command -v pm2 &> /dev/null; then
-    echo "� [Runner] Installing PM2..."
-    npm install -g pm2
-fi
+# 3. Process Management (SSH SAFETY FIRST)
+echo "🔄 [Deploy] Updating PM2 processes..."
 
-# Start or Reload
-# To be absolutely safe, we delete the old process and force kill the port first
-pm2 delete latex-online-server 2>/dev/null || true
-
-echo "🧹 [Runner] Ensuring port 3000 is free..."
-
-# Find process holding port 3000
-# We use lsof to get PID and Command name to avoid killing sshd (if user is using reverse forward)
-if command -v lsof &> /dev/null; then
-    # Output format: PID COMMAND
-    lsof -i:3000 -F pc | while read -r line; do
-        # Simple parser for lsof -F output
-        if [[ $line =~ ^p([0-9]+) ]]; then
-            PID=${BASH_REMATCH[1]}
-        elif [[ $line =~ ^c(.+) ]]; then
-            CMD=${BASH_REMATCH[1]}
-            
-            # Logic: If we have both PID and CMD
-            if [ -n "$PID" ] && [ -n "$CMD" ]; then
-                if [[ "$CMD" == *"sshd"* ]]; then
-                    echo "⚠️ [Runner] Port 3000 is held by sshd (likely your connection). SKIPPING kill."
-                else
-                    echo "🔪 [Runner] Killing $CMD (PID $PID) on port 3000..."
-                    kill -9 $PID 2>/dev/null || true
-                fi
-                # Reset for next entry
-                PID=""
-                CMD=""
+# We use a surgical approach to avoid killing SSH
+# 1. We ONLY target port 3000 (Backend) and 3001 (Frontend)
+# 2. We EXPLICITLY skip any process related to 'sshd'
+PROTECT_SSH_AND_KILL() {
+    PORT=$1
+    echo "🧹 [Port $PORT] Checking for existing processes..."
+    PIDS=$(lsof -t -i:$PORT 2>/dev/null || echo "")
+    if [ -n "$PIDS" ]; then
+        for PID in $PIDS; do
+            # Verify process name to avoid killing sshd
+            CMD=$(ps -p $PID -o comm= 2>/dev/null || echo "unknown")
+            if [[ "$CMD" == *"sshd"* ]]; then
+                echo "⚠️ [Port $PORT] Found sshd (PID $PID), SKIPPING."
+            else
+                echo "🔪 [Port $PORT] Killing $CMD (PID $PID)..."
+                kill -9 $PID 2>/dev/null || true
             fi
-        fi
-    done
-else
-    # Fallback if lsof fails/missing (though strictly we prefer lsof now)
-    fuser -k 3000/tcp 2>/dev/null || true
-fi
-
-# Wait loop for port to be actually free
-echo "⏳ [Runner] Waiting for port 3000 to clear..."
-for i in {1..10}; do
-    if ! lsof -i:3000 >/dev/null 2>&1; then
-        echo "✅ [Runner] Port 3000 is free."
-        break
+        done
+    else
+        echo "✅ [Port $PORT] Already free."
     fi
-    sleep 1
-done
+}
 
-pm2 start ecosystem.config.cjs
+PROTECT_SSH_AND_KILL 3000
+PROTECT_SSH_AND_KILL 3001
 
-# Save list
+# Restart via PM2
+# We delete existing entries to ensure a clean environment reload
+pm2 delete latex-backend 2>/dev/null || true
+pm2 delete latex-frontend 2>/dev/null || true
+
+# Start everything fresh using the ecosystem file
+pm2 start ecosystem.config.cjs --update-env
 pm2 save
 
-echo "✅ [Runner] Deployment complete! Server managed by PM2."
+echo "🎉 [Deploy] SUCCESS!"
+echo "--------------------------------------------------"
+echo "Management commands:"
+echo "  pm2 list          # Check status"
+echo "  pm2 logs          # View all logs"
+echo "  pm2 logs latex-backend"
+echo "  pm2 logs latex-frontend"
+echo "--------------------------------------------------"
 pm2 list

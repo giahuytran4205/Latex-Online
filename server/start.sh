@@ -1,33 +1,22 @@
-#!/data/data/com.termux/files/usr/bin/bash
-# start.sh - Server startup script for Termux
+#!/bin/bash
+# Simple script to start the local development/production environment via PM2
 
-cd "$(dirname "$0")"
+SCRIPT_DIR=$(dirname "$0")
+cd "$SCRIPT_DIR/.."
 
-# Kill existing server on port 3000
-echo "Stopping existing server..."
-fuser -k 3000/tcp 2>/dev/null || true
-sleep 1
+echo "🚀 Starting Latex Online via PM2..."
 
-# Start server in background with nohup and proper detachment
-echo "Starting server..."
-nohup node index.js > ../server.log 2>&1 &
-SERVER_PID=$!
-
-# Disown the process to prevent SIGHUP when shell exits
-disown $SERVER_PID
-
-# Save PID for later
-echo $SERVER_PID > ../server.pid
-echo "Server started with PID: $SERVER_PID"
-
-sleep 3
-
-# Check if server started
-if curl -s http://localhost:3000/api/health > /dev/null 2>&1; then
-    echo "Server check: OK"
-    exit 0
-else
-    echo "Server check: Failed (might still be starting)"
-    # Don't exit with error, just warn, as it might take longer on slow devices
-    exit 0
+# Check if PM2 is installed
+if ! command -v pm2 &> /dev/null; then
+    echo "PM2 not found. Please install it with: npm install -g pm2"
+    exit 1
 fi
+
+# Ensure paths are set for the shell environment (especially on Termux)
+# (This part is handled robustly by the ecosystem config checking environment)
+
+pm2 start ecosystem.config.cjs --update-env
+
+echo "✅ App started in PM2."
+echo "Use 'pm2 list' to see status and 'pm2 logs' to see logs."
+pm2 list
