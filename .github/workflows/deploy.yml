@@ -94,7 +94,7 @@ jobs:
             # 4. Restart Server
             echo "🔄 Restarting Server..."
             # Stop existing process safely
-            pkill -f "node index.js" || true
+            pkill -f "node index.js" || echo "No process found to stop."
             sleep 2
             
             # Start new process
