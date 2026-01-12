@@ -103,14 +103,32 @@ jobs:
             cd "$DEPLOY_DIR"
             
             echo "Extracting archive..."
+            
+            # Backup node_modules to speed up deploy
+            if [ -d "server/node_modules" ]; then
+                echo "Backing up node_modules..."
+                mv server/node_modules ./node_modules_backup
+            fi
+            
+            # Clean old files
+            rm -rf client server deploy *.tar.gz 2>/dev/null || true
+
             tar -xzvf latex-online.tar.gz
             
-            # Move files to correct structure (handle potential nesting)
+            # Move files to correct structure
             if [ -d "deploy" ]; then
                 mkdir -p client
                 mv deploy/client-dist client/dist
                 mv deploy/server ./server
                 rm -rf deploy
+            fi
+            
+            # Restore node_modules
+            if [ -d "node_modules_backup" ]; then
+                echo "Restoring node_modules..."
+                mkdir -p server/node_modules
+                mv node_modules_backup/* server/node_modules/
+                rm -rf node_modules_backup
             fi
             
             # Check structure

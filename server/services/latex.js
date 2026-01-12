@@ -41,7 +41,7 @@ const TERMUX_BIN = join(TERMUX_BASE, 'usr/bin')
 function getEnginePath(engine) {
     // 0. Strongest Force: User confirmed path
     // We do NOT check existsSync because cwd might be broken, causing FS issues
-    const userConfirmedPath = join(TERMUX_BIN, 'texlive', engine) // .../usr/bin/texlive/pdflatex
+    const userConfirmedPath = join(TERMUX_BIN, engine) // .../usr/bin/pdflatex
 
     // Check if we are likely on Termux
     if (process.env.PREFIX && process.env.PREFIX.includes('com.termux')) {
