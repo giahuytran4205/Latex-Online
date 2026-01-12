@@ -84,9 +84,6 @@ jobs:
           target: "/data/data/com.termux/files/home/latex-online"
           debug: true
 
-      - name: Extract files
-        uses: appleboy/ssh-action@v1.0.0
-        with:
       - name: Extract and Start Server
         uses: appleboy/ssh-action@v1.0.0
         with:
