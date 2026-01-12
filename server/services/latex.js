@@ -1,5 +1,6 @@
 import { spawn } from 'child_process'
-import { writeFileSync, mkdirSync, existsSync, readFileSync, cpSync } from 'fs'
+import { writeFileSync, mkdirSync, existsSync, readFileSync, cpSync, readdirSync } from 'fs'
+import fs from 'fs' // Default import for robust usage
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
 import { v4 as uuidv4 } from 'uuid'
@@ -81,6 +82,11 @@ export async function compileLatex(projectId = 'default-project', engine = 'pdfl
                 errors: parseErrors(result.stdout + result.stderr),
             }
         } else {
+            // DEBUG: List files to understand why we missed it
+            const files = fs.readdirSync(workDir);
+            console.error(`[LaTeX] PDF not found at ${generatedPdf}`);
+            console.error(`[LaTeX] Directory contents of ${workDir}:`, files);
+
             return {
                 success: false,
                 pdfPath: null,
