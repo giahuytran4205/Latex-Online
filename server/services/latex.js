@@ -1,11 +1,11 @@
-import { spawn, execSync } from 'child_process'
-import { writeFileSync, mkdirSync, existsSync, readFileSync, readdirSync } from 'fs'
+import { spawn } from 'child_process'
+import { writeFileSync, mkdirSync, existsSync, readFileSync, cpSync } from 'fs'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
 import { v4 as uuidv4 } from 'uuid'
 // Use ncp for recursive copy if fs.cpSync is not available (Node < 16.7)
 // But we assume Node 18+ on Termux
-import ncp from 'ncp'
+import { ncp } from 'ncp'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -13,74 +13,22 @@ const __dirname = dirname(__filename)
 const TEMP_DIR = join(__dirname, '../temp')
 const PROJECTS_DIR = join(__dirname, '../../projects')
 
-// Termux pdflatex path (defined later)
+// Termux pdflatex path
+const TERMUX_BIN = '/data/data/com.termux/files/usr/bin'
 
 // Ensure temp directory exists
 if (!existsSync(TEMP_DIR)) {
     mkdirSync(TEMP_DIR, { recursive: true })
 }
 
-// Add helper to check execution environment
-function checkEnvironment() {
-    try {
-        console.log('[Env] PATH:', process.env.PATH)
-        console.log('[Env] Which pdflatex:', execSync('which pdflatex', { cwd: '/' }).toString().trim())
-        console.log('[Env] Termux bin ls:', execSync(`ls -l ${TERMUX_BIN}/pdflatex`, { cwd: '/' }).toString().trim())
-    } catch (e) {
-        console.error('[Env] Check failed:', e.message)
-    }
-}
-
-// Hardcode Termux Bin Path Base
-const TERMUX_BASE = '/data/data/com.termux/files'
-const TERMUX_BIN = join(TERMUX_BASE, 'usr/bin')
-
 /**
  * Get the full path to a LaTeX engine
  */
 function getEnginePath(engine) {
-    // 0. Strongest Force: User confirmed path
-    // We do NOT check existsSync because cwd might be broken, causing FS issues
-    const userConfirmedPath = join(TERMUX_BIN, engine) // .../usr/bin/pdflatex
-
-    // Check if we are likely on Termux
-    if (process.env.PREFIX && process.env.PREFIX.includes('com.termux')) {
-        console.log(`[LaTeX] Termux detected. Using PATH for engine: ${engine}`)
-        return engine
+    const termuxPath = join(TERMUX_BIN, engine)
+    if (existsSync(termuxPath)) {
+        return termuxPath
     }
-
-    // Also check standard structure if PREFIX missing
-    if (existsSync(TERMUX_BIN)) {
-        console.log(`[LaTeX] Termux bin dir found. Forcing path: ${userConfirmedPath}`)
-        return userConfirmedPath
-    }
-
-    // 1. List of potential paths to check
-    const candidates = [
-        join(TERMUX_BIN, engine), // Standard
-        `${TERMUX_BASE}/usr/share/texlive/bin/aarch64-linux/${engine}`,
-    ]
-
-    // Check candidates
-    for (const p of candidates) {
-        if (existsSync(p)) return p
-    }
-
-    // 2. Deep search fallback
-    console.log(`[LaTeX] Path not found in candidates. Deep searching...`)
-    try {
-        const cmd = `find ${TERMUX_BASE}/usr -name ${engine} -type f -path "*/bin/*" 2>/dev/null | head -n 1`
-        // Fix getcwd error by setting cwd to root
-        const found = execSync(cmd, { cwd: '/', encoding: 'utf8' }).trim()
-        if (found) {
-            console.log(`[LaTeX] Discovered path: ${found}`)
-            return found
-        }
-    } catch (e) {
-        // Ignore error
-    }
-
-    console.warn(`[LaTeX] CRITICAL: Not found ${engine}. Returning default.`)
     return engine
 }
 
@@ -92,9 +40,6 @@ function getEnginePath(engine) {
  * @param {string} code - Optional override code (legacy support)
  */
 export async function compileLatex(projectId = 'default-project', engine = 'pdflatex', filename = 'main', code = null) {
-    // Run env check once per compile (for debugging)
-    checkEnvironment()
-
     const jobId = uuidv4().substring(0, 8)
     const workDir = join(TEMP_DIR, jobId)
     const projectDir = join(PROJECTS_DIR, projectId)
@@ -123,7 +68,7 @@ export async function compileLatex(projectId = 'default-project', engine = 'pdfl
         }
 
         const enginePath = getEnginePath(engine)
-        console.log(`[LaTeX] Compiling project ${projectId} with enginePath: "${enginePath}"`)
+        console.log(`[LaTeX] Compiling project ${projectId} with ${enginePath}`)
 
         // Run LaTeX engine
         const texFile = join(workDir, `${filename}.tex`)
@@ -172,26 +117,12 @@ function runLatexEngine(enginePath, texFile, workDir) {
 
         console.log(`[LaTeX] Spawning: ${enginePath} ${args.join(' ')}`)
 
-        // Determine directory to add to PATH
-        const engineDir = dirname(enginePath)
-        const newPath = `${engineDir}:${TERMUX_BIN}:${process.env.PATH || ''}`
-        console.log(`[LaTeX] Using PATH: ${newPath}`)
-
         const proc = spawn(enginePath, args, {
             cwd: workDir,
             timeout: 120000,
-            shell: true, // Enable shell to better resolve PATH
             env: {
                 ...process.env,
-                PATH: newPath,
-                // Critical for Termux: Explicitly set TeX environment variables
-                TEXMFROOT: '/data/data/com.termux/files/usr/share/texlive/2025.0',
-                TEXMFDIST: '/data/data/com.termux/files/usr/share/texlive/2025.0/texmf-dist',
-                TEXMFLOCAL: '/data/data/com.termux/files/usr/share/texlive/texmf-local',
-                TEXMFSYSVAR: '/data/data/com.termux/files/usr/share/texlive/2025.0/texmf-var',
-                TEXMFSYSCONFIG: '/data/data/com.termux/files/usr/share/texlive/2025.0/texmf-config',
-                // Critical for Perl scripts used by TeX Live
-                PERL5LIB: '/data/data/com.termux/files/usr/share/texlive/2025.0/tlpkg:/data/data/com.termux/files/usr/share/texlive/2025.0/texmf-dist/scripts/texlive',
+                PATH: `${TERMUX_BIN}:${process.env.PATH || ''}`
             }
         })
 

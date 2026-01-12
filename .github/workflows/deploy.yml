@@ -1,4 +1,4 @@
-name: Premium Pull-Based Deployment
+name: Deploy to Termux Server
 
 on:
   push:
@@ -9,34 +9,66 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Tailscale Connection
+      - name: Setup Tailscale
         uses: tailscale/github-action@v2
         with:
           oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
           oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
           tags: tag:ci
 
-      - name: remote SSH deployment
+      - name: Deploy on Server
         uses: appleboy/ssh-action@v1.0.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
         with:
           host: ${{ secrets.TERMUX_HOST }}
           port: ${{ secrets.TERMUX_PORT }}
           username: ${{ secrets.TERMUX_USER }}
           key: ${{ secrets.TERMUX_SSH_KEY }}
+          envs: GITHUB_TOKEN,GITHUB_ACTOR,GITHUB_REPOSITORY
+          script_stop: true
           script: |
-            PROJECT_DIR="/data/data/com.termux/files/home/latex-online"
-            REPO_URL="https://github.com/giahuytran4205/Latex-Online.git"
+            # Configuration
+            TARGET_DIR="/data/data/com.termux/files/home/latex-online"
+            # Construct URL with Authentication
+            REPO_URL="https://${GITHUB_ACTOR}:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
             
-            # Sync code
-            if [ -d "$PROJECT_DIR" ]; then
-                cd "$PROJECT_DIR"
-                git reset --hard
-                git pull
-            else
-                git clone "$REPO_URL" "$PROJECT_DIR"
-                cd "$PROJECT_DIR"
+            echo "🚀 Starting Server-Side Deployment..."
+            
+            # 1. Ensure Git is installed
+            if ! command -v git &> /dev/null; then
+                echo "📦 Installing Git..."
+                pkg update -y && pkg install -y git
             fi
             
-            # Execute the smart deployment runner
-            chmod +x scripts/deploy.sh
-            ./scripts/deploy.sh
+            # 2. Update Source Code
+            if [ -d "$TARGET_DIR/.git" ]; then
+                echo "⬇️  Pulling latest changes in $TARGET_DIR..."
+                cd "$TARGET_DIR"
+                # Fix git safe directory ownership warning
+                git config --global --add safe.directory "$TARGET_DIR"
+                
+                # Fetch and Reset
+                git fetch origin
+                git reset --hard origin/main
+            else
+                echo "⬇️  Cloning repository to $TARGET_DIR..."
+                # Clean up non-git directory if it exists
+                rm -rf "$TARGET_DIR" 2>/dev/null || true
+                
+                git clone "$REPO_URL" "$TARGET_DIR"
+                cd "$TARGET_DIR"
+            fi
+            
+            # 3. Execute Build & Deploy Script
+            echo "🛠️  Running local deploy script..."
+            if [ -f "scripts/deploy.sh" ]; then
+                chmod +x scripts/deploy.sh
+                bash scripts/deploy.sh
+            else
+                echo "❌ Error: scripts/deploy.sh not found!"
+                ls -R
+                exit 1
+            fi
