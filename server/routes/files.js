@@ -16,6 +16,27 @@ if (!existsSync(PROJECTS_DIR)) {
     mkdirSync(PROJECTS_DIR, { recursive: true })
 }
 
+const TEMP_DIR = join(__dirname, '../temp')
+if (!existsSync(TEMP_DIR)) {
+    mkdirSync(TEMP_DIR, { recursive: true })
+}
+
+// Serve temporary files (PDFs)
+router.get('/temp/:filename', (req, res) => {
+    try {
+        const { filename } = req.params
+        const filePath = join(TEMP_DIR, filename)
+
+        if (!existsSync(filePath)) {
+            return res.status(404).json({ error: 'File not found' })
+        }
+
+        res.sendFile(filePath)
+    } catch (err) {
+        res.status(500).json({ error: err.message })
+    }
+})
+
 // Helper to get project path
 const getProjectPath = (projectId) => {
     const path = join(PROJECTS_DIR, projectId)
