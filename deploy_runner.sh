@@ -61,5 +61,6 @@ if ps -p "$NEW_PID" > /dev/null; then
    exit 0
 else
    echo "❌ [Runner] Process died immediately. Check logs."
+   cat "$LOG_FILE"
    exit 1
 fi
