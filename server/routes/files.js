@@ -104,6 +104,23 @@ router.get('/:projectId/:filename', (req, res) => {
     }
 })
 
+// Download file
+router.get('/:projectId/:filename/download', (req, res) => {
+    try {
+        const { projectId, filename } = req.params
+        const filePath = join(getProjectPath(projectId), filename)
+
+        if (!existsSync(filePath)) {
+            return res.status(404).json({ error: 'File not found' })
+        }
+
+        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`)
+        res.sendFile(filePath)
+    } catch (err) {
+        res.status(500).json({ error: err.message })
+    }
+})
+
 // Save file
 router.put('/:projectId/:filename', (req, res) => {
     try {

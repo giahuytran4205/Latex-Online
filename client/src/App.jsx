@@ -138,6 +138,25 @@ function App() {
         }
     }
 
+    const handleUploadFile = async (filename, content) => {
+        try {
+            // First try to create the file
+            await createFile('default-project', filename, content)
+            await loadFiles()
+            return true
+        } catch (err) {
+            // If file exists, try to save/overwrite
+            try {
+                await saveFile('default-project', filename, content)
+                await loadFiles()
+                return true
+            } catch (saveErr) {
+                alert('Failed to upload file: ' + saveErr.message)
+                return false
+            }
+        }
+    }
+
     const handleCompile = useCallback(async () => {
         setIsCompiling(true)
         setLogs('')
@@ -178,30 +197,35 @@ function App() {
     }, [theme])
 
     // Resize handlers
+    const mainContentRef = useRef(null)
+
     const handleMouseDown = useCallback((type) => (e) => {
         e.preventDefault()
+        e.stopPropagation()
         setIsResizing(type)
     }, [])
 
     useEffect(() => {
         if (!isResizing) return
+
         const handleMouseMove = (e) => {
             if (isResizing === 'sidebar') {
                 const newWidth = Math.max(150, Math.min(400, e.clientX))
                 setSidebarWidth(newWidth)
-            } else if (isResizing === 'editor' && appRef.current) {
-                const rect = appRef.current.getBoundingClientRect()
-                const contentWidth = rect.width - sidebarWidth
-                const x = e.clientX - sidebarWidth
-                const percent = Math.max(30, Math.min(70, (x / contentWidth) * 100))
+            } else if (isResizing === 'editor' && mainContentRef.current) {
+                const rect = mainContentRef.current.getBoundingClientRect()
+                const x = e.clientX - rect.left
+                const percent = Math.max(25, Math.min(75, (x / rect.width) * 100))
                 setEditorWidth(percent)
             }
         }
+
         const handleMouseUp = () => {
             setIsResizing(null)
-            localStorage.setItem('latex-sidebar-width', sidebarWidth)
-            localStorage.setItem('latex-editor-width', editorWidth)
+            localStorage.setItem('latex-sidebar-width', String(sidebarWidth))
+            localStorage.setItem('latex-editor-width', String(editorWidth))
         }
+
         document.addEventListener('mousemove', handleMouseMove)
         document.addEventListener('mouseup', handleMouseUp)
         return () => {
@@ -216,7 +240,7 @@ function App() {
             ref={appRef}
             style={{
                 '--sidebar-width': `${sidebarWidth}px`,
-                '--editor-width': `${editorWidth}%`
+                '--editor-width': editorWidth
             }}
         >
             <Toolbar
@@ -237,19 +261,22 @@ function App() {
                 onAddFile={handleAddFile}
                 onDeleteFile={handleDeleteFile}
                 onRenameFile={handleRenameFile}
+                onUploadFile={handleUploadFile}
             />
 
             <div className="resize-handle resize-handle--sidebar" onMouseDown={handleMouseDown('sidebar')} />
 
-            <Editor
-                code={code}
-                onChange={setCode}
-                onCollaboratorsChange={setCollaborators}
-            />
+            <div className="main-content" ref={mainContentRef}>
+                <Editor
+                    code={code}
+                    onChange={setCode}
+                    onCollaboratorsChange={setCollaborators}
+                />
 
-            <div className="resize-handle resize-handle--editor" onMouseDown={handleMouseDown('editor')} />
+                <div className="resize-handle resize-handle--editor" onMouseDown={handleMouseDown('editor')} />
 
-            <Preview pdfUrl={pdfUrl} />
+                <Preview pdfUrl={pdfUrl} />
+            </div>
 
             <Console
                 logs={logs}

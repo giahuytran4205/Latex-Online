@@ -73,14 +73,14 @@ body {
 
 .app {
   --sidebar-width: 200px;
-  --editor-width: 50%;
+  --editor-width: 50;
 
   display: grid;
   grid-template-rows: auto 1fr;
-  grid-template-columns: var(--sidebar-width) calc((100% - var(--sidebar-width)) * var(--editor-width) / 100) 1fr;
+  grid-template-columns: var(--sidebar-width) 1fr;
   grid-template-areas:
-    "toolbar toolbar toolbar"
-    "sidebar editor preview";
+    "toolbar toolbar"
+    "sidebar main-content";
   height: 100vh;
   overflow: hidden;
   position: relative;
@@ -91,12 +91,55 @@ body {
   cursor: col-resize;
 }
 
+.app.resizing * {
+  pointer-events: none;
+}
+
+/* Main content wrapper for editor and preview */
+.main-content {
+  grid-area: main-content;
+  display: flex;
+  flex-direction: row;
+  overflow: hidden;
+  position: relative;
+}
+
+.main-content .editor-panel {
+  flex: 0 0 calc(var(--editor-width) * 1%);
+  min-width: 200px;
+  max-width: calc(100% - 200px);
+}
+
+.main-content .preview-panel {
+  flex: 1;
+  min-width: 200px;
+}
+
 /* Resize Handles */
 .resize-handle {
   position: absolute;
-  z-index: 10;
+  z-index: 100;
   background: transparent;
-  transition: background 0.2s;
+  transition: background 0.15s;
+}
+
+.resize-handle::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 4px;
+  height: 40px;
+  background: var(--border-color);
+  border-radius: 2px;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.resize-handle:hover::before,
+.resize-handle:active::before {
+  opacity: 1;
 }
 
 .resize-handle:hover,
@@ -108,29 +151,46 @@ body {
   left: var(--sidebar-width);
   top: 50px;
   bottom: 0;
-  width: 4px;
+  width: 6px;
   cursor: col-resize;
   transform: translateX(-50%);
 }
 
 .resize-handle--editor {
-  left: calc(var(--sidebar-width) + (100vw - var(--sidebar-width)) * var(--editor-width) / 100);
-  top: 50px;
+  position: relative;
+  top: 0;
   bottom: 0;
-  width: 4px;
+  width: 6px;
   cursor: col-resize;
-  transform: translateX(-50%);
+  flex-shrink: 0;
+  background: var(--border-color);
+}
+
+.resize-handle--editor:hover,
+.resize-handle--editor:active {
+  background: var(--accent);
 }
 
 @media (max-width: 900px) {
   .app {
     grid-template-columns: 1fr;
-    grid-template-rows: auto auto 1fr 1fr;
+    grid-template-rows: auto auto 1fr;
     grid-template-areas:
       "toolbar"
       "sidebar"
-      "editor"
-      "preview";
+      "main-content";
+  }
+
+  .main-content {
+    flex-direction: column;
+  }
+
+  .main-content .editor-panel,
+  .main-content .preview-panel {
+    flex: 1;
+    min-width: unset;
+    max-width: unset;
+    min-height: 200px;
   }
 
   .sidebar {
@@ -398,7 +458,6 @@ body {
    =============================================== */
 
 .editor-panel {
-  grid-area: editor;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -505,7 +564,6 @@ body {
    =============================================== */
 
 .preview-panel {
-  grid-area: preview;
   display: flex;
   flex-direction: column;
   overflow: hidden;
