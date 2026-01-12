@@ -43,13 +43,17 @@
 }
 
 /* Reset & Base */
-*, *::before, *::after {
+*,
+*::before,
+*::after {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
 }
 
-html, body, #root {
+html,
+body,
+#root {
   height: 100%;
   width: 100%;
 }
@@ -68,14 +72,54 @@ body {
    =============================================== */
 
 .app {
+  --sidebar-width: 200px;
+  --editor-width: 50%;
+
   display: grid;
   grid-template-rows: auto 1fr;
-  grid-template-columns: 250px 1fr 1fr;
+  grid-template-columns: var(--sidebar-width) calc((100% - var(--sidebar-width)) * var(--editor-width) / 100) 1fr;
   grid-template-areas:
     "toolbar toolbar toolbar"
     "sidebar editor preview";
   height: 100vh;
   overflow: hidden;
+  position: relative;
+}
+
+.app.resizing {
+  user-select: none;
+  cursor: col-resize;
+}
+
+/* Resize Handles */
+.resize-handle {
+  position: absolute;
+  z-index: 10;
+  background: transparent;
+  transition: background 0.2s;
+}
+
+.resize-handle:hover,
+.resize-handle:active {
+  background: var(--accent);
+}
+
+.resize-handle--sidebar {
+  left: var(--sidebar-width);
+  top: 50px;
+  bottom: 0;
+  width: 4px;
+  cursor: col-resize;
+  transform: translateX(-50%);
+}
+
+.resize-handle--editor {
+  left: calc(var(--sidebar-width) + (100vw - var(--sidebar-width)) * var(--editor-width) / 100);
+  top: 50px;
+  bottom: 0;
+  width: 4px;
+  cursor: col-resize;
+  transform: translateX(-50%);
 }
 
 @media (max-width: 900px) {
@@ -88,10 +132,14 @@ body {
       "editor"
       "preview";
   }
-  
+
   .sidebar {
     max-height: 120px;
     overflow-y: auto;
+  }
+
+  .resize-handle {
+    display: none;
   }
 }
 
@@ -261,6 +309,90 @@ body {
   color: var(--text-muted);
 }
 
+/* File Tree Add/Rename Input */
+.file-tree__add {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  margin-bottom: 4px;
+}
+
+.file-tree__add input,
+.file-tree__rename {
+  flex: 1;
+  padding: 4px 8px;
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 0.8rem;
+  outline: none;
+}
+
+.file-tree__add button {
+  padding: 4px 8px;
+  border: none;
+  background: var(--accent-light);
+  color: var(--accent);
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.8rem;
+}
+
+.file-tree__add button:hover {
+  background: var(--accent);
+  color: white;
+}
+
+.file-tree__rename {
+  width: 100%;
+}
+
+/* Context Menu */
+.context-menu-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 999;
+}
+
+.context-menu {
+  position: fixed;
+  z-index: 1000;
+  background: var(--bg-panel);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lg);
+  padding: 4px;
+  min-width: 120px;
+}
+
+.context-menu button {
+  display: block;
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 0.85rem;
+  text-align: left;
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.context-menu button:hover {
+  background: var(--accent-light);
+}
+
+.context-menu button.danger {
+  color: var(--error);
+}
+
+.context-menu button.danger:hover {
+  background: rgba(239, 68, 68, 0.1);
+}
+
 /* ===============================================
    Editor Panel
    =============================================== */
@@ -357,8 +489,15 @@ body {
 }
 
 @keyframes cursor-blink {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.5;
+  }
 }
 
 /* ===============================================
@@ -586,7 +725,9 @@ body {
 }
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .status-dot {
@@ -598,8 +739,15 @@ body {
 }
 
 @keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.5;
+  }
 }
 
 /* ===============================================
@@ -617,9 +765,26 @@ body {
   border: 0;
 }
 
-.text-center { text-align: center; }
-.text-muted { color: var(--text-muted); }
-.mt-1 { margin-top: 8px; }
-.mt-2 { margin-top: 16px; }
-.gap-1 { gap: 8px; }
-.gap-2 { gap: 16px; }
+.text-center {
+  text-align: center;
+}
+
+.text-muted {
+  color: var(--text-muted);
+}
+
+.mt-1 {
+  margin-top: 8px;
+}
+
+.mt-2 {
+  margin-top: 16px;
+}
+
+.gap-1 {
+  gap: 8px;
+}
+
+.gap-2 {
+  gap: 16px;
+}

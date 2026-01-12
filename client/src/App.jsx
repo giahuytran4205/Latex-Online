@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import Editor from './components/Editor/Editor'
 import Preview from './components/Preview/Preview'
 import Toolbar from './components/Toolbar/Toolbar'
@@ -6,7 +6,8 @@ import FileTree from './components/FileTree/FileTree'
 import Console from './components/Console/Console'
 import { compileLatex } from './services/api'
 
-const DEFAULT_LATEX = `\\documentclass{article}
+const DEFAULT_FILES = {
+    'main.tex': `\\documentclass{article}
 \\usepackage[utf8]{inputenc}
 \\usepackage{amsmath}
 \\usepackage{graphicx}
@@ -43,7 +44,17 @@ And the quadratic formula:
 \\end{itemize}
 
 \\end{document}
+`,
+    'references.bib': `@article{einstein1905,
+  author = {Albert Einstein},
+  title = {On the Electrodynamics of Moving Bodies},
+  journal = {Annalen der Physik},
+  year = {1905},
+  volume = {17},
+  pages = {891--921}
+}
 `
+}
 
 function App() {
     const [theme, setTheme] = useState(() => {
@@ -52,13 +63,44 @@ function App() {
         return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
     })
     const [engine, setEngine] = useState('pdflatex')
-    const [code, setCode] = useState(DEFAULT_LATEX)
+    const [files, setFiles] = useState(() => {
+        const saved = localStorage.getItem('latex-files')
+        return saved ? JSON.parse(saved) : DEFAULT_FILES
+    })
+    const [activeFile, setActiveFile] = useState('main.tex')
     const [pdfUrl, setPdfUrl] = useState(null)
     const [logs, setLogs] = useState('')
     const [isCompiling, setIsCompiling] = useState(false)
     const [consoleOpen, setConsoleOpen] = useState(false)
-    const [activeFile, setActiveFile] = useState('main.tex')
     const [collaborators, setCollaborators] = useState([])
+
+    // Resizable panels
+    const [sidebarWidth, setSidebarWidth] = useState(() => {
+        const saved = localStorage.getItem('latex-sidebar-width')
+        return saved ? parseInt(saved) : 200
+    })
+    const [editorWidth, setEditorWidth] = useState(() => {
+        const saved = localStorage.getItem('latex-editor-width')
+        return saved ? parseInt(saved) : 50 // percentage
+    })
+    const [isResizing, setIsResizing] = useState(null)
+    const appRef = useRef(null)
+
+    // Get current file content
+    const code = files[activeFile] || ''
+
+    // Update file content
+    const setCode = useCallback((newCode) => {
+        setFiles(prev => ({
+            ...prev,
+            [activeFile]: newCode
+        }))
+    }, [activeFile])
+
+    // Save files to localStorage
+    useEffect(() => {
+        localStorage.setItem('latex-files', JSON.stringify(files))
+    }, [files])
 
     // Apply theme
     useEffect(() => {
@@ -71,6 +113,58 @@ function App() {
         localStorage.setItem('latex-theme', theme)
     }, [theme])
 
+    // Add new file
+    const handleAddFile = useCallback((filename) => {
+        if (!filename || files[filename]) return false
+
+        let content = ''
+        if (filename.endsWith('.tex')) {
+            content = `% ${filename}\n\\section{New Section}\n\n`
+        } else if (filename.endsWith('.bib')) {
+            content = `% Bibliography file: ${filename}\n`
+        } else {
+            content = `% ${filename}\n`
+        }
+
+        setFiles(prev => ({ ...prev, [filename]: content }))
+        setActiveFile(filename)
+        return true
+    }, [files])
+
+    // Delete file
+    const handleDeleteFile = useCallback((filename) => {
+        if (filename === 'main.tex') return false // Can't delete main.tex
+
+        setFiles(prev => {
+            const newFiles = { ...prev }
+            delete newFiles[filename]
+            return newFiles
+        })
+
+        if (activeFile === filename) {
+            setActiveFile('main.tex')
+        }
+        return true
+    }, [activeFile])
+
+    // Rename file
+    const handleRenameFile = useCallback((oldName, newName) => {
+        if (!newName || files[newName] || oldName === 'main.tex') return false
+
+        setFiles(prev => {
+            const content = prev[oldName]
+            const newFiles = { ...prev }
+            delete newFiles[oldName]
+            newFiles[newName] = content
+            return newFiles
+        })
+
+        if (activeFile === oldName) {
+            setActiveFile(newName)
+        }
+        return true
+    }, [files, activeFile])
+
     // Compile LaTeX
     const handleCompile = useCallback(async () => {
         setIsCompiling(true)
@@ -79,9 +173,9 @@ function App() {
 
         try {
             const result = await compileLatex({
-                code,
+                code: files['main.tex'] || code,
                 engine,
-                filename: activeFile
+                filename: 'main.tex'
             })
 
             if (result.success) {
@@ -95,7 +189,7 @@ function App() {
         } finally {
             setIsCompiling(false)
         }
-    }, [code, engine, activeFile])
+    }, [files, code, engine])
 
     // Keyboard shortcut for compile
     useEffect(() => {
@@ -109,13 +203,59 @@ function App() {
         return () => window.removeEventListener('keydown', handleKeyDown)
     }, [handleCompile])
 
-    const files = [
-        { name: 'main.tex', type: 'tex' },
-        { name: 'references.bib', type: 'bib' },
-    ]
+    // Handle resize
+    const handleMouseDown = useCallback((type) => (e) => {
+        e.preventDefault()
+        setIsResizing(type)
+    }, [])
+
+    useEffect(() => {
+        if (!isResizing) return
+
+        const handleMouseMove = (e) => {
+            if (!appRef.current) return
+
+            if (isResizing === 'sidebar') {
+                const newWidth = Math.max(150, Math.min(400, e.clientX))
+                setSidebarWidth(newWidth)
+                localStorage.setItem('latex-sidebar-width', newWidth.toString())
+            } else if (isResizing === 'editor') {
+                const rect = appRef.current.getBoundingClientRect()
+                const contentWidth = rect.width - sidebarWidth
+                const x = e.clientX - sidebarWidth
+                const percent = Math.max(30, Math.min(70, (x / contentWidth) * 100))
+                setEditorWidth(percent)
+                localStorage.setItem('latex-editor-width', percent.toString())
+            }
+        }
+
+        const handleMouseUp = () => {
+            setIsResizing(null)
+        }
+
+        document.addEventListener('mousemove', handleMouseMove)
+        document.addEventListener('mouseup', handleMouseUp)
+        return () => {
+            document.removeEventListener('mousemove', handleMouseMove)
+            document.removeEventListener('mouseup', handleMouseUp)
+        }
+    }, [isResizing, sidebarWidth])
+
+    // Get file list for FileTree
+    const fileList = Object.keys(files).map(name => ({
+        name,
+        type: name.split('.').pop()
+    }))
 
     return (
-        <div className="app">
+        <div
+            className={`app ${isResizing ? 'resizing' : ''}`}
+            ref={appRef}
+            style={{
+                '--sidebar-width': `${sidebarWidth}px`,
+                '--editor-width': `${editorWidth}%`
+            }}
+        >
             <Toolbar
                 engine={engine}
                 onEngineChange={setEngine}
@@ -128,15 +268,30 @@ function App() {
             />
 
             <FileTree
-                files={files}
+                files={fileList}
                 activeFile={activeFile}
                 onFileSelect={setActiveFile}
+                onAddFile={handleAddFile}
+                onDeleteFile={handleDeleteFile}
+                onRenameFile={handleRenameFile}
+            />
+
+            {/* Sidebar resize handle */}
+            <div
+                className="resize-handle resize-handle--sidebar"
+                onMouseDown={handleMouseDown('sidebar')}
             />
 
             <Editor
                 code={code}
                 onChange={setCode}
                 onCollaboratorsChange={setCollaborators}
+            />
+
+            {/* Editor/Preview resize handle */}
+            <div
+                className="resize-handle resize-handle--editor"
+                onMouseDown={handleMouseDown('editor')}
             />
 
             <Preview pdfUrl={pdfUrl} />
