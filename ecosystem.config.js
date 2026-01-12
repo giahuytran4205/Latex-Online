@@ -5,7 +5,8 @@ module.exports = {
         env: {
             NODE_ENV: "production",
             PORT: 3005,
-            // Paths will be injected by the deploy script or found at runtime
+            // Force Termux paths to be available to the process
+            PATH: "/data/data/com.termux/files/usr/bin:/data/data/com.termux/files/usr/bin/texlive:" + process.env.PATH
         },
         autorestart: true,
         max_memory_restart: "1G",
