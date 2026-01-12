@@ -1,10 +1,10 @@
-/* FileTree Component Styles */
+/* FileTree Component Styles - Overleaf-like design */
 
 /* Header Actions */
 .sidebar__actions {
     display: flex;
     align-items: center;
-    gap: 4px;
+    gap: 2px;
 }
 
 .btn--tiny {
@@ -18,25 +18,31 @@
     height: 12px;
 }
 
-/* File List */
+/* File Tree List */
 .file-tree__list {
     display: flex;
     flex-direction: column;
-    gap: 2px;
 }
 
-/* File Item */
+/* File Tree Node */
+.file-tree__node {
+    display: flex;
+    flex-direction: column;
+}
+
+/* File Tree Item */
 .file-tree__item {
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 8px 12px;
-    border-radius: var(--radius);
+    gap: 4px;
+    padding: 6px 12px;
     cursor: pointer;
-    font-size: 0.875rem;
+    font-size: 0.8125rem;
     color: var(--text-primary);
-    transition: all 0.15s ease;
+    transition: all 0.1s ease;
     position: relative;
+    min-height: 28px;
+    user-select: none;
 }
 
 .file-tree__item:hover {
@@ -52,12 +58,30 @@
     content: '';
     position: absolute;
     left: 0;
-    top: 50%;
-    transform: translateY(-50%);
-    width: 3px;
-    height: 60%;
+    top: 0;
+    bottom: 0;
+    width: 2px;
     background: var(--accent);
-    border-radius: 0 2px 2px 0;
+}
+
+.file-tree__item--folder {
+    font-weight: 500;
+}
+
+/* Chevron for folders */
+.file-tree__chevron {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+    color: var(--text-muted);
+    transition: transform 0.15s ease;
+}
+
+.file-tree__chevron--expanded {
+    transform: rotate(90deg);
 }
 
 /* File Info */
@@ -66,19 +90,9 @@
     min-width: 0;
     display: flex;
     flex-direction: column;
-    gap: 2px;
 }
 
 .file-tree__name {
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    font-weight: 500;
-}
-
-.file-tree__meta {
-    font-size: 0.7rem;
-    color: var(--text-muted);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -89,6 +103,7 @@
     font-size: 10px;
     color: var(--warning);
     flex-shrink: 0;
+    margin-left: 4px;
 }
 
 /* Icon */
@@ -96,11 +111,15 @@
     width: 16px;
     height: 16px;
     flex-shrink: 0;
-    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
-.file-tree__item--active .file-tree__icon {
-    color: var(--accent);
+/* Children container */
+.file-tree__children {
+    display: flex;
+    flex-direction: column;
 }
 
 /* Empty State */
@@ -109,14 +128,24 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    padding: 24px;
+    padding: 32px 16px;
     text-align: center;
     color: var(--text-muted);
     gap: 12px;
 }
 
+.file-tree__empty svg {
+    opacity: 0.3;
+}
+
 .file-tree__empty p {
     font-size: 0.85rem;
+    margin: 0;
+}
+
+.file-tree__empty-actions {
+    display: flex;
+    gap: 8px;
 }
 
 .btn--small {
@@ -124,34 +153,42 @@
     font-size: 0.75rem !important;
 }
 
-/* Add File Row */
+/* Add File/Folder Row */
 .file-tree__add {
     display: flex;
     align-items: center;
-    gap: 4px;
-    padding: 4px 8px;
-    margin-bottom: 4px;
+    gap: 6px;
+    padding: 6px 12px;
+    margin: 4px 8px;
     background: var(--bg-tertiary);
     border-radius: var(--radius);
+    border: 1px solid var(--accent);
+}
+
+.file-tree__add-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--accent);
 }
 
 .file-tree__add input {
     flex: 1;
-    padding: 6px 8px;
-    border: 1px solid var(--accent);
-    border-radius: 4px;
+    padding: 4px 8px;
+    border: none;
     background: var(--bg-primary);
     color: var(--text-primary);
     font-size: 0.8rem;
     outline: none;
+    border-radius: 4px;
 }
 
-.file-tree__add input:focus {
-    box-shadow: 0 0 0 2px var(--accent-light);
+.file-tree__add input::placeholder {
+    color: var(--text-muted);
 }
 
 .file-tree__add button {
-    padding: 6px 10px;
+    padding: 4px 8px;
     border: none;
     background: var(--accent-light);
     color: var(--accent);
@@ -169,7 +206,7 @@
 /* Rename Input */
 .file-tree__rename {
     width: 100%;
-    padding: 4px 6px;
+    padding: 2px 6px;
     border: 1px solid var(--accent);
     border-radius: 4px;
     background: var(--bg-primary);
@@ -182,11 +219,43 @@
     box-shadow: 0 0 0 2px var(--accent-light);
 }
 
-/* Context Menu Enhancement */
+/* Context Menu */
+.context-menu-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 999;
+}
+
+.context-menu {
+    position: fixed;
+    z-index: 1000;
+    background: var(--bg-panel);
+    backdrop-filter: blur(12px);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-lg);
+    padding: 4px;
+    min-width: 160px;
+}
+
 .context-menu button {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 10px;
+    width: 100%;
+    padding: 8px 12px;
+    border: none;
+    background: transparent;
+    color: var(--text-primary);
+    font-size: 0.8rem;
+    text-align: left;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: all 0.1s ease;
+}
+
+.context-menu button:hover {
+    background: var(--accent-light);
 }
 
 .context-menu button svg {
@@ -198,6 +267,20 @@
     color: var(--accent);
 }
 
+.context-menu button.danger {
+    color: var(--error);
+}
+
+.context-menu button.danger:hover {
+    background: rgba(239, 68, 68, 0.1);
+}
+
 .context-menu button.danger svg {
     color: var(--error);
+}
+
+.context-menu__separator {
+    height: 1px;
+    background: var(--border-color);
+    margin: 4px 8px;
 }

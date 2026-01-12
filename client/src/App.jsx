@@ -42,8 +42,10 @@ function App() {
     // Resizable panels state
     const [sidebarWidth, setSidebarWidth] = useState(() => parseInt(localStorage.getItem('latex-sidebar-width') || '200'))
     const [editorWidth, setEditorWidth] = useState(() => parseInt(localStorage.getItem('latex-editor-width') || '50'))
+    const [consoleHeight, setConsoleHeight] = useState(() => parseInt(localStorage.getItem('latex-console-height') || '200'))
     const [isResizing, setIsResizing] = useState(null)
     const appRef = useRef(null)
+    const contentAreaRef = useRef(null)
 
     // Initial load
     useEffect(() => {
@@ -102,7 +104,10 @@ function App() {
         try {
             await createFile('default-project', filename)
             await loadFiles()
-            setActiveFileName(filename)
+            // Only select if it's a file, not a folder
+            if (!filename.endsWith('/')) {
+                setActiveFileName(filename)
+            }
             return true
         } catch (err) {
             alert('Failed to create file: ' + err.message)
@@ -217,6 +222,10 @@ function App() {
                 const x = e.clientX - rect.left
                 const percent = Math.max(25, Math.min(75, (x / rect.width) * 100))
                 setEditorWidth(percent)
+            } else if (isResizing === 'console' && contentAreaRef.current) {
+                const rect = contentAreaRef.current.getBoundingClientRect()
+                const newHeight = Math.max(100, Math.min(500, rect.bottom - e.clientY))
+                setConsoleHeight(newHeight)
             }
         }
 
@@ -224,6 +233,7 @@ function App() {
             setIsResizing(null)
             localStorage.setItem('latex-sidebar-width', String(sidebarWidth))
             localStorage.setItem('latex-editor-width', String(editorWidth))
+            localStorage.setItem('latex-console-height', String(consoleHeight))
         }
 
         document.addEventListener('mousemove', handleMouseMove)
@@ -240,7 +250,8 @@ function App() {
             ref={appRef}
             style={{
                 '--sidebar-width': `${sidebarWidth}px`,
-                '--editor-width': editorWidth
+                '--editor-width': editorWidth,
+                '--console-height': `${consoleHeight}px`
             }}
         >
             <Toolbar
@@ -266,23 +277,46 @@ function App() {
 
             <div className="resize-handle resize-handle--sidebar" onMouseDown={handleMouseDown('sidebar')} />
 
-            <div className="main-content" ref={mainContentRef}>
-                <Editor
-                    code={code}
-                    onChange={setCode}
-                    onCollaboratorsChange={setCollaborators}
-                />
+            <div className="content-area" ref={contentAreaRef}>
+                <div className="main-content" ref={mainContentRef}>
+                    <Editor
+                        code={code}
+                        onChange={setCode}
+                        onCollaboratorsChange={setCollaborators}
+                    />
 
-                <div className="resize-handle resize-handle--editor" onMouseDown={handleMouseDown('editor')} />
+                    <div className="resize-handle resize-handle--editor" onMouseDown={handleMouseDown('editor')} />
 
-                <Preview pdfUrl={pdfUrl} />
+                    <Preview pdfUrl={pdfUrl} />
+                </div>
+
+                {/* Console Toggle when closed */}
+                {!consoleOpen && (
+                    <div className="console-toggle" onClick={() => setConsoleOpen(true)}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <polyline points="4,17 10,11 4,5" />
+                            <line x1="12" y1="19" x2="20" y2="19" />
+                        </svg>
+                        <span>Compilation Log</span>
+                        {logs && logs.includes('Error') && (
+                            <span style={{ color: 'var(--error)', fontWeight: 600 }}>• Errors</span>
+                        )}
+                    </div>
+                )}
+
+                {/* Console Panel when open */}
+                <div className={`console-wrapper ${consoleOpen ? 'console-wrapper--open' : ''}`}>
+                    <div
+                        className="resize-handle resize-handle--console"
+                        onMouseDown={handleMouseDown('console')}
+                    />
+                    <Console
+                        logs={logs}
+                        isOpen={consoleOpen}
+                        onToggle={() => setConsoleOpen(!consoleOpen)}
+                    />
+                </div>
             </div>
-
-            <Console
-                logs={logs}
-                isOpen={consoleOpen}
-                onToggle={() => setConsoleOpen(!consoleOpen)}
-            />
         </div>
     )
 }

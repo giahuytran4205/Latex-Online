@@ -1,6 +1,9 @@
 const API_BASE = '/api'
 const DEFAULT_PROJECT = 'default-project'
 
+// Helper to encode filename for URL (handles nested paths)
+const encodeFilename = (filename) => encodeURIComponent(filename)
+
 export async function compileLatex({ code, engine, filename, projectId = DEFAULT_PROJECT }) {
     const response = await fetch(`${API_BASE}/compile`, {
         method: 'POST',
@@ -23,13 +26,13 @@ export async function getFiles(projectId = DEFAULT_PROJECT) {
 }
 
 export async function getFileContent(projectId = DEFAULT_PROJECT, filename) {
-    const response = await fetch(`${API_BASE}/files/${projectId}/${filename}`)
+    const response = await fetch(`${API_BASE}/files/${projectId}/${encodeFilename(filename)}`)
     if (!response.ok) throw new Error('Failed to fetch file content')
     return response.json()
 }
 
 export async function saveFile(projectId = DEFAULT_PROJECT, filename, content) {
-    const response = await fetch(`${API_BASE}/files/${projectId}/${filename}`, {
+    const response = await fetch(`${API_BASE}/files/${projectId}/${encodeFilename(filename)}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ content }),
@@ -49,7 +52,7 @@ export async function createFile(projectId = DEFAULT_PROJECT, filename, content 
 }
 
 export async function deleteFile(projectId = DEFAULT_PROJECT, filename) {
-    const response = await fetch(`${API_BASE}/files/${projectId}/${filename}`, {
+    const response = await fetch(`${API_BASE}/files/${projectId}/${encodeFilename(filename)}`, {
         method: 'DELETE',
     })
     if (!response.ok) throw new Error('Failed to delete file')

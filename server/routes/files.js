@@ -63,24 +63,48 @@ Start typing...
     return path
 }
 
-// Get project files
+// Get project files (recursive)
 router.get('/:projectId', (req, res) => {
     try {
         const { projectId } = req.params
         const projectPath = getProjectPath(projectId)
 
-        const files = readdirSync(projectPath)
-            .filter(file => !file.startsWith('.'))
-            .map(file => {
-                const stats = statSync(join(projectPath, file))
-                return {
-                    name: file,
-                    type: extname(file).substring(1) || 'txt',
-                    size: stats.size,
-                    updatedAt: stats.mtime
-                }
-            })
+        // Recursively get all files
+        const getAllFiles = (dir, basePath = '') => {
+            const items = readdirSync(dir)
+            let files = []
 
+            for (const item of items) {
+                if (item.startsWith('.')) continue
+
+                const fullPath = join(dir, item)
+                const relativePath = basePath ? `${basePath}/${item}` : item
+                const stats = statSync(fullPath)
+
+                if (stats.isDirectory()) {
+                    // Add folder entry
+                    files.push({
+                        name: relativePath + '/',
+                        type: 'folder',
+                        size: 0,
+                        updatedAt: stats.mtime
+                    })
+                    // Recursively get files in folder
+                    files = files.concat(getAllFiles(fullPath, relativePath))
+                } else {
+                    files.push({
+                        name: relativePath,
+                        type: extname(item).substring(1) || 'txt',
+                        size: stats.size,
+                        updatedAt: stats.mtime
+                    })
+                }
+            }
+
+            return files
+        }
+
+        const files = getAllFiles(projectPath)
         res.json({ files })
     } catch (err) {
         res.status(500).json({ error: err.message })
@@ -91,14 +115,15 @@ router.get('/:projectId', (req, res) => {
 router.get('/:projectId/:filename', (req, res) => {
     try {
         const { projectId, filename } = req.params
-        const filePath = join(getProjectPath(projectId), filename)
+        const decodedFilename = decodeURIComponent(filename)
+        const filePath = join(getProjectPath(projectId), decodedFilename)
 
         if (!existsSync(filePath)) {
             return res.status(404).json({ error: 'File not found' })
         }
 
         const content = readFileSync(filePath, 'utf-8')
-        res.json({ filename, content })
+        res.json({ filename: decodedFilename, content })
     } catch (err) {
         res.status(500).json({ error: err.message })
     }
@@ -108,13 +133,16 @@ router.get('/:projectId/:filename', (req, res) => {
 router.get('/:projectId/:filename/download', (req, res) => {
     try {
         const { projectId, filename } = req.params
-        const filePath = join(getProjectPath(projectId), filename)
+        const decodedFilename = decodeURIComponent(filename)
+        const filePath = join(getProjectPath(projectId), decodedFilename)
 
         if (!existsSync(filePath)) {
             return res.status(404).json({ error: 'File not found' })
         }
 
-        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`)
+        // Get just the base filename for download
+        const baseName = decodedFilename.split('/').pop()
+        res.setHeader('Content-Disposition', `attachment; filename="${baseName}"`)
         res.sendFile(filePath)
     } catch (err) {
         res.status(500).json({ error: err.message })
@@ -126,17 +154,25 @@ router.put('/:projectId/:filename', (req, res) => {
     try {
         const { projectId, filename } = req.params
         const { content } = req.body
+        const decodedFilename = decodeURIComponent(filename)
         const projectPath = getProjectPath(projectId)
+        const filePath = join(projectPath, decodedFilename)
 
-        writeFileSync(join(projectPath, filename), content)
+        // Ensure parent directory exists
+        const parentDir = dirname(filePath)
+        if (!existsSync(parentDir)) {
+            mkdirSync(parentDir, { recursive: true })
+        }
 
-        res.json({ success: true, filename })
+        writeFileSync(filePath, content)
+
+        res.json({ success: true, filename: decodedFilename })
     } catch (err) {
         res.status(500).json({ error: err.message })
     }
 })
 
-// Create file
+// Create file or folder
 router.post('/:projectId', (req, res) => {
     try {
         const { projectId } = req.params
@@ -144,27 +180,52 @@ router.post('/:projectId', (req, res) => {
 
         if (!filename) return res.status(400).json({ error: 'Filename required' })
 
-        const filePath = join(getProjectPath(projectId), filename)
+        const projectPath = getProjectPath(projectId)
+        const filePath = join(projectPath, filename)
+
+        // Check if it's a folder (ends with /)
+        const isFolder = filename.endsWith('/')
 
         if (existsSync(filePath)) {
-            return res.status(400).json({ error: 'File already exists' })
+            return res.status(400).json({ error: isFolder ? 'Folder already exists' : 'File already exists' })
         }
 
-        writeFileSync(filePath, content)
+        if (isFolder) {
+            // Create folder
+            mkdirSync(filePath, { recursive: true })
+        } else {
+            // Create parent directories if needed
+            const parentDir = dirname(filePath)
+            if (!existsSync(parentDir)) {
+                mkdirSync(parentDir, { recursive: true })
+            }
+            // Create file
+            writeFileSync(filePath, content)
+        }
+
         res.json({ success: true, filename })
     } catch (err) {
         res.status(500).json({ error: err.message })
     }
 })
 
-// Delete file
+// Delete file or folder
 router.delete('/:projectId/:filename', (req, res) => {
     try {
         const { projectId, filename } = req.params
-        const filePath = join(getProjectPath(projectId), filename)
+        // Handle URL encoded paths (for nested files)
+        const decodedFilename = decodeURIComponent(filename)
+        const filePath = join(getProjectPath(projectId), decodedFilename)
 
         if (existsSync(filePath)) {
-            unlinkSync(filePath)
+            const stats = statSync(filePath)
+            if (stats.isDirectory()) {
+                // Use rmSync for directories (Node 14.14+)
+                const { rmSync } = require('fs')
+                rmSync(filePath, { recursive: true, force: true })
+            } else {
+                unlinkSync(filePath)
+            }
         }
 
         res.json({ success: true })
