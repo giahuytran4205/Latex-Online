@@ -66,8 +66,26 @@ setup_latex_env
 echo "📦 Updating system packages..."
 pkg update -y || true
 echo "📦 Installing nginx, nodejs, lsof..."
-echo "📦 Installing nginx, nodejs, lsof, texlive..."
-pkg install -y nginx nodejs lsof texlive
+echo "📦 Installing nginx, nodejs, lsof..."
+pkg install -y nginx nodejs lsof
+
+echo "📦 Checking TeX Live..."
+if ! command -v pdflatex &> /dev/null; then
+    echo "📦 Installing TeX Live..."
+    echo "📦 Installing TeX Live..."
+    # 1. Try generic 'texlive'
+    if pkg install -y texlive 2>/dev/null; then
+        echo "✅ 'texlive' package installed."
+    # 2. Try 'texlive-bin' (Common in newer Termux repos)
+    elif pkg install -y texlive-bin 2>/dev/null; then
+        echo "✅ 'texlive-bin' installed."
+    # 3. Fallback to installer script
+    else
+        echo "⚠️  Packages failed. Trying installer..."
+        pkg install -y texlive-installer || true
+        termux-install-tl || true
+    fi
+fi
 
 # PM2 is installed via npm, not pkg
 if ! command -v pm2 &> /dev/null; then
