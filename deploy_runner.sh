@@ -36,8 +36,21 @@ if ! command -v pm2 &> /dev/null; then
 fi
 
 # Start or Reload
-# This handles both first-time start and zero-downtime reloads
-pm2 startOrReload ecosystem.config.cjs
+# To be absolutely safe, we delete the old process and force kill the port first
+pm2 delete latex-online-server 2>/dev/null || true
+
+echo "🧹 [Runner] Ensuring port 3000 is free..."
+if command -v fuser &> /dev/null; then
+    fuser -k 3000/tcp 2>/dev/null || true
+else
+    PIDS_PORT=$(lsof -t -i:3000 2>/dev/null || echo "")
+    if [ -n "$PIDS_PORT" ]; then
+         kill -9 $PIDS_PORT 2>/dev/null || true
+    fi
+fi
+sleep 2
+
+pm2 start ecosystem.config.cjs
 
 # Save list
 pm2 save
