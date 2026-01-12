@@ -39,36 +39,36 @@ const TERMUX_BIN = join(TERMUX_BASE, 'usr/bin')
  * Get the full path to a LaTeX engine
  */
 function getEnginePath(engine) {
-    const termuxPath = join(TERMUX_BIN, engine)
+    // List of paths to check (Priority order)
+    const candidates = [
+        join(TERMUX_BIN, 'texlive', engine), // User confirmed path: .../bin/texlive/pdflatex
+        join(TERMUX_BIN, engine),            // Standard path
+        `${TERMUX_BASE}/usr/share/texlive/bin/aarch64-linux/${engine}`,
+        `${TERMUX_BASE}/home/.termux-latex/bin/${engine}`
+    ]
 
-    // 1. Check standard path
-    if (existsSync(termuxPath)) {
-        console.log(`[LaTeX] Found at standard path: ${termuxPath}`)
-        return termuxPath
-    }
-
-    // 2. If on Termux, try to find it dynamically
-    if (existsSync(TERMUX_BIN)) {
-        console.log(`[LaTeX] Standard path failed. Searching in ${TERMUX_BASE}...`)
-        try {
-            // Find executable named 'engine' (e.g. pdflatex) in usr/bin or subdirs
-            // Limit depth to avoid slow search
-            const cmd = `find ${TERMUX_BASE}/usr -name ${engine} -type f -path "*/bin/*" 2>/dev/null | head -n 1`
-            const foundPath = execSync(cmd).toString().trim()
-
-            if (foundPath) {
-                console.log(`[LaTeX] Discovered path: ${foundPath}`)
-                return foundPath
-            }
-        } catch (e) {
-            console.error('[LaTeX] Path discovery failed:', e.message)
+    // Check candidates
+    for (const p of candidates) {
+        if (existsSync(p)) {
+            console.log(`[LaTeX] Found engine at: ${p}`)
+            return p
         }
-
-        // 3. Fallback: maybe it's texlive wrapper?
-        // Some installations put it in .../usr/bin/texlive/bin/...
     }
 
-    console.warn(`[LaTeX] Could not find ${engine}. Returning default "${engine}"`)
+    // Deep search fallback as last resort
+    if (existsSync(TERMUX_BIN)) {
+        console.log(`[LaTeX] Path not found in candidates. Deep searching...`)
+        try {
+            const cmd = `find ${TERMUX_BASE}/usr -name ${engine} -type f -path "*/bin/*" 2>/dev/null | head -n 1`
+            const found = execSync(cmd).toString().trim()
+            if (found) {
+                console.log(`[LaTeX] Discovered path: ${found}`)
+                return found
+            }
+        } catch (e) { console.error('Search failed:', e.message) }
+    }
+
+    console.warn(`[LaTeX] CRITICAL: Not found ${engine}. Returning default.`)
     return engine
 }
 
