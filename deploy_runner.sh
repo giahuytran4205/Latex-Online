@@ -8,27 +8,33 @@ LOG_FILE="$PROJECT_DIR/server.log"
 echo "🚀 [Runner] Starting deployment runner..."
 
 # 1. Environment
-export PATH="/data/data/com.termux/files/usr/bin:/data/data/com.termux/files/usr/bin/texlive:$PATH"
-export LC_ALL=C
-# Critical TeX Live Environment Variables
-export TEXMFROOT='/data/data/com.termux/files/usr/share/texlive/2025.0'
-export TEXMFDIST="$TEXMFROOT/texmf-dist"
-export TEXMFLOCAL='/data/data/com.termux/files/usr/share/texlive/texmf-local'
-export TEXMFSYSVAR="$TEXMFROOT/texmf-var"
-export TEXMFSYSCONFIG="$TEXMFROOT/texmf-config"
-export PERL5LIB="$TEXMFROOT/tlpkg:$TEXMFDIST/scripts/texlive"
+echo "🔎 [Runner] Debugging and fixing TeX Live environment..."
 
-echo "🔎 [Runner] Debugging TeX Live environment..."
-if [ ! -f "$TEXMFDIST/scripts/texlive/mktexlsr.pl" ]; then
-    echo "⚠️ [Runner] mktexlsr.pl NOT found at expected path!"
-    echo "Searching for mktexlsr.pl..."
-    find /data/data/com.termux/files/usr/share/texlive -name "mktexlsr.pl" 2>/dev/null || echo "Not found."
+# 1. Find the true location of mktexlsr.pl and TLUtils.pm to build PERL5LIB
+TEXLIVE_BASE="/data/data/com.termux/files/usr/share/texlive"
+MKTEXLSR_PATH=$(find "$TEXLIVE_BASE" -name "mktexlsr.pl" 2>/dev/null | head -n 1)
+TLUTILS_PATH=$(find "$TEXLIVE_BASE" -name "TLUtils.pm" 2>/dev/null | head -n 1)
+
+if [ -n "$MKTEXLSR_PATH" ] && [ -n "$TLUTILS_PATH" ]; then
+    echo "✅ Found mktexlsr.pl at: $MKTEXLSR_PATH"
+    
+    # Extract directories
+    SCRIPT_DIR=$(dirname "$MKTEXLSR_PATH")
+    TLPKG_DIR=$(dirname "$(dirname "$TLUTILS_PATH")") # TLUtils is usually in tlpkg/TeXLive/TLUtils.pm
+    
+    # Export PERL5LIB
+    export PERL5LIB="$TLPKG_DIR:$SCRIPT_DIR"
+    echo "🔗 Set PERL5LIB to: $PERL5LIB"
+    
+    # Also update other vars based on this root if possible, but standard paths are usually okay.
+    # We insist on running fmtutil-sys with this PERL5LIB
+    echo "🔨 [Runner] Generating pdflatex format..."
+    fmtutil-sys --byfmt pdflatex || echo "❌ Format generation failed."
 else
-    echo "✅ [Runner] mktexlsr.pl found."
+    echo "❌ [Runner] Could not find mktexlsr.pl or TLUtils.pm. TeX Live installation might be broken."
+    echo "Attempting to install 'texlive-bin' again..."
+    pkg install -y texlive-bin || true
 fi
-
-echo "🔨 [Runner] Pre-generating pdflatex format..."
-fmtutil-sys --byfmt pdflatex || echo "⚠️ [Runner] Format generation failed (non-fatal, will try at runtime)"
 
 cd "$PROJECT_DIR"
 
