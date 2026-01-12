@@ -85,13 +85,32 @@ echo "🔄 Reloading Nginx..."
 nginx -s reload 2>/dev/null || nginx &
 
 echo "🚀 Restarting Backend via PM2..."
-# We use --update-env to pass our dynamically found TeX paths to the backend
+
+# SAFETY: Clear port 3000 if it's not held by SSH
+PORT=3000
+PIDS=$(lsof -t -i:$PORT 2>/dev/null || echo "")
+if [ -n "$PIDS" ]; then
+    for PID in $PIDS; do
+        CMD=$(ps -p $PID -o comm= 2>/dev/null || echo "unknown")
+        if [[ "$CMD" == *"sshd"* ]]; then
+            echo "⚠️  Port $PORT held by sshd. Skipping kill."
+        else
+            echo "🔪 Killing process $CMD (PID $PID) on port $PORT..."
+            kill -9 $PID 2>/dev/null || true
+        fi
+    done
+fi
+
+# Clean PM2 state
+pm2 delete latex-api 2>/dev/null || true
+
+# Start with dynamically found TeX paths
 pm2 start ecosystem.config.js --update-env
 pm2 save
 
 echo "✨ Deployment Complete!"
 echo "------------------------------------------------"
-echo "URL: http://localhost:8080 (Termux Default)"
+echo "URL: http://localhost:8080 (Managed by Nginx)"
 echo "Backend: Port 3000 (Managed by PM2)"
 echo "------------------------------------------------"
 pm2 list
