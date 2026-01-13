@@ -13,14 +13,16 @@ mkdir -p "$PROJECT_DIR/logs"
 mkdir -p "$NGINX_CONF_DIR"
 mkdir -p "$NGINX_LOG_DIR"
 
-# Simple TeX Live Check
+# Simple TeX Live Check - DO NOT install during deploy (takes 30+ minutes)
 check_latex() {
     echo "📦 Checking LaTeX..."
     if command -v pdflatex &> /dev/null; then
-        echo "✅ pdflatex found."
+        echo "✅ pdflatex found: $(which pdflatex)"
     else
-        echo "⚠️ pdflatex not found. Installing..."
-        pkg install -y texlive-bin || pkg install -y texlive
+        echo "⚠️  WARNING: pdflatex not found!"
+        echo "⚠️  Please install manually ONCE by running:"
+        echo "⚠️  pkg install texlive-bin texlive-installer"
+        echo "⚠️  Continuing without LaTeX (compilation will fail)..."
     fi
 }
 

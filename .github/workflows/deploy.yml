@@ -35,6 +35,8 @@ jobs:
           username: ${{ secrets.TERMUX_USER }}
           key: ${{ secrets.TERMUX_SSH_KEY }}
           envs: GITHUB_TOKEN,GITHUB_ACTOR,GITHUB_REPOSITORY,VITE_FIREBASE_API_KEY,VITE_FIREBASE_AUTH_DOMAIN,VITE_FIREBASE_PROJECT_ID,VITE_FIREBASE_STORAGE_BUCKET,VITE_FIREBASE_MESSAGING_SENDER_ID,VITE_FIREBASE_APP_ID
+          timeout: 30m
+          command_timeout: 25m
           script_stop: true
           script: |
             # Configuration
