@@ -377,6 +377,31 @@ router.post('/:projectId/share', (req, res) => {
     }
 })
 
+// Get user storage info
+router.get('/storage', (req, res) => {
+    try {
+        const userId = req.user.uid
+        const userProjectsDir = join(PROJECTS_DIR, userId)
+
+        const usedStorage = existsSync(userProjectsDir) ? getDirectorySize(userProjectsDir) : 0
+
+        // Default storage limit: 100MB
+        // In production, this could come from Firestore user profile
+        const storageLimit = 100 * 1024 * 1024
+
+        console.log(`[Storage] User ${userId}: ${usedStorage} bytes used`)
+
+        res.json({
+            used: usedStorage,
+            limit: storageLimit,
+            userId: userId
+        })
+    } catch (error) {
+        console.error('[Storage] Error:', error)
+        res.status(500).json({ error: error.message })
+    }
+})
+
 // Helper to calculate directory size
 function getDirectorySize(dirPath) {
     let size = 0
@@ -398,3 +423,4 @@ function getDirectorySize(dirPath) {
 }
 
 export default router
+

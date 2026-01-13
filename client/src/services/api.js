@@ -81,7 +81,8 @@ export async function shareProject(projectId, email, permission = 'view') {
 
 export async function getUserStorageInfo() {
     const headers = await getAuthHeaders()
-    const response = await fetch(`${API_BASE}/user/storage`, { headers })
+    // Use projects router which has proper auth middleware
+    const response = await fetch(`${API_BASE}/projects/storage`, { headers })
     if (!response.ok) {
         // Return default if endpoint not available
         return { used: 0, limit: 100 * 1024 * 1024 }

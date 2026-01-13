@@ -8,33 +8,8 @@ import compileRouter from './routes/compile.js'
 import filesRouter from './routes/files.js'
 import projectsRouter from './routes/projects.js'
 
-import { existsSync, readdirSync, statSync } from 'fs'
-
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
-
-const PROJECTS_DIR = join(__dirname, '../projects')
-
-// Helper to calculate directory size recursively
-function getDirectorySize(dirPath) {
-    let size = 0
-    try {
-        if (!existsSync(dirPath)) return 0
-        const files = readdirSync(dirPath)
-        for (const file of files) {
-            const filePath = join(dirPath, file)
-            const stat = statSync(filePath)
-            if (stat.isDirectory()) {
-                size += getDirectorySize(filePath)
-            } else {
-                size += stat.size
-            }
-        }
-    } catch (e) {
-        // Ignore errors
-    }
-    return size
-}
 
 const app = express()
 const server = createServer(app)
@@ -49,44 +24,6 @@ app.use(express.static(join(__dirname, '../client/dist')))
 app.use('/api/compile', compileRouter)
 app.use('/api/files', filesRouter)
 app.use('/api/projects', projectsRouter)
-
-// User storage info endpoint
-app.get('/api/user/storage', async (req, res) => {
-    try {
-        // Get user ID from auth header
-        const authHeader = req.headers.authorization
-        let userId = 'dev-user'
-
-        if (authHeader && authHeader.startsWith('Bearer ')) {
-            // In production, verify token and get user ID
-            // For now, we'll try to decode it or use dev-user
-            try {
-                const token = authHeader.split('Bearer ')[1]
-                // Simple base64 decode to peek at payload (not secure, just for dev)
-                const payload = JSON.parse(atob(token.split('.')[1]))
-                userId = payload.user_id || payload.uid || 'dev-user'
-            } catch {
-                userId = 'dev-user'
-            }
-        }
-
-        const userProjectsDir = join(PROJECTS_DIR, userId)
-        const usedStorage = existsSync(userProjectsDir) ? getDirectorySize(userProjectsDir) : 0
-
-        // Default storage limit: 100MB
-        // In production, this would come from Firestore user profile
-        const storageLimit = 100 * 1024 * 1024
-
-        res.json({
-            used: usedStorage,
-            limit: storageLimit,
-            userId: userId
-        })
-    } catch (error) {
-        console.error('[Storage] Error calculating storage:', error)
-        res.status(500).json({ error: error.message })
-    }
-})
 
 // Health check
 app.get('/api/health', (req, res) => {
