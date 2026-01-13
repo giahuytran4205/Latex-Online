@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
+import { useToast } from '../../components/Toast/Toast'
+import { useConfirm } from '../../components/ConfirmDialog/ConfirmDialog'
 import {
     getProjects,
     createProject,
@@ -13,6 +15,9 @@ import './Home.css'
 function Home() {
     const { user, userProfile, logout } = useAuth()
     const navigate = useNavigate()
+    const toast = useToast()
+    const { confirm } = useConfirm()
+
     const [projects, setProjects] = useState([])
     const [isLoading, setIsLoading] = useState(true)
     const [showNewProjectModal, setShowNewProjectModal] = useState(false)
@@ -72,26 +77,34 @@ function Home() {
                 setShowNewProjectModal(false)
                 setNewProjectName('')
                 setNewProjectTemplate('blank')
+                toast.success('Project created successfully!')
                 navigate(`/editor/${result.projectId}`)
             }
         } catch (error) {
-            alert('Failed to create project: ' + error.message)
+            toast.error('Failed to create project: ' + error.message)
         } finally {
             setIsCreating(false)
         }
     }
 
     const handleDeleteProject = async (projectId, projectName) => {
-        if (!confirm(`Are you sure you want to delete "${projectName}"? This action cannot be undone.`)) {
-            return
-        }
+        const confirmed = await confirm({
+            title: 'Delete Project',
+            message: `Are you sure you want to delete "${projectName}"? This action cannot be undone.`,
+            confirmText: 'Delete',
+            cancelText: 'Cancel',
+            type: 'danger'
+        })
+
+        if (!confirmed) return
 
         try {
             await deleteProject(projectId)
             await loadProjects()
             await loadStorageInfo()
+            toast.success('Project deleted successfully')
         } catch (error) {
-            alert('Failed to delete project: ' + error.message)
+            toast.error('Failed to delete project: ' + error.message)
         }
     }
 
@@ -101,9 +114,10 @@ function Home() {
             if (result.success) {
                 await loadProjects()
                 await loadStorageInfo()
+                toast.success('Project duplicated successfully')
             }
         } catch (error) {
-            alert('Failed to duplicate project: ' + error.message)
+            toast.error('Failed to duplicate project: ' + error.message)
         }
     }
 

@@ -187,3 +187,13 @@ export async function moveFile(projectId, oldPath, newPath) {
     if (!response.ok) throw new Error('Failed to move file')
     return response.json()
 }
+
+// ============ STORAGE ============
+
+export async function getUserStorageInfo() {
+    const headers = await getAuthHeaders()
+    const response = await fetch(`${API_BASE}/user/storage`, { headers })
+    if (!response.ok) throw new Error('Failed to fetch storage info')
+    return response.json()
+}
+
