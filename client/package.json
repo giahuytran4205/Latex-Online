@@ -9,8 +9,6 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
     "@codemirror/autocomplete": "^6.11.1",
     "@codemirror/commands": "^6.3.2",
     "@codemirror/lang-javascript": "^6.2.1",
@@ -19,10 +17,14 @@
     "@codemirror/state": "^6.4.0",
     "@codemirror/view": "^6.22.0",
     "codemirror": "^6.0.1",
+    "firebase": "^12.7.0",
+    "pdfjs-dist": "^4.0.379",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^7.12.0",
     "y-codemirror.next": "^0.3.2",
     "y-websocket": "^1.5.0",
-    "yjs": "^13.6.10",
-    "pdfjs-dist": "^4.0.379"
+    "yjs": "^13.6.10"
   },
   "devDependencies": {
     "@types/react": "^18.2.43",

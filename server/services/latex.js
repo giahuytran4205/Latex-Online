@@ -104,8 +104,13 @@ export function cleanupOldTempFiles() {
 /**
  * Compile LaTeX code using specified engine with incremental support
  */
-export async function compileLatex(projectId = 'default-project', engine = 'pdflatex', filename = 'main', code = null) {
-    const projectDir = join(PROJECTS_DIR, projectId)
+export async function compileLatex(projectId = 'default-project', engine = 'pdflatex', filename = 'main', code = null, userId = 'dev-user') {
+    // Support user-based project paths
+    let projectDir = join(PROJECTS_DIR, userId, projectId)
+    if (!existsSync(projectDir)) {
+        // Fallback to legacy path
+        projectDir = join(PROJECTS_DIR, projectId)
+    }
     const workDir = getProjectWorkDir(projectId)
 
     // Calculate current project hash

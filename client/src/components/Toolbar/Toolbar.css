@@ -1,4 +1,32 @@
-/* Toolbar styles are mostly in index.css */
+/* Toolbar specific styles */
+
+.toolbar__left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.toolbar__back-btn {
+    padding: 8px;
+    border-radius: var(--radius);
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+}
+
+.toolbar__back-btn:hover {
+    background: var(--accent-light);
+    color: var(--accent);
+}
+
+.toolbar__project-name {
+    font-weight: 600;
+    color: var(--text-primary);
+    max-width: 250px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 @media (max-width: 600px) {
     .toolbar {
         flex-wrap: wrap;
@@ -16,5 +44,9 @@
 
     .btn {
         padding: 8px 12px;
+    }
+
+    .toolbar__project-name {
+        max-width: 150px;
     }
 }

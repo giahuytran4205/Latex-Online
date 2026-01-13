@@ -6,6 +6,7 @@ import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
 import compileRouter from './routes/compile.js'
 import filesRouter from './routes/files.js'
+import projectsRouter from './routes/projects.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -22,6 +23,17 @@ app.use(express.static(join(__dirname, '../client/dist')))
 // API Routes
 app.use('/api/compile', compileRouter)
 app.use('/api/files', filesRouter)
+app.use('/api/projects', projectsRouter)
+
+// User storage info endpoint
+app.get('/api/user/storage', async (req, res) => {
+    // TODO: Integrate with Firebase to get actual user limits
+    // For now, return default values
+    res.json({
+        used: 0,
+        limit: 100 * 1024 * 1024 // 100MB default
+    })
+})
 
 // Health check
 app.get('/api/health', (req, res) => {

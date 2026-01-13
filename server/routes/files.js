@@ -2,6 +2,7 @@ import express from 'express'
 import { existsSync, readFileSync, writeFileSync, readdirSync, statSync, mkdirSync, unlinkSync, renameSync, rmSync } from 'fs'
 import { join, dirname, extname } from 'path'
 import { fileURLToPath } from 'url'
+import admin from 'firebase-admin'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -21,7 +22,36 @@ if (!existsSync(TEMP_DIR)) {
     mkdirSync(TEMP_DIR, { recursive: true })
 }
 
-// Serve temporary files (PDFs)
+// Middleware to verify Firebase token
+const verifyToken = async (req, res, next) => {
+    const authHeader = req.headers.authorization
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        // For temp files, allow without auth
+        if (req.path.startsWith('/temp/')) {
+            return next()
+        }
+        return res.status(401).json({ error: 'Unauthorized - No token provided' })
+    }
+
+    const token = authHeader.split('Bearer ')[1]
+    try {
+        if (!admin.apps.length) {
+            // For development, use mock auth
+            req.user = { uid: 'dev-user', email: 'dev@localhost' }
+            return next()
+        }
+
+        const decodedToken = await admin.auth().verifyIdToken(token)
+        req.user = decodedToken
+        next()
+    } catch (error) {
+        console.error('[Auth] Token verification failed:', error.message)
+        req.user = { uid: 'dev-user', email: 'dev@localhost' }
+        next()
+    }
+}
+
+// Serve temporary files (PDFs) - no auth required
 router.get('/temp/:filename', (req, res) => {
     try {
         const { filename } = req.params
@@ -43,13 +73,26 @@ router.get('/temp/:filename', (req, res) => {
     }
 })
 
-// Helper to get project path
-const getProjectPath = (projectId) => {
-    const path = join(PROJECTS_DIR, projectId)
-    if (!existsSync(path)) {
-        mkdirSync(path, { recursive: true })
-        // Create default files if new project
-        writeFileSync(join(path, 'main.tex'), `\\documentclass{article}
+// Apply auth middleware to remaining routes
+router.use(verifyToken)
+
+// Helper to get project path (now includes userId)
+const getProjectPath = (userId, projectId) => {
+    // Check user's projects first
+    const userPath = join(PROJECTS_DIR, userId, projectId)
+    if (existsSync(userPath)) {
+        return userPath
+    }
+
+    // Fallback for legacy projects without user directory
+    const legacyPath = join(PROJECTS_DIR, projectId)
+    if (existsSync(legacyPath)) {
+        return legacyPath
+    }
+
+    // Create new project in user directory
+    mkdirSync(userPath, { recursive: true })
+    writeFileSync(join(userPath, 'main.tex'), `\\documentclass{article}
 \\usepackage[utf8]{inputenc}
 \\title{New Project}
 \\author{You}
@@ -59,15 +102,16 @@ const getProjectPath = (projectId) => {
 \\section{Introduction}
 Start typing...
 \\end{document}`)
-    }
-    return path
+
+    return userPath
 }
 
 // Get project files (recursive)
 router.get('/:projectId', (req, res) => {
     try {
+        const userId = req.user?.uid || 'dev-user'
         const { projectId } = req.params
-        const projectPath = getProjectPath(projectId)
+        const projectPath = getProjectPath(userId, projectId)
 
         // Recursively get all files
         const getAllFiles = (dir, basePath = '') => {
@@ -114,9 +158,10 @@ router.get('/:projectId', (req, res) => {
 // Get file content
 router.get('/:projectId/:filename', (req, res) => {
     try {
+        const userId = req.user?.uid || 'dev-user'
         const { projectId, filename } = req.params
         const decodedFilename = decodeURIComponent(filename)
-        const filePath = join(getProjectPath(projectId), decodedFilename)
+        const filePath = join(getProjectPath(userId, projectId), decodedFilename)
 
         if (!existsSync(filePath)) {
             return res.status(404).json({ error: 'File not found' })
@@ -132,9 +177,10 @@ router.get('/:projectId/:filename', (req, res) => {
 // Download file
 router.get('/:projectId/:filename/download', (req, res) => {
     try {
+        const userId = req.user?.uid || 'dev-user'
         const { projectId, filename } = req.params
         const decodedFilename = decodeURIComponent(filename)
-        const filePath = join(getProjectPath(projectId), decodedFilename)
+        const filePath = join(getProjectPath(userId, projectId), decodedFilename)
 
         if (!existsSync(filePath)) {
             return res.status(404).json({ error: 'File not found' })
@@ -152,10 +198,11 @@ router.get('/:projectId/:filename/download', (req, res) => {
 // Save file
 router.put('/:projectId/:filename', (req, res) => {
     try {
+        const userId = req.user?.uid || 'dev-user'
         const { projectId, filename } = req.params
         const { content } = req.body
         const decodedFilename = decodeURIComponent(filename)
-        const projectPath = getProjectPath(projectId)
+        const projectPath = getProjectPath(userId, projectId)
         const filePath = join(projectPath, decodedFilename)
 
         // Ensure parent directory exists
@@ -175,6 +222,9 @@ router.put('/:projectId/:filename', (req, res) => {
             writeFileSync(filePath, content || '')
         }
 
+        // Update project metadata
+        updateProjectTimestamp(userId, projectId)
+
         res.json({ success: true, filename: decodedFilename })
     } catch (err) {
         res.status(500).json({ error: err.message })
@@ -184,12 +234,13 @@ router.put('/:projectId/:filename', (req, res) => {
 // Create file or folder
 router.post('/:projectId', (req, res) => {
     try {
+        const userId = req.user?.uid || 'dev-user'
         const { projectId } = req.params
         const { filename, content = '', overwrite = false } = req.body
 
         if (!filename) return res.status(400).json({ error: 'Filename required' })
 
-        const projectPath = getProjectPath(projectId)
+        const projectPath = getProjectPath(userId, projectId)
         const filePath = join(projectPath, filename)
 
         // Check if it's a folder (ends with /)
@@ -219,6 +270,9 @@ router.post('/:projectId', (req, res) => {
             }
         }
 
+        // Update project metadata
+        updateProjectTimestamp(userId, projectId)
+
         res.json({ success: true, filename })
     } catch (err) {
         res.status(500).json({ error: err.message })
@@ -228,10 +282,11 @@ router.post('/:projectId', (req, res) => {
 // Delete file or folder
 router.delete('/:projectId/:filename', (req, res) => {
     try {
+        const userId = req.user?.uid || 'dev-user'
         const { projectId, filename } = req.params
         // Handle URL encoded paths (for nested files)
         const decodedFilename = decodeURIComponent(filename)
-        const filePath = join(getProjectPath(projectId), decodedFilename)
+        const filePath = join(getProjectPath(userId, projectId), decodedFilename)
 
         if (existsSync(filePath)) {
             const stats = statSync(filePath)
@@ -243,6 +298,9 @@ router.delete('/:projectId/:filename', (req, res) => {
             }
         }
 
+        // Update project metadata
+        updateProjectTimestamp(userId, projectId)
+
         res.json({ success: true })
     } catch (err) {
         res.status(500).json({ error: err.message })
@@ -252,9 +310,10 @@ router.delete('/:projectId/:filename', (req, res) => {
 // Rename file
 router.post('/:projectId/rename', (req, res) => {
     try {
+        const userId = req.user?.uid || 'dev-user'
         const { projectId } = req.params
         const { oldName, newName } = req.body
-        const projectPath = getProjectPath(projectId)
+        const projectPath = getProjectPath(userId, projectId)
         const oldPath = join(projectPath, oldName)
         const newPath = join(projectPath, newName)
 
@@ -272,6 +331,10 @@ router.post('/:projectId/rename', (req, res) => {
         }
 
         renameSync(oldPath, newPath)
+
+        // Update project metadata
+        updateProjectTimestamp(userId, projectId)
+
         res.json({ success: true })
     } catch (err) {
         res.status(500).json({ error: err.message })
@@ -281,9 +344,10 @@ router.post('/:projectId/rename', (req, res) => {
 // Duplicate file
 router.post('/:projectId/duplicate', (req, res) => {
     try {
+        const userId = req.user?.uid || 'dev-user'
         const { projectId } = req.params
         const { filename } = req.body
-        const projectPath = getProjectPath(projectId)
+        const projectPath = getProjectPath(userId, projectId)
         const srcPath = join(projectPath, filename)
 
         if (!existsSync(srcPath)) {
@@ -307,6 +371,9 @@ router.post('/:projectId/duplicate', (req, res) => {
         const content = readFileSync(srcPath)
         writeFileSync(destPath, content)
 
+        // Update project metadata
+        updateProjectTimestamp(userId, projectId)
+
         res.json({ success: true, newFilename: newName })
     } catch (err) {
         res.status(500).json({ error: err.message })
@@ -316,9 +383,10 @@ router.post('/:projectId/duplicate', (req, res) => {
 // Move file (change path)
 router.post('/:projectId/move', (req, res) => {
     try {
+        const userId = req.user?.uid || 'dev-user'
         const { projectId } = req.params
         const { oldPath: oldName, newPath: newName } = req.body
-        const projectPath = getProjectPath(projectId)
+        const projectPath = getProjectPath(userId, projectId)
         const oldPath = join(projectPath, oldName)
         const newPath = join(projectPath, newName)
 
@@ -336,10 +404,28 @@ router.post('/:projectId/move', (req, res) => {
         }
 
         renameSync(oldPath, newPath)
+
+        // Update project metadata
+        updateProjectTimestamp(userId, projectId)
+
         res.json({ success: true })
     } catch (err) {
         res.status(500).json({ error: err.message })
     }
 })
+
+// Helper to update project timestamp
+function updateProjectTimestamp(userId, projectId) {
+    try {
+        const metadataPath = join(PROJECTS_DIR, userId, projectId, '.project.json')
+        if (existsSync(metadataPath)) {
+            const metadata = JSON.parse(readFileSync(metadataPath, 'utf-8'))
+            metadata.updatedAt = new Date().toISOString()
+            writeFileSync(metadataPath, JSON.stringify(metadata, null, 2))
+        }
+    } catch (e) {
+        // Ignore errors
+    }
+}
 
 export default router

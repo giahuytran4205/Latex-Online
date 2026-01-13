@@ -7,8 +7,10 @@ function Toolbar({
     isCompiling,
     theme,
     onThemeChange,
-    collaborators,
+    collaborators = [],
     pdfUrl,
+    projectName,
+    onBackToHome,
 }) {
     const handleDownload = () => {
         if (pdfUrl) {
@@ -21,13 +23,32 @@ function Toolbar({
 
     return (
         <header className="toolbar">
-            <div className="toolbar__logo">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                    <polyline points="14,2 14,8 20,8" />
-                    <path d="M9 15l2 2 4-4" />
-                </svg>
-                LaTeX Online
+            <div className="toolbar__left">
+                {/* Back to Home Button */}
+                {onBackToHome && (
+                    <button
+                        className="btn btn--icon toolbar__back-btn"
+                        onClick={onBackToHome}
+                        title="Back to Projects"
+                    >
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M19 12H5M12 19l-7-7 7-7" />
+                        </svg>
+                    </button>
+                )}
+
+                <div className="toolbar__logo">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                        <polyline points="14,2 14,8 20,8" />
+                        <path d="M9 15l2 2 4-4" />
+                    </svg>
+                    {projectName ? (
+                        <span className="toolbar__project-name">{projectName}</span>
+                    ) : (
+                        'LaTeX Online'
+                    )}
+                </div>
             </div>
 
             <div className="toolbar__actions">

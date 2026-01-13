@@ -47,6 +47,23 @@ cd "$PROJECT_DIR"
 
 echo "📦 Building Frontend..."
 cd client
+
+# Create .env.local from GitHub Secrets (passed via SSH env)
+if [ -n "$VITE_FIREBASE_API_KEY" ]; then
+    echo "🔐 Creating Firebase config from secrets..."
+    cat > .env.local <<EOF
+VITE_FIREBASE_API_KEY=$VITE_FIREBASE_API_KEY
+VITE_FIREBASE_AUTH_DOMAIN=$VITE_FIREBASE_AUTH_DOMAIN
+VITE_FIREBASE_PROJECT_ID=$VITE_FIREBASE_PROJECT_ID
+VITE_FIREBASE_STORAGE_BUCKET=$VITE_FIREBASE_STORAGE_BUCKET
+VITE_FIREBASE_MESSAGING_SENDER_ID=$VITE_FIREBASE_MESSAGING_SENDER_ID
+VITE_FIREBASE_APP_ID=$VITE_FIREBASE_APP_ID
+EOF
+    echo "✅ .env.local created"
+else
+    echo "⚠️  No Firebase secrets found, using existing .env.local or defaults"
+fi
+
 npm install
 npm run build
 cd ..
