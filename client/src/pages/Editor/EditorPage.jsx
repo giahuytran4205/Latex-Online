@@ -380,6 +380,7 @@ function EditorPage() {
                 onRenameFile={handleRenameFile}
                 onUploadFile={handleUploadFile}
                 onDuplicateFile={handleDuplicateFile}
+                onStorageUpdate={loadFiles}
             />
 
             <div className="resize-handle resize-handle--sidebar" onMouseDown={handleMouseDown('sidebar')} />

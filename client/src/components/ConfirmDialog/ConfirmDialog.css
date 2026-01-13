@@ -1,0 +1,123 @@
+/* Confirm Dialog Styles */
+.confirm-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+    animation: fade-in 0.15s ease-out;
+}
+
+@keyframes fade-in {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+.confirm-dialog {
+    background: var(--bg-panel);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    width: 100%;
+    max-width: 400px;
+    box-shadow: var(--shadow-lg);
+    animation: dialog-slide-up 0.2s ease-out;
+}
+
+@keyframes dialog-slide-up {
+    from {
+        opacity: 0;
+        transform: translateY(20px) scale(0.95);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+.confirm-dialog__header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 20px 24px 12px;
+}
+
+.confirm-dialog__header h3 {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0;
+}
+
+.confirm-dialog__icon {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+}
+
+.confirm-dialog__icon--default {
+    background: rgba(99, 102, 241, 0.15);
+    color: var(--accent);
+}
+
+.confirm-dialog__icon--warning {
+    background: rgba(245, 158, 11, 0.15);
+    color: var(--warning);
+}
+
+.confirm-dialog__icon--danger {
+    background: rgba(239, 68, 68, 0.15);
+    color: var(--error);
+}
+
+.confirm-dialog__body {
+    padding: 0 24px 20px;
+}
+
+.confirm-dialog__body p {
+    color: var(--text-secondary);
+    font-size: 0.95rem;
+    line-height: 1.5;
+    margin: 0;
+}
+
+.confirm-dialog__footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    padding: 16px 24px;
+    background: var(--bg-secondary);
+    border-top: 1px solid var(--border-color);
+    border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+}
+
+.btn--danger {
+    background: linear-gradient(135deg, var(--error), #dc2626);
+    color: white;
+    border: none;
+}
+
+.btn--danger:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
+}
+
+/* Responsive */
+@media (max-width: 480px) {
+    .confirm-dialog {
+        margin: 16px;
+        max-width: calc(100% - 32px);
+    }
+}

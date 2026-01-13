@@ -1,7 +1,12 @@
 import { useState, useRef, useMemo } from 'react'
+import { useToast } from '../Toast/Toast'
+import { useConfirm } from '../ConfirmDialog/ConfirmDialog'
 import './FileTree.css'
 
-function FileTree({ files, activeFile, onFileSelect, onAddFile, onDeleteFile, onRenameFile, onUploadFile, onDuplicateFile }) {
+function FileTree({ files, activeFile, onFileSelect, onAddFile, onDeleteFile, onRenameFile, onUploadFile, onDuplicateFile, onStorageUpdate }) {
+    const toast = useToast()
+    const { confirm } = useConfirm()
+
     const [isAdding, setIsAdding] = useState(false)
     const [selectedFiles, setSelectedFiles] = useState(new Set())
     const [addType, setAddType] = useState('file') // 'file' or 'folder'
@@ -14,7 +19,11 @@ function FileTree({ files, activeFile, onFileSelect, onAddFile, onDeleteFile, on
         const saved = localStorage.getItem('latex-expanded-folders')
         return saved ? new Set(JSON.parse(saved)) : new Set([''])
     })
+    const [uploadProgress, setUploadProgress] = useState(null) // { current, total, filename }
+    const [showUploadMenu, setShowUploadMenu] = useState(false)
+
     const fileInputRef = useRef(null)
+    const folderInputRef = useRef(null)
 
     // Build tree structure from flat file list
     const fileTree = useMemo(() => {
@@ -58,6 +67,11 @@ function FileTree({ files, activeFile, onFileSelect, onAddFile, onDeleteFile, on
         })
 
         return tree
+    }, [files])
+
+    // Get existing file paths for duplicate detection
+    const existingFilePaths = useMemo(() => {
+        return new Set(files.map(f => f.name.replace(/\/$/, '')))
     }, [files])
 
     const getIcon = (type, isExpanded = false) => {
@@ -128,9 +142,6 @@ function FileTree({ files, activeFile, onFileSelect, onAddFile, onDeleteFile, on
     }
 
     const [lastSelectedPath, setLastSelectedPath] = useState(null)
-    const [showConfirm, setShowConfirm] = useState(false)
-    const [confirmMessage, setConfirmMessage] = useState('')
-    const [confirmAction, setConfirmAction] = useState(null)
 
     // Helper to get flat list of visible items for range selection
     const visibleItems = useMemo(() => {
@@ -219,14 +230,15 @@ function FileTree({ files, activeFile, onFileSelect, onAddFile, onDeleteFile, on
         const fullPath = addPath ? `${addPath}/${nameToCreate}` : nameToCreate
 
         if (onAddFile) {
-            await onAddFile(fullPath)
+            const success = await onAddFile(fullPath)
+            if (success) {
+                toast.success(`${addType === 'folder' ? 'Folder' : 'File'} created successfully`)
+            }
             setNewFileName('')
             setIsAdding(false)
             setAddPath('')
         }
     }
-
-
 
     const handleDelete = async () => {
         if (contextMenu && onDeleteFile) {
@@ -235,24 +247,29 @@ function FileTree({ files, activeFile, onFileSelect, onAddFile, onDeleteFile, on
                 ? Array.from(selectedFiles)
                 : [contextMenu.item.path]
 
-            const message = itemsToDelete.length > 1
-                ? `Are you sure you want to delete ${itemsToDelete.length} items?`
-                : `Are you sure you want to delete "${contextMenu.item.name}"?`
+            const confirmed = await confirm({
+                title: 'Delete Files',
+                message: itemsToDelete.length > 1
+                    ? `Are you sure you want to delete ${itemsToDelete.length} items? This action cannot be undone.`
+                    : `Are you sure you want to delete "${contextMenu.item.name}"? This action cannot be undone.`,
+                confirmText: 'Delete',
+                cancelText: 'Cancel',
+                type: 'danger'
+            })
 
-            setConfirmMessage(message)
-            setConfirmAction(() => async () => {
+            if (confirmed) {
                 try {
                     for (const path of itemsToDelete) {
                         await onDeleteFile(path)
                     }
                     setSelectedFiles(new Set())
+                    toast.success(`${itemsToDelete.length} item(s) deleted`)
+                    if (onStorageUpdate) onStorageUpdate()
                 } catch (e) {
                     console.error('Delete failed', e)
-                } finally {
-                    setShowConfirm(false)
+                    toast.error('Failed to delete some files')
                 }
-            })
-            setShowConfirm(true)
+            }
         }
         setContextMenu(null)
     }
@@ -265,25 +282,34 @@ function FileTree({ files, activeFile, onFileSelect, onAddFile, onDeleteFile, on
         setContextMenu(null)
     }
 
-    const handleRename = () => {
+    const handleRename = async () => {
         if (renaming && renameValue.trim() && onRenameFile) {
             const oldPath = renaming
             const parts = oldPath.split('/')
             parts[parts.length - 1] = renameValue.trim()
             const newPath = parts.join('/')
-            onRenameFile(oldPath, newPath)
+
+            const success = await onRenameFile(oldPath, newPath)
+            if (success) {
+                toast.success('Renamed successfully')
+            }
         }
         setRenaming(null)
         setRenameValue('')
     }
 
-
-
+    // Upload menu toggle
     const handleUploadClick = () => {
+        setShowUploadMenu(!showUploadMenu)
+    }
+
+    const handleUploadFiles = () => {
+        setShowUploadMenu(false)
         fileInputRef.current?.click()
     }
 
-    const handleUploadFolderClick = () => {
+    const handleUploadFolder = () => {
+        setShowUploadMenu(false)
         folderInputRef.current?.click()
     }
 
@@ -293,16 +319,59 @@ function FileTree({ files, activeFile, onFileSelect, onAddFile, onDeleteFile, on
 
         const totalFiles = uploadedFiles.length
         let uploaded = 0
+        let skipped = 0
         let failed = 0
 
+        // Check for duplicates and ask for overwrite
+        const filesToUpload = []
+        const duplicates = []
+
         for (const file of uploadedFiles) {
+            const uploadPath = file.webkitRelativePath || file.name
+            if (existingFilePaths.has(uploadPath)) {
+                duplicates.push(uploadPath)
+            }
+            filesToUpload.push({ file, path: uploadPath })
+        }
+
+        let overwriteAll = false
+        let skipAll = false
+
+        if (duplicates.length > 0) {
+            const confirmed = await confirm({
+                title: 'Files Already Exist',
+                message: duplicates.length === 1
+                    ? `"${duplicates[0]}" already exists. Do you want to overwrite it?`
+                    : `${duplicates.length} files already exist. Do you want to overwrite them?`,
+                confirmText: 'Overwrite',
+                cancelText: 'Skip',
+                type: 'warning'
+            })
+
+            if (confirmed) {
+                overwriteAll = true
+            } else {
+                skipAll = true
+            }
+        }
+
+        setUploadProgress({ current: 0, total: totalFiles, filename: '' })
+
+        for (let i = 0; i < filesToUpload.length; i++) {
+            const { file, path } = filesToUpload[i]
+
+            setUploadProgress({ current: i + 1, total: totalFiles, filename: file.name })
+
             try {
-                // Use webkitRelativePath if available (folder upload), otherwise just filename
-                const uploadPath = file.webkitRelativePath || file.name
+                // Check if should skip
+                if (existingFilePaths.has(path) && skipAll) {
+                    skipped++
+                    continue
+                }
 
                 const content = await readFileContent(file)
                 if (onUploadFile) {
-                    await onUploadFile(uploadPath, content)
+                    await onUploadFile(path, content)
                 }
                 uploaded++
             } catch (err) {
@@ -311,14 +380,20 @@ function FileTree({ files, activeFile, onFileSelect, onAddFile, onDeleteFile, on
             }
         }
 
+        setUploadProgress(null)
+
+        // Show result toast
         if (failed > 0) {
-            alert(`Upload complete: ${uploaded} successful, ${failed} failed`)
+            toast.warning(`Uploaded ${uploaded} files, ${skipped} skipped, ${failed} failed`)
+        } else if (skipped > 0) {
+            toast.info(`Uploaded ${uploaded} files, ${skipped} skipped`)
+        } else {
+            toast.success(`Successfully uploaded ${uploaded} file(s)`)
         }
 
+        if (onStorageUpdate) onStorageUpdate()
         e.target.value = ''
     }
-
-    const folderInputRef = useRef(null)
 
     // Drag & Drop handlers
     const [isDragging, setIsDragging] = useState(false)
@@ -332,7 +407,6 @@ function FileTree({ files, activeFile, onFileSelect, onAddFile, onDeleteFile, on
     const handleDragLeave = (e) => {
         e.preventDefault()
         e.stopPropagation()
-        // Only disable if leaving the main container
         if (e.currentTarget.contains(e.relatedTarget)) return
         setIsDragging(false)
     }
@@ -343,22 +417,14 @@ function FileTree({ files, activeFile, onFileSelect, onAddFile, onDeleteFile, on
         setIsDragging(true)
     }
 
-    const traverseFileTree = async (item, path = '') => {
+    const collectFilesFromEntry = async (item, path = '') => {
+        const files = []
+
         if (item.isFile) {
-            return new Promise((resolve, reject) => {
-                item.file(async (file) => {
-                    try {
-                        const content = await readFileContent(file)
-                        // Preserve full path relative to drop root
-                        const fullPath = path + file.name
-                        if (onUploadFile) {
-                            await onUploadFile(fullPath, content)
-                        }
-                        resolve({ success: true })
-                    } catch (e) {
-                        console.error('Failed to read file:', e)
-                        resolve({ success: false })
-                    }
+            return new Promise((resolve) => {
+                item.file((file) => {
+                    const fullPath = path + file.name
+                    resolve([{ file, path: fullPath }])
                 })
             })
         } else if (item.isDirectory) {
@@ -378,10 +444,13 @@ function FileTree({ files, activeFile, onFileSelect, onAddFile, onDeleteFile, on
                 readNext()
             })
 
-            // Recursively traverse
-            const promises = entries.map(entry => traverseFileTree(entry, path + item.name + '/'))
-            return Promise.all(promises)
+            for (const entry of entries) {
+                const subFiles = await collectFilesFromEntry(entry, path + item.name + '/')
+                files.push(...subFiles)
+            }
         }
+
+        return files
     }
 
     const handleDrop = async (e) => {
@@ -392,26 +461,84 @@ function FileTree({ files, activeFile, onFileSelect, onAddFile, onDeleteFile, on
         const items = e.dataTransfer.items
         if (!items) return
 
-        let count = 0
-        const promises = []
-
+        // Collect all files first
+        const allFiles = []
         for (let i = 0; i < items.length; i++) {
             const item = items[i].webkitGetAsEntry ? items[i].webkitGetAsEntry() : null
             if (item) {
-                promises.push(traverseFileTree(item))
-                count++
+                const files = await collectFilesFromEntry(item)
+                allFiles.push(...files)
             }
         }
 
-        if (count > 0) {
-            await Promise.all(promises)
+        if (allFiles.length === 0) return
+
+        // Check for duplicates
+        const duplicates = allFiles.filter(f => existingFilePaths.has(f.path))
+
+        let overwriteAll = false
+        let skipAll = false
+
+        if (duplicates.length > 0) {
+            const confirmed = await confirm({
+                title: 'Files Already Exist',
+                message: duplicates.length === 1
+                    ? `"${duplicates[0].path}" already exists. Do you want to overwrite it?`
+                    : `${duplicates.length} files already exist. Do you want to overwrite them?`,
+                confirmText: 'Overwrite',
+                cancelText: 'Skip',
+                type: 'warning'
+            })
+
+            overwriteAll = confirmed
+            skipAll = !confirmed
         }
+
+        // Upload files
+        let uploaded = 0
+        let skipped = 0
+        let failed = 0
+
+        setUploadProgress({ current: 0, total: allFiles.length, filename: '' })
+
+        for (let i = 0; i < allFiles.length; i++) {
+            const { file, path } = allFiles[i]
+
+            setUploadProgress({ current: i + 1, total: allFiles.length, filename: file.name })
+
+            try {
+                if (existingFilePaths.has(path) && skipAll) {
+                    skipped++
+                    continue
+                }
+
+                const content = await readFileContent(file)
+                if (onUploadFile) {
+                    await onUploadFile(path, content)
+                }
+                uploaded++
+            } catch (err) {
+                console.error('Failed to upload:', err)
+                failed++
+            }
+        }
+
+        setUploadProgress(null)
+
+        if (failed > 0) {
+            toast.warning(`Uploaded ${uploaded} files, ${skipped} skipped, ${failed} failed`)
+        } else if (skipped > 0) {
+            toast.info(`Uploaded ${uploaded} files, ${skipped} skipped`)
+        } else {
+            toast.success(`Successfully uploaded ${uploaded} file(s)`)
+        }
+
+        if (onStorageUpdate) onStorageUpdate()
     }
 
     const readFileContent = (file) => {
         return new Promise((resolve, reject) => {
             const reader = new FileReader()
-            reader.onload = () => resolve(reader.result)
             reader.onerror = reject
 
             // Text file extensions
@@ -419,10 +546,10 @@ function FileTree({ files, activeFile, onFileSelect, onAddFile, onDeleteFile, on
             const ext = file.name.split('.').pop().toLowerCase()
 
             if (textExtensions.includes(ext)) {
+                reader.onload = () => resolve(reader.result)
                 reader.readAsText(file)
             } else {
                 // For binary files (images, PDFs), use ArrayBuffer and convert to base64
-                reader.readAsArrayBuffer(file)
                 reader.onload = () => {
                     const buffer = reader.result
                     const bytes = new Uint8Array(buffer)
@@ -433,6 +560,7 @@ function FileTree({ files, activeFile, onFileSelect, onAddFile, onDeleteFile, on
                     const base64 = 'data:' + file.type + ';base64,' + btoa(binary)
                     resolve(base64)
                 }
+                reader.readAsArrayBuffer(file)
             }
         })
     }
@@ -452,8 +580,11 @@ function FileTree({ files, activeFile, onFileSelect, onAddFile, onDeleteFile, on
         if (!contextMenu || !onDuplicateFile) return
         try {
             await onDuplicateFile(contextMenu.item.path)
+            toast.success('File duplicated')
+            if (onStorageUpdate) onStorageUpdate()
         } catch (err) {
             console.error('Failed to duplicate:', err)
+            toast.error('Failed to duplicate file')
         }
         setContextMenu(null)
     }
@@ -594,31 +725,55 @@ function FileTree({ files, activeFile, onFileSelect, onAddFile, onDeleteFile, on
                     <p>Drop files or folders here</p>
                 </div>
             )}
+
+            {uploadProgress && (
+                <div className="file-tree__upload-progress">
+                    <div className="file-tree__upload-progress-bar">
+                        <div
+                            className="file-tree__upload-progress-fill"
+                            style={{ width: `${(uploadProgress.current / uploadProgress.total) * 100}%` }}
+                        />
+                    </div>
+                    <span>Uploading {uploadProgress.current}/{uploadProgress.total}: {uploadProgress.filename}</span>
+                </div>
+            )}
+
             <div className="sidebar__header">
                 <span>FILES</span>
                 <div className="sidebar__actions">
-                    <button
-                        className="btn btn--icon btn--tiny"
-                        title="Upload file"
-                        onClick={handleUploadClick}
-                    >
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                            <polyline points="17,8 12,3 7,8" />
-                            <line x1="12" y1="3" x2="12" y2="15" />
-                        </svg>
-                    </button>
-                    <button
-                        className="btn btn--icon btn--tiny"
-                        title="Upload folder"
-                        onClick={handleUploadFolderClick}
-                    >
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
-                            <polyline points="12,10 12,16" />
-                            <polyline points="9,13 12,10 15,13" />
-                        </svg>
-                    </button>
+                    <div className="upload-menu-wrapper">
+                        <button
+                            className="btn btn--icon btn--tiny"
+                            title="Upload"
+                            onClick={handleUploadClick}
+                        >
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                <polyline points="17,8 12,3 7,8" />
+                                <line x1="12" y1="3" x2="12" y2="15" />
+                            </svg>
+                        </button>
+                        {showUploadMenu && (
+                            <>
+                                <div className="upload-menu-overlay" onClick={() => setShowUploadMenu(false)} />
+                                <div className="upload-menu">
+                                    <button onClick={handleUploadFiles}>
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                                            <polyline points="14,2 14,8 20,8" />
+                                        </svg>
+                                        Upload Files
+                                    </button>
+                                    <button onClick={handleUploadFolder}>
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+                                        </svg>
+                                        Upload Folder
+                                    </button>
+                                </div>
+                            </>
+                        )}
+                    </div>
                     <button
                         className="btn btn--icon btn--tiny"
                         title="New folder"
@@ -738,7 +893,7 @@ function FileTree({ files, activeFile, onFileSelect, onAddFile, onDeleteFile, on
                     >
                         {contextMenu.item.type === 'folder' && (
                             <>
-                                <button onClick={() => handleNewFile(contextMenu.item.path)}>
+                                <button onClick={() => { handleNewFile(''); setContextMenu(null) }}>
                                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                         <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
                                         <polyline points="14,2 14,8 20,8" />
@@ -747,7 +902,7 @@ function FileTree({ files, activeFile, onFileSelect, onAddFile, onDeleteFile, on
                                     </svg>
                                     New File
                                 </button>
-                                <button onClick={() => handleNewFolder(contextMenu.item.path)}>
+                                <button onClick={() => { handleNewFolder(''); setContextMenu(null) }}>
                                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                         <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
                                         <line x1="12" y1="11" x2="12" y2="17" />
@@ -798,18 +953,6 @@ function FileTree({ files, activeFile, onFileSelect, onAddFile, onDeleteFile, on
                         )}
                     </div>
                 </>
-            )}
-            {showConfirm && (
-                <div className="file-tree__confirm-overlay">
-                    <div className="file-tree__confirm-modal">
-                        <h3>Confirm Action</h3>
-                        <p>{confirmMessage}</p>
-                        <div className="file-tree__confirm-actions">
-                            <button className="btn btn--secondary" onClick={() => setShowConfirm(false)}>Cancel</button>
-                            <button className="btn btn--danger" onClick={confirmAction}>Confirm</button>
-                        </div>
-                    </div>
-                </div>
             )}
         </aside>
     )
