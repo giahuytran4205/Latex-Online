@@ -580,9 +580,76 @@ function FileTree({ files, activeFile, onFileSelect, onAddFile, onDeleteFile, on
             if (onStorageUpdate) onStorageUpdate()
         } catch (err) {
             console.error('Failed to duplicate:', err)
-            toast.error('Failed to duplicate file')
         }
         setContextMenu(null)
+    }
+
+    const [draggedItem, setDraggedItem] = useState(null)
+
+    const handleDragStartItem = (e, item) => {
+        e.stopPropagation()
+        setDraggedItem(item)
+        e.dataTransfer.effectAllowed = 'move'
+        e.dataTransfer.setData('text/plain', item.path)
+    }
+
+    const handleDragOverItem = (e, item) => {
+        e.preventDefault()
+        e.stopPropagation()
+
+        // Only allow dropping on folders, and not on itself or its parent
+        if (item.type === 'folder' && draggedItem && item.path !== draggedItem.path) {
+            // Check if item is a child of draggedItem (if draggedItem is folder)
+            if (draggedItem.type === 'folder' && item.path.startsWith(draggedItem.path)) {
+                e.dataTransfer.dropEffect = 'none'
+                return
+            }
+            e.currentTarget.classList.add('file-tree__item--drop-target')
+            e.dataTransfer.dropEffect = 'move'
+        } else {
+            e.dataTransfer.dropEffect = 'none'
+        }
+    }
+
+    const handleDragLeaveItem = (e) => {
+        e.currentTarget.classList.remove('file-tree__item--drop-target')
+    }
+
+    const handleDropItem = async (e, targetItem) => {
+        e.preventDefault()
+        e.stopPropagation()
+        e.currentTarget.classList.remove('file-tree__item--drop-target')
+
+        if (!draggedItem || !targetItem || targetItem.type !== 'folder') return
+        if (draggedItem.path === targetItem.path) return
+
+        // Calculate new path
+        const fileName = draggedItem.path.split('/').filter(Boolean).pop()
+        const targetPath = targetItem.path.endsWith('/') ? targetItem.path : targetItem.path + '/'
+        const newPath = targetPath + fileName + (draggedItem.type === 'folder' ? '/' : '')
+
+        if (newPath === draggedItem.path) return
+
+        const confirmed = await confirm({
+            title: 'Move Item',
+            message: `Move "${draggedItem.name}" to "${targetItem.path || 'root'}"?`,
+            confirmText: 'Move',
+            cancelText: 'Cancel'
+        })
+
+        if (confirmed) {
+            try {
+                if (onRenameFile) {
+                    const success = await onRenameFile(draggedItem.path, newPath)
+                    if (success) {
+                        toast.success('Moved successfully')
+                    }
+                }
+            } catch (err) {
+                toast.error('Failed to move item')
+            }
+        }
+        setDraggedItem(null)
     }
 
     const handleItemClick = (e, item) => {
@@ -649,6 +716,11 @@ function FileTree({ files, activeFile, onFileSelect, onAddFile, onDeleteFile, on
                 <div
                     className={`file-tree__item ${isActive ? 'file-tree__item--active' : ''} ${isSelected ? 'file-tree__item--selected' : ''} ${isFolder ? 'file-tree__item--folder' : ''}`}
                     style={{ paddingLeft: `${12 + depth * 16}px` }}
+                    draggable
+                    onDragStart={(e) => handleDragStartItem(e, item)}
+                    onDragOver={(e) => isFolder ? handleDragOverItem(e, item) : null}
+                    onDragLeave={(e) => isFolder ? handleDragLeaveItem(e) : null}
+                    onDrop={(e) => isFolder ? handleDropItem(e, item) : null}
                     onClick={(e) => handleItemClick(e, item)}
                     onContextMenu={(e) => handleContextMenu(e, item)}
                 >

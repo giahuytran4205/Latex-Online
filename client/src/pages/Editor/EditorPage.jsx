@@ -17,7 +17,8 @@ import {
     deleteFile,
     renameFile,
     duplicateFile,
-    getProjectInfo
+    getProjectInfo,
+    resolveSyncTeX
 } from '../../services/api'
 import './EditorPage.css'
 
@@ -59,7 +60,9 @@ function EditorPage() {
     const [logs, setLogs] = useState('')
     const [isCompiling, setIsCompiling] = useState(false)
     const [consoleOpen, setConsoleOpen] = useState(false)
+    const [compilationErrors, setCompilationErrors] = useState([])
     const [collaborators, setCollaborators] = useState([])
+    const [jumpToLine, setJumpToLine] = useState(null)
 
     // Auto-save logic: Debounce name and code together to prevent race conditions
     const [debouncedData, setDebouncedData] = useState({ filename: activeFileName, code: code })
@@ -299,6 +302,20 @@ function EditorPage() {
         }
     }
 
+    const handleSyncTeX = async (page, x, y) => {
+        try {
+            const result = await resolveSyncTeX(projectId, page, x, y)
+            if (result.success) {
+                if (result.file !== activeFileName) {
+                    await setActiveFileName(result.file)
+                }
+                setJumpToLine({ line: result.line, timestamp: Date.now() })
+            }
+        } catch (err) {
+            console.error('SyncTeX failed:', err)
+        }
+    }
+
     const handleCompile = useCallback(async () => {
         setIsCompiling(true)
         setLogs('')
@@ -320,8 +337,10 @@ function EditorPage() {
             if (result.success) {
                 setPdfUrl(result.pdfUrl + '?t=' + Date.now())
                 setLogs(result.logs || 'Compilation successful!')
+                setCompilationErrors([])
             } else {
                 setLogs(result.logs || 'Compilation failed.')
+                setCompilationErrors(result.errors || [])
             }
         } catch (error) {
             setLogs(`Error: ${error.message}`)
@@ -425,16 +444,26 @@ function EditorPage() {
 
             <div className="content-area" ref={contentAreaRef}>
                 <div className="main-content" ref={mainContentRef}>
-                    <Editor
-                        code={code}
-                        onChange={setCode}
-                        onCompile={handleCompile}
-                        activeFile={activeFileName}
-                    />
+                    <div className={`editor-container ${isCodeLoading ? 'editor-container--loading' : ''}`}>
+                        <Editor
+                            code={code}
+                            onChange={setCode}
+                            onCompile={handleCompile}
+                            activeFile={activeFileName}
+                            errors={compilationErrors}
+                            jumpToLine={jumpToLine}
+                        />
+                        {isCodeLoading && (
+                            <div className="editor-loading-overlay">
+                                <div className="loading-spinner"></div>
+                                <span>Loading file content...</span>
+                            </div>
+                        )}
+                    </div>
 
                     <div className="resize-handle resize-handle--editor" onMouseDown={handleMouseDown('editor')} />
 
-                    <Preview pdfUrl={pdfUrl} />
+                    <Preview pdfUrl={pdfUrl} onSyncTeX={handleSyncTeX} />
                 </div>
 
                 {/* Console Toggle when closed */}

@@ -111,6 +111,14 @@ export async function compileLatex({ code, engine, filename, projectId }) {
     }
 }
 
+export async function resolveSyncTeX(projectId, page, x, y) {
+    const headers = await getAuthHeaders()
+    const query = new URLSearchParams({ projectId, page, x, y }).toString()
+    const response = await fetch(`${API_BASE}/compile/synctex?${query}`, { headers })
+    if (!response.ok) throw new Error('SyncTeX resolution failed')
+    return response.json()
+}
+
 // ============ FILE OPERATIONS ============
 
 export async function getFiles(projectId) {

@@ -1,1 +1,100 @@
-/* Preview specific styles are mostly in index.css */
+.preview-panel {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+.preview-panel__content {
+    flex: 1;
+    overflow-y: auto;
+    background: var(--bg-tertiary);
+    padding: 20px 0;
+    position: relative;
+    scroll-behavior: smooth;
+}
+
+.pdf-viewer {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+}
+
+.pdf-page-wrapper {
+    background: white;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    margin: 0 auto;
+}
+
+.pdf-page-wrapper canvas {
+    display: block;
+    cursor: crosshair;
+}
+
+.preview-panel__controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.zoom-controls {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: var(--bg-secondary);
+    padding: 2px 8px;
+    border-radius: 6px;
+    border: 1px solid var(--border-color);
+}
+
+.zoom-level {
+    font-size: 0.8rem;
+    font-weight: 600;
+    min-width: 40px;
+    text-align: center;
+    color: var(--text-secondary);
+}
+
+.preview-loading {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: var(--bg-panel);
+    padding: 16px;
+    border-radius: 50%;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.preview-panel__empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: var(--text-muted);
+    gap: 16px;
+}
+
+.preview-panel__empty svg {
+    opacity: 0.2;
+}
+
+/* Scrollbar styling for PDF viewer */
+.preview-panel__content::-webkit-scrollbar {
+    width: 10px;
+}
+
+.preview-panel__content::-webkit-scrollbar-track {
+    background: var(--bg-tertiary);
+}
+
+.preview-panel__content::-webkit-scrollbar-thumb {
+    background: var(--bg-secondary);
+    border: 2px solid var(--bg-tertiary);
+    border-radius: 10px;
+}
+
+.preview-panel__content::-webkit-scrollbar-thumb:hover {
+    background: var(--text-muted);
+}

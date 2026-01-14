@@ -302,25 +302,88 @@ function runLatexEngine(enginePath, texFile, workDir) {
 function parseErrors(log) {
     const errors = []
     const lines = log.split('\n')
+    let currentFile = 'main.tex'
 
-    for (const line of lines) {
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i]
+
         // LaTeX errors start with !
         if (line.startsWith('!')) {
-            errors.push(line.trim())
+            const message = line.substring(1).trim()
+            let lineNumber = 1
+            let file = currentFile
+
+            // Check next line for l.LINE_NUMBER
+            if (i + 1 < lines.length && lines[i + 1].match(/^l\.(\d+)/)) {
+                const match = lines[i + 1].match(/^l\.(\d+)/)
+                lineNumber = parseInt(match[1])
+            }
+
+            errors.push({
+                line: lineNumber,
+                message: message,
+                file: file,
+                type: 'error'
+            })
         }
-        // File:line: error format
-        else if (line.includes('Error:') || line.includes('Fatal error')) {
-            errors.push(line.trim())
-        }
-        // Standard file:line: message format
-        const match = line.match(/^(.+\.tex):(\d+): (.+)$/)
-        if (match) {
-            errors.push(`Line ${match[2]}: ${match[3]}`)
+
+        // File:line: error format (from -file-line-error)
+        const fileLineMatch = line.match(/^(.+\.tex):(\d+): (.+)$/)
+        if (fileLineMatch) {
+            errors.push({
+                line: parseInt(fileLineMatch[2]),
+                message: fileLineMatch[3],
+                file: basename(fileLineMatch[1]),
+                type: 'error'
+            })
         }
     }
 
-    // Deduplicate
-    return [...new Set(errors)]
+    return errors
+}
+
+/**
+ * Resolve PDF coordinates to source line using SyncTeX
+ */
+export async function resolveSyncTeX(projectId, page, x, y) {
+    const workDir = getProjectWorkDir(projectId)
+    const synctexFile = join(workDir, 'main.synctex.gz')
+
+    if (!existsSync(synctexFile)) {
+        throw new Error('SyncTeX data not found. Please compile the project first.')
+    }
+
+    return new Promise((resolve, reject) => {
+        // synctex edit -o page:x:y:main.pdf
+        const args = ['edit', '-o', `${page}:${x}:${y}:main.pdf`]
+
+        const proc = spawn('synctex', args, { cwd: workDir })
+
+        let output = ''
+        proc.stdout.on('data', (d) => output += d.toString())
+        proc.stderr.on('data', (d) => console.error('[SyncTeX] Error:', d.toString()))
+
+        proc.on('close', (code) => {
+            if (code !== 0) {
+                return reject(new Error('SyncTeX resolution failed'))
+            }
+
+            const result = {
+                file: 'main.tex',
+                line: 1,
+                column: 0
+            }
+
+            const lines = output.split('\n')
+            for (const line of lines) {
+                if (line.startsWith('File:')) result.file = basename(line.split(':')[1].trim())
+                if (line.startsWith('Line:')) result.line = parseInt(line.split(':')[1].trim())
+                if (line.startsWith('Column:')) result.column = parseInt(line.split(':')[1].trim())
+            }
+
+            resolve(result)
+        })
+    })
 }
 
 // Run cleanup on startup

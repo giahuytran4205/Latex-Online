@@ -1,5 +1,5 @@
 import express from 'express'
-import { compileLatex } from '../services/latex.js'
+import { compileLatex, resolveSyncTeX } from '../services/latex.js'
 import admin from 'firebase-admin'
 
 const router = express.Router()
@@ -68,6 +68,22 @@ router.post('/', async (req, res) => {
             error: 'Internal Server Error',
             details: error.message
         })
+    }
+})
+
+// GET /api/compile/synctex
+router.get('/synctex', async (req, res) => {
+    try {
+        const { projectId, page, x, y } = req.query
+        if (!projectId || !page || !x || !y) {
+            return res.status(400).json({ success: false, error: 'Missing parameters' })
+        }
+
+        const result = await resolveSyncTeX(projectId, parseInt(page), parseFloat(x), parseFloat(y))
+        res.json({ success: true, ...result })
+    } catch (error) {
+        console.error('[SyncTeX] Error:', error)
+        res.status(500).json({ success: false, error: error.message })
     }
 })
 

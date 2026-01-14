@@ -6,7 +6,48 @@ import { indentWithTab } from '@codemirror/commands'
 import { StreamLanguage } from '@codemirror/language'
 import { stex } from '@codemirror/legacy-modes/mode/stex'
 import { autocompletion, startCompletion, completionStatus, acceptCompletion } from '@codemirror/autocomplete'
+import { Decoration, gutter, GutterMarker } from '@codemirror/view'
+import { StateField, StateEffect } from '@codemirror/state'
 import './Editor.css'
+
+// Error decorations
+const errorMark = Decoration.line({
+    attributes: { class: 'cm-line-error' }
+})
+
+const errorGutterMarker = new class extends GutterMarker {
+    toDOM() {
+        const span = document.createElement('span')
+        span.className = 'cm-error-gutter-marker'
+        span.innerHTML = '●'
+        span.title = 'LaTeX Error'
+        return span
+    }
+}
+
+const setErrors = StateEffect.define()
+
+const errorField = StateField.define({
+    create() {
+        return Decoration.none
+    },
+    update(underlines, tr) {
+        underlines = underlines.map(tr.changes)
+        for (let e of tr.effects) {
+            if (e.is(setErrors)) {
+                underlines = e.value
+            }
+        }
+        return underlines
+    },
+    provide: f => EditorView.decorations.from(f)
+})
+
+const errorGutter = gutter({
+    class: 'cm-error-gutter',
+    renderEmptyElements: false,
+    markers: view => view.state.field(errorField)
+})
 
 // LaTeX autocomplete data
 const latexCommands = [
@@ -152,7 +193,7 @@ function wrapSelection(view, before, after) {
     return true
 }
 
-function Editor({ code, onChange, onCompile, activeFile }) {
+function Editor({ code, onChange, onCompile, activeFile, errors = [], jumpToLine }) {
     const editorRef = useRef(null)
     const viewRef = useRef(null)
     const onChangeRef = useRef(onChange)
@@ -197,6 +238,19 @@ function Editor({ code, onChange, onCompile, activeFile }) {
         '.cm-tooltip-autocomplete > ul > li[aria-selected]': {
             backgroundColor: 'var(--accent-light)',
             color: 'var(--accent)',
+        },
+        '.cm-line-error': {
+            backgroundColor: 'rgba(239, 68, 68, 0.1)',
+        },
+        '.cm-error-underline': {
+            textDecoration: 'underline 2px var(--error)',
+            textUnderlineOffset: '4px',
+        },
+        '.cm-error-gutter-marker': {
+            color: 'var(--error)',
+            fontSize: '12px',
+            paddingLeft: '4px',
+            display: 'block',
         },
     }), [])
 
@@ -251,6 +305,8 @@ function Editor({ code, onChange, onCompile, activeFile }) {
                         onChangeRef.current?.(update.state.doc.toString())
                     }
                 }),
+                errorField,
+                errorGutter,
             ],
         })
 
@@ -285,6 +341,51 @@ function Editor({ code, onChange, onCompile, activeFile }) {
             isInternalChange.current = false
         }
     }, [code])
+
+    // Update error decorations
+    useEffect(() => {
+        if (!viewRef.current || !activeFile) return
+
+        const activeErrors = errors.filter(e => e.file === activeFile || e.file === activeFile.split('/').pop())
+        const deco = []
+
+        for (const err of activeErrors) {
+            if (err.line >= 1 && err.line <= viewRef.current.state.doc.lines) {
+                try {
+                    const line = viewRef.current.state.doc.line(err.line)
+                    // Add both line decoration and gutter marker
+                    deco.push(errorMark.range(line.from))
+                    deco.push(errorGutterMarker.range(line.from))
+                } catch (e) {
+                    console.error('Error applying marker:', e)
+                }
+            }
+        }
+
+        // Sort decorations by position (required for Decoration.set)
+        deco.sort((a, b) => a.from - b.from)
+
+        viewRef.current.dispatch({
+            effects: setErrors.of(Decoration.set(deco, true))
+        })
+    }, [errors, activeFile])
+
+    // Handle SyncTeX jump
+    useEffect(() => {
+        if (!viewRef.current || !jumpToLine) return
+
+        const { line } = jumpToLine
+        if (line >= 1 && line <= viewRef.current.state.doc.lines) {
+            const lineInfo = viewRef.current.state.doc.line(line)
+            viewRef.current.dispatch({
+                selection: { anchor: lineInfo.from, head: lineInfo.from },
+                scrollIntoView: true,
+                userEvent: 'select'
+            })
+            // Focus the editor
+            viewRef.current.focus()
+        }
+    }, [jumpToLine])
 
     // Get display filename
     const displayName = activeFile ? activeFile.split('/').pop() : 'main.tex'

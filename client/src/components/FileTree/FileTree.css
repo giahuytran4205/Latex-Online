@@ -41,6 +41,12 @@
     font-weight: 500;
 }
 
+.file-tree__item--drop-target {
+    background-color: rgba(59, 130, 246, 0.2) !important;
+    border: 2px dashed var(--accent) !important;
+    border-radius: 4px;
+}
+
 .file-tree__chevron {
     display: flex;
     align-items: center;
