@@ -220,21 +220,31 @@ function PdfPage({ pdf, pageNum, scale, onDoubleClick }) {
                 const linkService = {
                     navigateTo: (dest) => { console.log('Navigate to:', dest) },
                     getDestinationHash: (dest) => '#',
-                    getAnchorUrl: (hash) => hash
+                    getAnchorUrl: (hash) => hash,
+                    setParams: () => { },
+                    setHash: () => { },
+                    executeNamedAction: (action) => console.log('Action:', action),
+                    addLinkAttributes: (link, url, newWindow = true) => {
+                        link.href = url;
+                        if (newWindow) {
+                            link.target = "_blank";
+                            link.rel = "noopener noreferrer nofollow";
+                        }
+                    }
                 }
 
-                const layer = new pdfjsLib.AnnotationLayer({
+                const annotationLayer = new pdfjsLib.AnnotationLayer({
                     div: annotationLayerDiv,
                     accessibilityManager: null,
                     page: page,
                     viewport: annotationViewport,
                 })
 
-                layer.render({
+                await annotationLayer.render({
                     annotations: annotations,
-                    div: annotationLayerDiv,
+                    viewport: annotationViewport,
                     linkService: linkService,
-                    page: page
+                    div: annotationLayerDiv,
                 })
             }
         }

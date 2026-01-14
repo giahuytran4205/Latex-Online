@@ -370,22 +370,34 @@ function Editor({ code, onChange, onCompile, activeFile, errors = [], jumpToLine
         })
     }, [errors, activeFile])
 
+    const lastJumpRef = useRef(null)
+
     // Handle SyncTeX jump
     useEffect(() => {
         if (!viewRef.current || !jumpToLine) return
 
+        // Prevent jumping multiple times for the same event
+        if (lastJumpRef.current === jumpToLine.timestamp) return
+
         const { line } = jumpToLine
+
+        // Only jump if we have the correct document content
+        // If code is still the old one, we wait for it to update (this effect will re-run)
         if (line >= 1 && line <= viewRef.current.state.doc.lines) {
             const lineInfo = viewRef.current.state.doc.line(line)
+
+            // Check if the current line content matches what we expect or just jump
+            // Actually, we just need to make sure the document has enough lines
+
             viewRef.current.dispatch({
                 selection: { anchor: lineInfo.from, head: lineInfo.from },
                 scrollIntoView: true,
                 userEvent: 'select'
             })
-            // Focus the editor
             viewRef.current.focus()
+            lastJumpRef.current = jumpToLine.timestamp
         }
-    }, [jumpToLine])
+    }, [jumpToLine, code]) // Re-run when code updates too
 
     // Get display filename
     const displayName = activeFile ? activeFile.split('/').pop() : 'main.tex'

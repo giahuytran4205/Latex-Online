@@ -1,7 +1,7 @@
 import { spawn } from 'child_process'
 import { writeFileSync, mkdirSync, existsSync, readFileSync, cpSync, readdirSync, statSync, unlinkSync, rmSync } from 'fs'
 import fs from 'fs'
-import { join, dirname, basename } from 'path'
+import { join, dirname, basename, relative } from 'path'
 import { fileURLToPath } from 'url'
 import { v4 as uuidv4 } from 'uuid'
 import crypto from 'crypto'
@@ -379,7 +379,8 @@ export async function resolveSyncTeX(projectId, page, x, y) {
             for (const line of lines) {
                 if (line.startsWith('File:')) {
                     const filePath = line.substring(line.indexOf(':') + 1).trim()
-                    result.file = basename(filePath)
+                    // Return path relative to workDir, normalized with forward slashes
+                    result.file = relative(workDir, filePath).replace(/\\/g, '/')
                 }
                 if (line.startsWith('Line:')) result.line = parseInt(line.split(':')[1].trim())
                 if (line.startsWith('Column:')) result.column = parseInt(line.split(':')[1].trim())
