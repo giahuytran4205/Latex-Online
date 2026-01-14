@@ -3,7 +3,8 @@ import * as pdfjsLib from 'pdfjs-dist'
 import './Preview.css'
 
 // Set worker path
-pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`
+import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
+pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker
 
 function Preview({ pdfUrl, onSyncTeX }) {
     const containerRef = useRef(null)
