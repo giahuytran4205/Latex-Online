@@ -1,5 +1,5 @@
 import { useRef, useEffect, useState, useCallback } from 'react'
-import { GlobalWorkerOptions, getDocument, AnnotationLayer, renderTextLayer } from 'pdfjs-dist'
+import { GlobalWorkerOptions, getDocument, AnnotationLayer, TextLayer } from 'pdfjs-dist'
 import 'pdfjs-dist/web/pdf_viewer.css'
 import './Preview.css'
 
@@ -46,15 +46,12 @@ useEffect(() => {
                 textLayerDiv.style.width = `${displayViewport.width}px`
                 textLayerDiv.style.setProperty('--scale-factor', scale);
 
-                // Check if renderTextLayer exists (it might be undefined if not exported correctly, but usually is)
-                if (renderTextLayer) {
-                    renderTextLayer({
-                        textContentSource: textContent,
-                        container: textLayerDiv,
-                        viewport: displayViewport,
-                        textDivs: []
-                    })
-                }
+                const textLayer = new TextLayer({
+                    textContentSource: textContent,
+                    container: textLayerDiv,
+                    viewport: displayViewport,
+                })
+                await textLayer.render()
             }
 
             // 3. Render Annotation Layer (Links)
