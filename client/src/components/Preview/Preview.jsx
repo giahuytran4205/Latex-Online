@@ -1,12 +1,11 @@
 import { useRef, useEffect, useState, useCallback } from 'react'
-import * as pdfjsLib from 'pdfjs-dist'
-import { AnnotationLayer } from 'pdfjs-dist/web/pdf_viewer.mjs'
+import { GlobalWorkerOptions, getDocument, AnnotationLayer, renderTextLayer } from 'pdfjs-dist'
 import 'pdfjs-dist/web/pdf_viewer.css'
 import './Preview.css'
 
 // Set worker path
 import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
-pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker
+GlobalWorkerOptions.workerSrc = pdfWorker
 // ... (rest of imports/component)
 
 // ... inside Preview component ...
@@ -47,9 +46,9 @@ useEffect(() => {
                 textLayerDiv.style.width = `${displayViewport.width}px`
                 textLayerDiv.style.setProperty('--scale-factor', scale);
 
-                // Check if renderTextLayer exists on pdfjsLib, otherwise might need import
-                if (pdfjsLib.renderTextLayer) {
-                    pdfjsLib.renderTextLayer({
+                // Check if renderTextLayer exists (it might be undefined if not exported correctly, but usually is)
+                if (renderTextLayer) {
+                    renderTextLayer({
                         textContentSource: textContent,
                         container: textLayerDiv,
                         viewport: displayViewport,
@@ -136,7 +135,7 @@ function Preview({ pdfUrl, onSyncTeX }) {
         const loadPdf = async () => {
             setLoading(true)
             try {
-                const loadingTask = pdfjsLib.getDocument(pdfUrl)
+                const loadingTask = getDocument(pdfUrl)
                 const pdfInstance = await loadingTask.promise
                 setPdf(pdfInstance)
                 setNumPages(pdfInstance.numPages)
