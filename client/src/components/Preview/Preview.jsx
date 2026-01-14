@@ -316,33 +316,58 @@ function OutlineTree({ items, onNavigate, depth = 0 }) {
     )
 }
 
-// Simple Link Service for PDF.js - STRICT Interface
-class SimpleLinkService {
+/* Adapted from Mozilla PDF.js web/pdf_link_service.js */
+const DEFAULT_LINK_REL = "noopener noreferrer nofollow";
+const LinkTarget = {
+    NONE: 0,
+    SELF: 1,
+    BLANK: 2,
+    PARENT: 3,
+    TOP: 4,
+};
+
+class LinkService {
     constructor() {
-        this.externalLinkTarget = 2 // _blank
-        this.externalLinkRel = 'noopener noreferrer nofollow'
-        this.externalLinkEnabled = true
-        this._params = {}
+        this.externalLinkTarget = LinkTarget.BLANK;
+        this.externalLinkRel = DEFAULT_LINK_REL;
+        this.externalLinkEnabled = true;
+    }
+
+    addLinkAttributes(link, url, newWindow = false) {
+        if (!url || typeof url !== "string") {
+            return;
+        }
+        const target = newWindow ? LinkTarget.BLANK : this.externalLinkTarget;
+        const rel = this.externalLinkRel;
+
+        if (this.externalLinkEnabled) {
+            link.href = url;
+        } else {
+            link.href = "";
+            link.title = `Disabled: ${url}`;
+            link.onclick = () => false;
+        }
+
+        let targetStr = "";
+        switch (target) {
+            case LinkTarget.NONE: break;
+            case LinkTarget.SELF: targetStr = "_self"; break;
+            case LinkTarget.BLANK: targetStr = "_blank"; break;
+            case LinkTarget.PARENT: targetStr = "_parent"; break;
+            case LinkTarget.TOP: targetStr = "_top"; break;
+        }
+        link.target = targetStr;
+        link.rel = typeof rel === "string" ? rel : DEFAULT_LINK_REL;
     }
 
     getDestinationHash(dest) {
-        return '#'
+        if (typeof dest === 'string') return `#${escape(dest)}`;
+        if (Array.isArray(dest)) return `#${escape(JSON.stringify(dest))}`;
+        return '#';
     }
 
     getAnchorUrl(hash) {
-        return hash
-    }
-
-    setHash(hash) { }
-
-    executeNamedAction(action) { }
-
-    navigateTo(dest) { }
-
-    addLinkAttributes(link, url, newWindow = true) {
-        link.href = url
-        link.target = newWindow ? '_blank' : '_self'
-        link.rel = this.externalLinkRel
+        return hash;
     }
 }
 
@@ -405,11 +430,7 @@ function PdfPage({ pdf, pageNum, scale, onDoubleClick, onInternalNavigate }) {
                 annotationLayerDiv.style.height = `${displayViewport.height}px`
                 annotationLayerDiv.style.width = `${displayViewport.width}px`
 
-                // Link Service logic
-                const linkService = new SimpleLinkService()
-                linkService.navigateTo = (dest) => {
-                    if (onInternalNavigate) onInternalNavigate(dest)
-                }
+                const linkService = new LinkService()
 
                 const annotationLayer = new pdfjsLib.AnnotationLayer({
                     div: annotationLayerDiv,
@@ -424,11 +445,33 @@ function PdfPage({ pdf, pageNum, scale, onDoubleClick, onInternalNavigate }) {
                     linkService: linkService,
                     div: annotationLayerDiv,
                 })
+
+                // Manual Patch for Internal Links to bypass hash navigation
+                const links = annotationLayerDiv.getElementsByTagName('a');
+                for (let i = 0; i < links.length; i++) {
+                    const link = links[i];
+                    const href = link.getAttribute('href');
+                    if (href && href.startsWith('#')) {
+                        link.onclick = (e) => {
+                            e.preventDefault();
+                            // Decode dest
+                            const hash = href.substring(1);
+                            const unescaped = unescape(hash);
+                            let dest = unescaped;
+                            try { dest = JSON.parse(unescaped); } catch (e) { }
+                            onInternalNavigate(dest);
+                        }
+                    }
+                }
             }
         }
+
         renderPage()
-        return () => { if (renderTask) renderTask.cancel() }
-    }, [pdf, pageNum, scale, onInternalNavigate]) // Thêm onInternalNavigate vào dependency
+
+        return () => {
+            if (renderTask) renderTask.cancel()
+        }
+    }, [pdf, pageNum, scale, onInternalNavigate])
 
     return (
         <div
