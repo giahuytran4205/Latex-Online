@@ -306,10 +306,26 @@ function EditorPage() {
         try {
             const result = await resolveSyncTeX(projectId, page, x, y)
             if (result.success) {
-                if (result.file !== activeFileName) {
-                    await setActiveFileName(result.file)
+                const targetFile = result.file
+
+                // Check if file exists in our project files list
+                // (Normalization: result.file should already be relative to workDir)
+                const fileExists = files.some(f => f.path === targetFile)
+
+                if (fileExists) {
+                    if (targetFile !== activeFileName) {
+                        setActiveFileName(targetFile)
+                        // setJumpToLine will be processed by Editor after code loads
+                    }
+                    setJumpToLine({ line: result.line, timestamp: Date.now() })
+
+                    // Show message if we switched files
+                    if (targetFile !== activeFileName) {
+                        toast.success(`Jumped to ${targetFile}`)
+                    }
+                } else {
+                    console.warn('SyncTeX target file not found in project:', targetFile)
                 }
-                setJumpToLine({ line: result.line, timestamp: Date.now() })
             }
         } catch (err) {
             console.error('SyncTeX failed:', err)

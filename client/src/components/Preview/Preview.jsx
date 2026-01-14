@@ -71,35 +71,35 @@ function Preview({ pdfUrl, onSyncTeX }) {
     return (
         <div className="preview-panel">
             <div className="preview-panel__header">
-                <span className="preview-panel__title">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: '8px', verticalAlign: 'text-bottom' }}>
+                <div className="preview-panel__title">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                         <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
                         <polyline points="14 2 14 8 20 8" />
                     </svg>
-                    PDF Preview
-                </span>
+                    <span>PDF Preview</span>
+                </div>
                 <div className="preview-panel__controls">
                     <div className="zoom-controls">
-                        <button className="btn btn--icon" onClick={() => setScale(s => Math.max(0.5, s - 0.2))}>
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="5" y1="12" x2="19" y2="12" /></svg>
+                        <button className="btn btn--icon btn--dark" title="Zoom Out" onClick={() => setScale(s => Math.max(0.5, s - 0.2))}>
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="5" y1="12" x2="19" y2="12" /></svg>
                         </button>
                         <span className="zoom-level">{Math.round(scale * 100)}%</span>
-                        <button className="btn btn--icon" onClick={() => setScale(s => Math.min(3, s + 0.2))}>
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
+                        <button className="btn btn--icon btn--dark" title="Zoom In" onClick={() => setScale(s => Math.min(3, s + 0.2))}>
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
                         </button>
                     </div>
                     {pdfUrl && (
                         <>
-                            <div className="separator"></div>
-                            <button className="btn btn--icon" title="Print" onClick={handlePrint}>
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <div className="separator--dark"></div>
+                            <button className="btn btn--icon btn--dark" title="Print" onClick={handlePrint}>
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                     <polyline points="6 9 6 2 18 2 18 9" />
                                     <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
                                     <rect x="6" y="14" width="12" height="8" />
                                 </svg>
                             </button>
-                            <button className="btn btn--icon" title="Download" onClick={handleDownload}>
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <button className="btn btn--icon btn--dark" title="Download" onClick={handleDownload}>
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
                                     <polyline points="7 10 12 15 17 10" />
                                     <line x1="12" y1="15" x2="12" y2="3" />
@@ -117,7 +117,8 @@ function Preview({ pdfUrl, onSyncTeX }) {
                             <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
                             <polyline points="14 2 14 8 20 8" />
                         </svg>
-                        <span>Compile your LaTeX to see the PDF preview</span>
+                        <h3>Ready to compile</h3>
+                        <p>Your PDF preview will appear here once you compile your LaTeX project.</p>
                     </div>
                 ) : (
                     <div className="pdf-viewer">
@@ -164,15 +165,21 @@ function PdfPage({ pdf, pageNum, scale, onDoubleClick }) {
             if (!pdf || !canvasRef.current) return
 
             const page = await pdf.getPage(pageNum)
-            const viewport = page.getViewport({ scale: scale * window.devicePixelRatio })
-            const canvas = canvasRef.current
-            const context = canvas.getContext('2d')
 
-            // Adjust canvas for high-DPI displays
+            // For sharper rendering, we can upscale the internal canvas
+            const renderScale = scale * window.devicePixelRatio * 1.5
+            const viewport = page.getViewport({ scale: renderScale })
+
+            const canvas = canvasRef.current
+            const context = canvas.getContext('2d', { alpha: false })
+
             canvas.height = viewport.height
             canvas.width = viewport.width
-            canvas.style.height = `${viewport.height / window.devicePixelRatio}px`
-            canvas.style.width = `${viewport.width / window.devicePixelRatio}px`
+
+            // CSS size is the "real" size
+            const displayViewport = page.getViewport({ scale: scale })
+            canvas.style.height = `${displayViewport.height}px`
+            canvas.style.width = `${displayViewport.width}px`
 
             const renderContext = {
                 canvasContext: context,
@@ -186,22 +193,14 @@ function PdfPage({ pdf, pageNum, scale, onDoubleClick }) {
                 const textContent = await page.getTextContent()
                 const textLayerDiv = textLayerRef.current
 
-                // Clear previous text layer content
                 textLayerDiv.innerHTML = ''
-                textLayerDiv.style.height = canvas.style.height
-                textLayerDiv.style.width = canvas.style.width
-
-                // Use PDF.js internal text layer rendering (simplified)
-                // Note: proper implementation usually requires pdfjs-dist/web/pdf_viewer.css
-                // We're doing a manual simplified render to allow selection
-
-                // We need to use the non-scaled viewport for text layer layout
-                const textViewport = page.getViewport({ scale: scale })
+                textLayerDiv.style.height = `${displayViewport.height}px`
+                textLayerDiv.style.width = `${displayViewport.width}px`
 
                 pdfjsLib.renderTextLayer({
                     textContentSource: textContent,
                     container: textLayerDiv,
-                    viewport: textViewport,
+                    viewport: displayViewport,
                     textDivs: []
                 })
             }
@@ -212,10 +211,8 @@ function PdfPage({ pdf, pageNum, scale, onDoubleClick }) {
                 const annotationLayerDiv = annotationLayerRef.current
 
                 annotationLayerDiv.innerHTML = ''
-                annotationLayerDiv.style.height = canvas.style.height
-                annotationLayerDiv.style.width = canvas.style.width
-
-                const annotationViewport = page.getViewport({ scale: scale })
+                annotationLayerDiv.style.height = `${displayViewport.height}px`
+                annotationLayerDiv.style.width = `${displayViewport.width}px`
 
                 const linkService = {
                     navigateTo: (dest) => { console.log('Navigate to:', dest) },
@@ -237,12 +234,12 @@ function PdfPage({ pdf, pageNum, scale, onDoubleClick }) {
                     div: annotationLayerDiv,
                     accessibilityManager: null,
                     page: page,
-                    viewport: annotationViewport,
+                    viewport: displayViewport,
                 })
 
                 await annotationLayer.render({
                     annotations: annotations,
-                    viewport: annotationViewport,
+                    viewport: displayViewport,
                     linkService: linkService,
                     div: annotationLayerDiv,
                 })
@@ -255,42 +252,11 @@ function PdfPage({ pdf, pageNum, scale, onDoubleClick }) {
     return (
         <div
             className="pdf-page-wrapper"
-            style={{ position: 'relative' }}
             onDoubleClick={(e) => onDoubleClick(e, pageNum)}
-            title="Double click to go to source"
         >
-            <canvas
-                ref={canvasRef}
-            />
-            <div
-                ref={textLayerRef}
-                className="textLayer"
-                style={{
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    overflow: 'hidden',
-                    lineHeight: '1.0',
-                    '--scale-factor': scale,
-                    opacity: 0, // Make text layer invisible but selectable
-                    pointerEvents: 'auto'
-                }}
-            />
-            <div
-                ref={annotationLayerRef}
-                className="annotationLayer"
-                style={{
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    overflow: 'hidden',
-                    pointerEvents: 'none' // Let double-clicks pass through to wrapper
-                }}
-            />
+            <canvas ref={canvasRef} />
+            <div ref={textLayerRef} className="textLayer" />
+            <div ref={annotationLayerRef} className="annotationLayer" />
         </div>
     )
 }

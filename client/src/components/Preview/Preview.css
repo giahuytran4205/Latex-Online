@@ -2,104 +2,103 @@
     display: flex;
     flex-direction: column;
     height: 100%;
+    background-color: #323639;
+    /* Standard PDF viewer background */
+}
+
+.preview-panel__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 16px;
+    background-color: #202124;
+    color: white;
+    height: 48px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+    z-index: 10;
+}
+
+.preview-panel__title {
+    display: flex;
+    align-items: center;
+    font-size: 14px;
+    font-weight: 500;
+    gap: 10px;
+}
+
+.preview-panel__controls {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.zoom-controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: #3c4043;
+    padding: 4px;
+    border-radius: 4px;
+}
+
+.zoom-level {
+    font-size: 12px;
+    min-width: 45px;
+    text-align: center;
 }
 
 .preview-panel__content {
     flex: 1;
     overflow-y: auto;
-    background: var(--bg-tertiary);
-    padding: 20px 0;
-    position: relative;
+    padding: 24px 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
     scroll-behavior: smooth;
+    position: relative;
 }
 
 .pdf-viewer {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 20px;
+    gap: 16px;
+    width: 100%;
 }
 
 .pdf-page-wrapper {
-    background: white;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-    margin: 0 auto;
+    background-color: white;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+    position: relative;
+    user-select: text;
+    transition: transform 0.2s ease;
 }
 
 .pdf-page-wrapper canvas {
     display: block;
-    cursor: crosshair;
+    max-width: 100%;
 }
 
-.preview-panel__controls {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
-.zoom-controls {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    background: var(--bg-secondary);
-    padding: 2px 8px;
-    border-radius: 6px;
-    border: 1px solid var(--border-color);
-}
-
-.zoom-level {
-    font-size: 0.8rem;
-    font-weight: 600;
-    min-width: 40px;
-    text-align: center;
-    color: var(--text-secondary);
-}
-
-.preview-loading {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    background: var(--bg-panel);
-    padding: 16px;
-    border-radius: 50%;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-}
-
-.preview-panel__empty {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    height: 100%;
-    color: var(--text-muted);
-    gap: 16px;
-}
-
-.preview-panel__empty svg {
-    opacity: 0.2;
-}
-
-/* Scrollbar styling for PDF viewer */
+/* Scrollbar styling */
 .preview-panel__content::-webkit-scrollbar {
-    width: 10px;
+    width: 12px;
 }
 
 .preview-panel__content::-webkit-scrollbar-track {
-    background: var(--bg-tertiary);
+    background: transparent;
 }
 
 .preview-panel__content::-webkit-scrollbar-thumb {
-    background: var(--bg-secondary);
-    border: 2px solid var(--bg-tertiary);
+    background: #5f6368;
+    border: 3px solid #323639;
     border-radius: 10px;
 }
 
 .preview-panel__content::-webkit-scrollbar-thumb:hover {
-    background: var(--text-muted);
+    background: #80868b;
 }
 
-/* PDF Text Layer */
+/* PDF Layers */
 .textLayer {
     position: absolute;
     left: 0;
@@ -108,7 +107,7 @@
     bottom: 0;
     overflow: hidden;
     opacity: 0;
-    /* Hide text markers but keep selectable */
+    /* Fully hidden text markers */
     line-height: 1.0;
 }
 
@@ -121,14 +120,9 @@
 }
 
 .textLayer ::selection {
-    background: rgba(var(--accent), 0.2);
+    background: rgba(var(--accent), 0.3);
 }
 
-.textLayer .endOfContent {
-    display: none;
-}
-
-/* PDF Annotation Layer */
 .annotationLayer {
     position: absolute;
     top: 0;
@@ -136,7 +130,6 @@
     right: 0;
     bottom: 0;
     pointer-events: none;
-    /* Let double-clicks pass through to wrapper */
     z-index: 3;
 }
 
@@ -145,7 +138,6 @@
 .annotationLayer .textAnnotation {
     position: absolute;
     pointer-events: auto;
-    /* Enable links */
 }
 
 .annotationLayer .linkAnnotation>a {
@@ -154,21 +146,52 @@
     left: 0;
     width: 100%;
     height: 100%;
-    background-color: rgba(var(--accent), 0);
-    transition: background-color 0.2s;
+    background-color: transparent;
 }
 
 .annotationLayer .linkAnnotation>a:hover {
     background-color: rgba(var(--accent), 0.1);
+    box-shadow: 0 0 4px rgba(var(--accent), 0.3);
 }
 
-.annotationLayer .textAnnotation img {
+.preview-loading {
     position: absolute;
-    cursor: auto;
-    width: 100%;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(255, 255, 255, 0.1);
+    padding: 20px;
+    border-radius: 50%;
+}
+
+.preview-panel__empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
     height: 100%;
+    color: #9aa0a6;
+    gap: 20px;
+    text-align: center;
+    padding: 40px;
 }
 
-.annotationLayer .popupWrapper {
-    position: absolute;
+.preview-panel__empty svg {
+    opacity: 0.3;
+}
+
+.btn--dark {
+    color: #e8eaed;
+    background: transparent;
+}
+
+.btn--dark:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.separator--dark {
+    width: 1px;
+    height: 24px;
+    background: #5f6368;
+    margin: 0 8px;
 }
