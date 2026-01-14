@@ -19,10 +19,10 @@ function Preview({ pdfUrl, onSyncTeX }) {
     const [isSidebarOpen, setIsSidebarOpen] = useState(false)
     const [sidebarView, setSidebarView] = useState('thumbnails') // 'thumbnails' | 'outline'
 
-    // State mới để lưu instance của LinkService
+    // State lưu instance của LinkService
     const [linkService, setLinkService] = useState(null)
 
-    // Hàm cuộn trang (được định nghĩa trước để dùng trong useEffect)
+    // Hàm cuộn trang (định nghĩa trước để dùng trong useEffect)
     const scrollToPage = useCallback((pageNum) => {
         if (!containerRef.current) return
         const pageElement = containerRef.current.querySelector(`.page[data-page-number="${pageNum}"]`)
@@ -52,7 +52,7 @@ function Preview({ pdfUrl, onSyncTeX }) {
                 const pdfOutline = await pdfInstance.getOutline()
                 setOutline(pdfOutline)
 
-                // --- KHỞI TẠO LINK SERVICE (SỬA ĐỔI) ---
+                // --- KHỞI TẠO LINK SERVICE ---
                 // 1. Tạo EventBus và LinkService từ thư viện có sẵn
                 const eventBus = new EventBus()
                 const service = new PDFLinkService({
@@ -75,7 +75,6 @@ function Preview({ pdfUrl, onSyncTeX }) {
                 })
 
                 setLinkService(service)
-                // ----------------------------------------
 
             } catch (err) {
                 console.error('Error loading PDF:', err)
@@ -85,7 +84,7 @@ function Preview({ pdfUrl, onSyncTeX }) {
         }
 
         loadPdf()
-    }, [pdfUrl, scrollToPage]) // Thêm scrollToPage vào dependency
+    }, [pdfUrl, scrollToPage])
 
     // Visible page tracking
     useEffect(() => {
@@ -128,7 +127,6 @@ function Preview({ pdfUrl, onSyncTeX }) {
         window.open(pdfUrl, '_blank').print()
     }
 
-    // Xử lý navigate từ Outline (Sidebar)
     const handleInternalNavigate = useCallback(async (dest) => {
         if (!pdf) return
         try {
@@ -277,14 +275,15 @@ function Preview({ pdfUrl, onSyncTeX }) {
                             <p>Your PDF preview will appear here once you compile your LaTeX project.</p>
                         </div>
                     ) : (
-                        <div className="pdf-viewer">
+                        // QUAN TRỌNG: Sử dụng class "pdfViewer" chuẩn của thư viện để ăn khớp CSS
+                        <div className="pdfViewer">
                             {Array.from({ length: numPages }, (_, i) => (
                                 <PdfPage
                                     key={`${pdfUrl}-${i + 1}-${scale}`}
                                     pdf={pdf}
                                     pageNum={i + 1}
                                     scale={scale}
-                                    linkService={linkService} // Truyền linkService xuống component con
+                                    linkService={linkService} // Truyền linkService xuống
                                     onDoubleClick={handleSyncTeXClick}
                                 />
                             ))}
@@ -349,7 +348,6 @@ function OutlineTree({ items, onNavigate, depth = 0 }) {
     )
 }
 
-// COMPONENT PDF PAGE ĐÃ SỬA ĐỔI
 function PdfPage({ pdf, pageNum, scale, onDoubleClick, linkService }) {
     const canvasRef = useRef(null)
     const textLayerRef = useRef(null)
@@ -399,8 +397,7 @@ function PdfPage({ pdf, pageNum, scale, onDoubleClick, linkService }) {
                     await textLayer.render()
                 }
 
-                // 3. Render Annotation Layer (Links)
-                // Chỉ render khi có linkService được truyền vào
+                // 3. Render Annotation Layer (Links, Forms)
                 if (annotationLayerRef.current && linkService) {
                     const annotations = await page.getAnnotations()
                     const annotationLayerDiv = annotationLayerRef.current
@@ -416,12 +413,14 @@ function PdfPage({ pdf, pageNum, scale, onDoubleClick, linkService }) {
                         viewport: displayViewport,
                     })
 
-                    // Truyền linkService dùng chung vào đây
                     await annotationLayer.render({
                         annotations: annotations,
                         viewport: displayViewport,
                         linkService: linkService,
                         div: annotationLayerDiv,
+                        intent: "display", // QUAN TRỌNG: Kích hoạt chế độ hiển thị tương tác
+                        renderForms: true, // Kích hoạt form nếu có
+                        imageResourcesPath: 'pdfjs-dist/web/images/', // Đường dẫn icon
                     })
                 }
             } catch (error) {
@@ -434,7 +433,7 @@ function PdfPage({ pdf, pageNum, scale, onDoubleClick, linkService }) {
         return () => {
             if (renderTask) renderTask.cancel()
         }
-    }, [pdf, pageNum, scale, linkService]) // Thêm linkService vào dependency
+    }, [pdf, pageNum, scale, linkService])
 
     return (
         <div
@@ -444,25 +443,26 @@ function PdfPage({ pdf, pageNum, scale, onDoubleClick, linkService }) {
             style={{
                 margin: '20px auto',
                 backgroundColor: 'white',
-                position: 'relative', // Parent relative
+                position: 'relative',
                 boxShadow: '0 4px 15px rgba(0, 0, 0, 0.4)',
-                width: canvasRef.current ? canvasRef.current.style.width : 'auto', // Giữ width ổn định
-                height: canvasRef.current ? canvasRef.current.style.height : 'auto'
+                width: canvasRef.current ? canvasRef.current.style.width : 'auto',
+                height: canvasRef.current ? canvasRef.current.style.height : 'auto',
+                // Cần thiết để CSS tính toán kích thước font
+                '--scale-factor': scale,
             }}
         >
-            {/* Canvas: zIndex 1 */}
             <div className="canvasWrapper" style={{ position: 'relative', zIndex: 1 }}>
                 <canvas ref={canvasRef} />
             </div>
 
-            {/* Text Layer: zIndex 2, Absolute positioning, Top/Left 0 */}
+            {/* Text Layer: Absolute top/left 0 */}
             <div
                 ref={textLayerRef}
                 className="textLayer"
                 style={{ zIndex: 2, position: 'absolute', top: 0, left: 0 }}
             />
 
-            {/* Annotation Layer: zIndex 3, Absolute positioning, Top/Left 0 */}
+            {/* Annotation Layer: Absolute top/left 0 */}
             <div
                 ref={annotationLayerRef}
                 className="annotationLayer"
