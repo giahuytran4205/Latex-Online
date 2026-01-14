@@ -377,7 +377,10 @@ export async function resolveSyncTeX(projectId, page, x, y) {
 
             const lines = output.split('\n')
             for (const line of lines) {
-                if (line.startsWith('File:')) result.file = basename(line.split(':')[1].trim())
+                if (line.startsWith('File:')) {
+                    const filePath = line.substring(line.indexOf(':') + 1).trim()
+                    result.file = basename(filePath)
+                }
                 if (line.startsWith('Line:')) result.line = parseInt(line.split(':')[1].trim())
                 if (line.startsWith('Column:')) result.column = parseInt(line.split(':')[1].trim())
             }

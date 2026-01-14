@@ -53,17 +53,17 @@ function Preview({ pdfUrl, onSyncTeX }) {
     const handleSyncTeXClick = useCallback((e, pageNum) => {
         if (!onSyncTeX || !containerRef.current) return
 
-        const canvas = e.currentTarget
-        const rect = canvas.getBoundingClientRect()
+        const rect = e.currentTarget.getBoundingClientRect()
 
-        // Coordinates relative to canvas
+        // Coordinates relative to the page wrapper
         const clickX = e.clientX - rect.left
         const clickY = e.clientY - rect.top
 
-        // Convert to PDF points (72 DPI)
-        // Canvas scale is scale * devicePixelRatio
-        const pdfX = (clickX / scale)
-        const pdfY = (rect.height - clickY) / scale // PDF coords usually start from bottom
+        // Convert pixels to PDF points (1/72 inch)
+        // PDF.js uses scale = pixels / PDF_point
+        // SyncTeX 'edit' typically expects coordinates from Top-Left
+        const pdfX = clickX / scale
+        const pdfY = clickY / scale
 
         onSyncTeX(pageNum, pdfX, pdfY)
     }, [onSyncTeX, scale])
@@ -243,7 +243,12 @@ function PdfPage({ pdf, pageNum, scale, onDoubleClick }) {
     }, [pdf, pageNum, scale])
 
     return (
-        <div className="pdf-page-wrapper" style={{ position: 'relative' }}>
+        <div
+            className="pdf-page-wrapper"
+            style={{ position: 'relative' }}
+            onDoubleClick={(e) => onDoubleClick(e, pageNum)}
+            title="Double click to go to source"
+        >
             <canvas
                 ref={canvasRef}
             />
@@ -258,10 +263,10 @@ function PdfPage({ pdf, pageNum, scale, onDoubleClick }) {
                     bottom: 0,
                     overflow: 'hidden',
                     lineHeight: '1.0',
-                    '--scale-factor': scale
+                    '--scale-factor': scale,
+                    opacity: 0, // Make text layer invisible but selectable
+                    pointerEvents: 'auto'
                 }}
-                onDoubleClick={(e) => onDoubleClick(e, pageNum)}
-                title="Double click to go to source"
             />
             <div
                 ref={annotationLayerRef}
@@ -272,7 +277,8 @@ function PdfPage({ pdf, pageNum, scale, onDoubleClick }) {
                     left: 0,
                     right: 0,
                     bottom: 0,
-                    overflow: 'hidden'
+                    overflow: 'hidden',
+                    pointerEvents: 'none' // Let double-clicks pass through to wrapper
                 }}
             />
         </div>

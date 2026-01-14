@@ -107,7 +107,8 @@
     right: 0;
     bottom: 0;
     overflow: hidden;
-    opacity: 0.2;
+    opacity: 0;
+    /* Hide text markers but keep selectable */
     line-height: 1.0;
 }
 
@@ -120,19 +121,11 @@
 }
 
 .textLayer ::selection {
-    background: rgba(0, 0, 255, 1);
+    background: rgba(var(--accent), 0.2);
 }
 
 .textLayer .endOfContent {
-    display: block;
-    position: absolute;
-    left: 0px;
-    top: 100%;
-    right: 0px;
-    bottom: 0px;
-    z-index: -1;
-    cursor: default;
-    user-select: none;
+    display: none;
 }
 
 /* PDF Annotation Layer */
@@ -142,11 +135,15 @@
     left: 0;
     right: 0;
     bottom: 0;
+    pointer-events: none;
+    /* Let clicks pass through unless on link */
 }
 
 .annotationLayer section {
     position: absolute;
     text-align: center;
+    pointer-events: auto;
+    /* Enable links */
 }
 
 .annotationLayer .linkAnnotation>a {
@@ -159,9 +156,9 @@
 }
 
 .annotationLayer .linkAnnotation>a:hover {
-    opacity: 0.2;
-    background: #ff0;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+    opacity: 0.1;
+    background: var(--accent);
+    border-radius: 2px;
 }
 
 .annotationLayer .textAnnotation img {
