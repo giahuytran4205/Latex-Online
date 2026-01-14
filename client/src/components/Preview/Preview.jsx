@@ -251,8 +251,8 @@ function Preview({ pdfUrl, onSyncTeX }) {
                                     pdf={pdf}
                                     pageNum={i + 1}
                                     scale={scale}
-                                // onDoubleClick={handleSyncTeXClick}
-                                // onInternalNavigate={handleInternalNavigate}
+                                    onDoubleClick={handleSyncTeXClick}
+                                    onInternalNavigate={handleInternalNavigate}
                                 />
                             ))}
                         </div>
@@ -359,39 +359,34 @@ function PdfPage({ pdf, pageNum, scale, onDoubleClick, onInternalNavigate }) {
 
             const page = await pdf.getPage(pageNum)
 
-            // For sharper rendering
+            // Xử lý scale
             const renderScale = scale * window.devicePixelRatio * 1.5
             const viewport = page.getViewport({ scale: renderScale })
+            const displayViewport = page.getViewport({ scale: scale })
 
+            // 1. Render Canvas
             const canvas = canvasRef.current
             const context = canvas.getContext('2d', { alpha: false })
-
             canvas.height = viewport.height
             canvas.width = viewport.width
-
-            // CSS size
-            const displayViewport = page.getViewport({ scale: scale })
             canvas.style.height = `${displayViewport.height}px`
             canvas.style.width = `${displayViewport.width}px`
 
             if (renderTask) renderTask.cancel()
-
-            const renderContext = {
-                canvasContext: context,
-                viewport: viewport
-            }
-
-            renderTask = page.render(renderContext)
+            renderTask = page.render({ canvasContext: context, viewport: viewport })
             await renderTask.promise
 
-            // Render Text Layer
+            // 2. Render Text Layer
             if (textLayerRef.current) {
                 const textContent = await page.getTextContent()
                 const textLayerDiv = textLayerRef.current
 
+                // Reset style
                 textLayerDiv.innerHTML = ''
                 textLayerDiv.style.height = `${displayViewport.height}px`
                 textLayerDiv.style.width = `${displayViewport.width}px`
+                // Quan trọng: Gán biến CSS custom property để PDF.js tính toán vị trí text
+                textLayerDiv.style.setProperty('--scale-factor', scale);
 
                 pdfjsLib.renderTextLayer({
                     textContentSource: textContent,
@@ -401,7 +396,7 @@ function PdfPage({ pdf, pageNum, scale, onDoubleClick, onInternalNavigate }) {
                 })
             }
 
-            // Render Annotation Layer
+            // 3. Render Annotation Layer (Links)
             if (annotationLayerRef.current) {
                 const annotations = await page.getAnnotations()
                 const annotationLayerDiv = annotationLayerRef.current
@@ -410,17 +405,15 @@ function PdfPage({ pdf, pageNum, scale, onDoubleClick, onInternalNavigate }) {
                 annotationLayerDiv.style.height = `${displayViewport.height}px`
                 annotationLayerDiv.style.width = `${displayViewport.width}px`
 
-                // Create a new LinkService for this page
+                // Link Service logic
                 const linkService = new SimpleLinkService()
-
-                // Custom override for internal navigate to ensure it uses the prop
                 linkService.navigateTo = (dest) => {
                     if (onInternalNavigate) onInternalNavigate(dest)
                 }
 
                 const annotationLayer = new pdfjsLib.AnnotationLayer({
                     div: annotationLayerDiv,
-                    accessibilityManager: null, // Ensure this isn't undefined if strict
+                    accessibilityManager: null,
                     page: page,
                     viewport: displayViewport,
                 })
@@ -433,40 +426,37 @@ function PdfPage({ pdf, pageNum, scale, onDoubleClick, onInternalNavigate }) {
                 })
             }
         }
-
         renderPage()
-
-        return () => {
-            if (renderTask) renderTask.cancel()
-        }
-    }, [pdf, pageNum, scale])
+        return () => { if (renderTask) renderTask.cancel() }
+    }, [pdf, pageNum, scale, onInternalNavigate]) // Thêm onInternalNavigate vào dependency
 
     return (
         <div
             className="page"
-            onDoubleClick={(e) => onDoubleClick(e, pageNum)}
+            onDoubleClick={(e) => onDoubleClick && onDoubleClick(e, pageNum)}
             data-page-number={pageNum}
             style={{
                 margin: '20px auto',
                 backgroundColor: 'white',
-                position: 'relative',
+                position: 'relative', // Parent relative
                 boxShadow: '0 4px 15px rgba(0, 0, 0, 0.4)',
-                overflow: 'hidden',
-                '--scale-factor': scale
+                width: canvasRef.current ? canvasRef.current.style.width : 'auto', // Giữ width ổn định
+                height: canvasRef.current ? canvasRef.current.style.height : 'auto'
             }}
         >
             <div className="canvasWrapper" style={{ position: 'relative', zIndex: 1 }}>
                 <canvas ref={canvasRef} />
             </div>
+            {/* Layer text & annotation phải absolute top/left 0 */}
             <div
                 ref={textLayerRef}
                 className="textLayer"
-                style={{ zIndex: 2 }}
+                style={{ zIndex: 2, position: 'absolute', top: 0, left: 0 }}
             />
             <div
                 ref={annotationLayerRef}
                 className="annotationLayer"
-                style={{ zIndex: 3 }}
+                style={{ zIndex: 3, position: 'absolute', top: 0, left: 0 }}
             />
         </div>
     )
