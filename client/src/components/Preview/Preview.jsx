@@ -142,8 +142,21 @@ function Preview({ pdfUrl, onSyncTeX }) {
     )
 }
 
+// Basic styles for text layer (if not importing pdf_viewer.css)
+const textLayerStyle = {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    right: 0,
+    bottom: 0,
+    overflow: 'hidden',
+    lineHeight: 1.0,
+    opacity: 0.2, // Make text selection visible but subtle
+}
+
 function PdfPage({ pdf, pageNum, scale, onDoubleClick }) {
     const canvasRef = useRef(null)
+    const textLayerRef = useRef(null)
 
     useEffect(() => {
         const renderPage = async () => {
@@ -154,6 +167,7 @@ function PdfPage({ pdf, pageNum, scale, onDoubleClick }) {
             const canvas = canvasRef.current
             const context = canvas.getContext('2d')
 
+            // Adjust canvas for high-DPI displays
             canvas.height = viewport.height
             canvas.width = viewport.width
             canvas.style.height = `${viewport.height / window.devicePixelRatio}px`
@@ -165,15 +179,54 @@ function PdfPage({ pdf, pageNum, scale, onDoubleClick }) {
             }
 
             await page.render(renderContext).promise
+
+            // Render Text Layer
+            if (textLayerRef.current) {
+                const textContent = await page.getTextContent()
+                const textLayerDiv = textLayerRef.current
+
+                // Clear previous text layer content
+                textLayerDiv.innerHTML = ''
+                textLayerDiv.style.height = canvas.style.height
+                textLayerDiv.style.width = canvas.style.width
+
+                // Use PDF.js internal text layer rendering (simplified)
+                // Note: proper implementation usually requires pdfjs-dist/web/pdf_viewer.css
+                // We're doing a manual simplified render to allow selection
+
+                // We need to use the non-scaled viewport for text layer layout
+                const textViewport = page.getViewport({ scale: scale })
+
+                pdfjsLib.renderTextLayer({
+                    textContentSource: textContent,
+                    container: textLayerDiv,
+                    viewport: textViewport,
+                    textDivs: []
+                })
+            }
         }
 
         renderPage()
     }, [pdf, pageNum, scale])
 
     return (
-        <div className="pdf-page-wrapper">
+        <div className="pdf-page-wrapper" style={{ position: 'relative' }}>
             <canvas
                 ref={canvasRef}
+            />
+            <div
+                ref={textLayerRef}
+                className="textLayer"
+                style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    overflow: 'hidden',
+                    lineHeight: '1.0',
+                    '--scale-factor': scale
+                }}
                 onDoubleClick={(e) => onDoubleClick(e, pageNum)}
                 title="Double click to go to source"
             />
