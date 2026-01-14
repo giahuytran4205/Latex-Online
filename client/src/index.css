@@ -115,7 +115,7 @@ body {
   /* Important for flex shrinking */
 }
 
-.main-content .editor-panel {
+.main-content .editor-container {
   flex: 0 0 calc(var(--editor-width) * 1%);
   min-width: 200px;
   max-width: calc(100% - 200px);
