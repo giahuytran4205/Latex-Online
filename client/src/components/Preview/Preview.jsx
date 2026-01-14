@@ -7,10 +7,6 @@ import './Preview.css'
 // Set worker path
 import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 GlobalWorkerOptions.workerSrc = pdfWorker
-// ... (rest of imports/component)
-
-// ... inside Preview component ...
-
 
 function Preview({ pdfUrl, onSyncTeX }) {
     const containerRef = useRef(null)
@@ -23,11 +19,24 @@ function Preview({ pdfUrl, onSyncTeX }) {
     const [isSidebarOpen, setIsSidebarOpen] = useState(false)
     const [sidebarView, setSidebarView] = useState('thumbnails') // 'thumbnails' | 'outline'
 
+    // State mới để lưu instance của LinkService
+    const [linkService, setLinkService] = useState(null)
+
+    // Hàm cuộn trang (được định nghĩa trước để dùng trong useEffect)
+    const scrollToPage = useCallback((pageNum) => {
+        if (!containerRef.current) return
+        const pageElement = containerRef.current.querySelector(`.page[data-page-number="${pageNum}"]`)
+        if (pageElement) {
+            pageElement.scrollIntoView({ behavior: 'smooth' })
+        }
+    }, [])
+
     useEffect(() => {
         if (!pdfUrl) {
             setPdf(null)
             setNumPages(0)
             setOutline(null)
+            setLinkService(null)
             return
         }
 
@@ -42,6 +51,32 @@ function Preview({ pdfUrl, onSyncTeX }) {
                 // Get Outline
                 const pdfOutline = await pdfInstance.getOutline()
                 setOutline(pdfOutline)
+
+                // --- KHỞI TẠO LINK SERVICE (SỬA ĐỔI) ---
+                // 1. Tạo EventBus và LinkService từ thư viện có sẵn
+                const eventBus = new EventBus()
+                const service = new PDFLinkService({
+                    eventBus,
+                    externalLinkTarget: LinkTarget.BLANK, // Mở tab mới cho link ngoài
+                    externalLinkRel: "noopener noreferrer nofollow",
+                    externalLinkEnabled: true, // Cho phép link ngoài
+                })
+
+                // 2. Gán Document
+                service.setDocument(pdfInstance)
+
+                // 3. Định nghĩa Viewer "giả" để xử lý scroll cho Internal Link
+                service.setViewer({
+                    scrollPageIntoView: ({ pageNumber }) => {
+                        scrollToPage(pageNumber)
+                    },
+                    pagesCount: pdfInstance.numPages,
+                    getPageIndex: (dest) => pdfInstance.getPageIndex(dest),
+                })
+
+                setLinkService(service)
+                // ----------------------------------------
+
             } catch (err) {
                 console.error('Error loading PDF:', err)
             } finally {
@@ -50,7 +85,7 @@ function Preview({ pdfUrl, onSyncTeX }) {
         }
 
         loadPdf()
-    }, [pdfUrl])
+    }, [pdfUrl, scrollToPage]) // Thêm scrollToPage vào dependency
 
     // Visible page tracking
     useEffect(() => {
@@ -93,14 +128,7 @@ function Preview({ pdfUrl, onSyncTeX }) {
         window.open(pdfUrl, '_blank').print()
     }
 
-    const scrollToPage = useCallback((pageNum) => {
-        if (!containerRef.current) return
-        const pageElement = containerRef.current.querySelector(`.page[data-page-number="${pageNum}"]`)
-        if (pageElement) {
-            pageElement.scrollIntoView({ behavior: 'smooth' })
-        }
-    }, [])
-
+    // Xử lý navigate từ Outline (Sidebar)
     const handleInternalNavigate = useCallback(async (dest) => {
         if (!pdf) return
         try {
@@ -256,8 +284,8 @@ function Preview({ pdfUrl, onSyncTeX }) {
                                     pdf={pdf}
                                     pageNum={i + 1}
                                     scale={scale}
+                                    linkService={linkService} // Truyền linkService xuống component con
                                     onDoubleClick={handleSyncTeXClick}
-                                    onInternalNavigate={handleInternalNavigate}
                                 />
                             ))}
                         </div>
@@ -321,7 +349,8 @@ function OutlineTree({ items, onNavigate, depth = 0 }) {
     )
 }
 
-function PdfPage({ pdf, pageNum, scale, onDoubleClick, onInternalNavigate }) {
+// COMPONENT PDF PAGE ĐÃ SỬA ĐỔI
+function PdfPage({ pdf, pageNum, scale, onDoubleClick, linkService }) {
     const canvasRef = useRef(null)
     const textLayerRef = useRef(null)
     const annotationLayerRef = useRef(null)
@@ -371,34 +400,14 @@ function PdfPage({ pdf, pageNum, scale, onDoubleClick, onInternalNavigate }) {
                 }
 
                 // 3. Render Annotation Layer (Links)
-                if (annotationLayerRef.current) {
+                // Chỉ render khi có linkService được truyền vào
+                if (annotationLayerRef.current && linkService) {
                     const annotations = await page.getAnnotations()
                     const annotationLayerDiv = annotationLayerRef.current
 
                     annotationLayerDiv.innerHTML = ''
                     annotationLayerDiv.style.height = `${displayViewport.height}px`
                     annotationLayerDiv.style.width = `${displayViewport.width}px`
-
-                    // Use official LinkService
-                    const eventBus = new EventBus();
-                    const linkService = new PDFLinkService({
-                        eventBus,
-                        externalLinkTarget: LinkTarget.BLANK,
-                        externalLinkRel: "noopener noreferrer nofollow",
-                        externalLinkEnabled: true,
-                    });
-                    linkService.setDocument(pdf);
-                    linkService.setViewer({
-                        scrollPageIntoView: (params) => {
-                            // Manual scroll handling since we don't have full viewer
-                            console.log("LinkService scroll request:", params);
-                            if (params && params.pageNumber) {
-                                // Find page element and scroll
-                                const pageEl = document.querySelector(`.page[data-page-number="${params.pageNumber}"]`);
-                                if (pageEl) pageEl.scrollIntoView({ behavior: 'smooth' });
-                            }
-                        }
-                    });
 
                     const annotationLayer = new AnnotationLayer({
                         div: annotationLayerDiv,
@@ -407,6 +416,7 @@ function PdfPage({ pdf, pageNum, scale, onDoubleClick, onInternalNavigate }) {
                         viewport: displayViewport,
                     })
 
+                    // Truyền linkService dùng chung vào đây
                     await annotationLayer.render({
                         annotations: annotations,
                         viewport: displayViewport,
@@ -424,7 +434,7 @@ function PdfPage({ pdf, pageNum, scale, onDoubleClick, onInternalNavigate }) {
         return () => {
             if (renderTask) renderTask.cancel()
         }
-    }, [pdf, pageNum, scale, onInternalNavigate])
+    }, [pdf, pageNum, scale, linkService]) // Thêm linkService vào dependency
 
     return (
         <div
@@ -440,15 +450,19 @@ function PdfPage({ pdf, pageNum, scale, onDoubleClick, onInternalNavigate }) {
                 height: canvasRef.current ? canvasRef.current.style.height : 'auto'
             }}
         >
+            {/* Canvas: zIndex 1 */}
             <div className="canvasWrapper" style={{ position: 'relative', zIndex: 1 }}>
                 <canvas ref={canvasRef} />
             </div>
-            {/* Layer text & annotation phải absolute top/left 0 */}
+
+            {/* Text Layer: zIndex 2, Absolute positioning, Top/Left 0 */}
             <div
                 ref={textLayerRef}
                 className="textLayer"
                 style={{ zIndex: 2, position: 'absolute', top: 0, left: 0 }}
             />
+
+            {/* Annotation Layer: zIndex 3, Absolute positioning, Top/Left 0 */}
             <div
                 ref={annotationLayerRef}
                 className="annotationLayer"
