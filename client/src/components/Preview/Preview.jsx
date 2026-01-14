@@ -157,6 +157,7 @@ const textLayerStyle = {
 function PdfPage({ pdf, pageNum, scale, onDoubleClick }) {
     const canvasRef = useRef(null)
     const textLayerRef = useRef(null)
+    const annotationLayerRef = useRef(null)
 
     useEffect(() => {
         const renderPage = async () => {
@@ -204,6 +205,38 @@ function PdfPage({ pdf, pageNum, scale, onDoubleClick }) {
                     textDivs: []
                 })
             }
+
+            // Render Annotation Layer
+            if (annotationLayerRef.current) {
+                const annotations = await page.getAnnotations()
+                const annotationLayerDiv = annotationLayerRef.current
+
+                annotationLayerDiv.innerHTML = ''
+                annotationLayerDiv.style.height = canvas.style.height
+                annotationLayerDiv.style.width = canvas.style.width
+
+                const annotationViewport = page.getViewport({ scale: scale })
+
+                const linkService = {
+                    navigateTo: (dest) => { console.log('Navigate to:', dest) },
+                    getDestinationHash: (dest) => '#',
+                    getAnchorUrl: (hash) => hash
+                }
+
+                const layer = new pdfjsLib.AnnotationLayer({
+                    div: annotationLayerDiv,
+                    accessibilityManager: null,
+                    page: page,
+                    viewport: annotationViewport,
+                })
+
+                layer.render({
+                    annotations: annotations,
+                    div: annotationLayerDiv,
+                    linkService: linkService,
+                    page: page
+                })
+            }
         }
 
         renderPage()
@@ -229,6 +262,18 @@ function PdfPage({ pdf, pageNum, scale, onDoubleClick }) {
                 }}
                 onDoubleClick={(e) => onDoubleClick(e, pageNum)}
                 title="Double click to go to source"
+            />
+            <div
+                ref={annotationLayerRef}
+                className="annotationLayer"
+                style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    overflow: 'hidden'
+                }}
             />
         </div>
     )
