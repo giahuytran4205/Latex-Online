@@ -1,5 +1,6 @@
 import { useRef, useEffect, useState, useCallback } from 'react'
 import * as pdfjsLib from 'pdfjs-dist'
+import 'pdfjs-dist/web/pdf_viewer.css'
 import './Preview.css'
 
 // Set worker path
@@ -161,12 +162,14 @@ function PdfPage({ pdf, pageNum, scale, onDoubleClick }) {
     const annotationLayerRef = useRef(null)
 
     useEffect(() => {
+        let renderTask = null
+
         const renderPage = async () => {
             if (!pdf || !canvasRef.current) return
 
             const page = await pdf.getPage(pageNum)
 
-            // For sharper rendering, we can upscale the internal canvas
+            // For sharper rendering
             const renderScale = scale * window.devicePixelRatio * 1.5
             const viewport = page.getViewport({ scale: renderScale })
 
@@ -176,17 +179,20 @@ function PdfPage({ pdf, pageNum, scale, onDoubleClick }) {
             canvas.height = viewport.height
             canvas.width = viewport.width
 
-            // CSS size is the "real" size
+            // CSS size
             const displayViewport = page.getViewport({ scale: scale })
             canvas.style.height = `${displayViewport.height}px`
             canvas.style.width = `${displayViewport.width}px`
+
+            if (renderTask) renderTask.cancel()
 
             const renderContext = {
                 canvasContext: context,
                 viewport: viewport
             }
 
-            await page.render(renderContext).promise
+            renderTask = page.render(renderContext)
+            await renderTask.promise
 
             // Render Text Layer
             if (textLayerRef.current) {
@@ -215,7 +221,12 @@ function PdfPage({ pdf, pageNum, scale, onDoubleClick }) {
                 annotationLayerDiv.style.width = `${displayViewport.width}px`
 
                 const linkService = {
-                    navigateTo: (dest) => { console.log('Navigate to:', dest) },
+                    externalLinkTarget: 2, // _blank
+                    externalLinkRel: 'noopener noreferrer nofollow',
+                    baseUrl: null,
+                    navigateTo: (dest) => {
+                        console.log('Navigate to destination:', dest)
+                    },
                     getDestinationHash: (dest) => '#',
                     getAnchorUrl: (hash) => hash,
                     setParams: () => { },
@@ -247,16 +258,39 @@ function PdfPage({ pdf, pageNum, scale, onDoubleClick }) {
         }
 
         renderPage()
+
+        return () => {
+            if (renderTask) renderTask.cancel()
+        }
     }, [pdf, pageNum, scale])
 
     return (
         <div
-            className="pdf-page-wrapper"
+            className="page"
             onDoubleClick={(e) => onDoubleClick(e, pageNum)}
+            data-page-number={pageNum}
+            style={{
+                margin: '20px auto',
+                backgroundColor: 'white',
+                position: 'relative',
+                boxShadow: '0 4px 15px rgba(0, 0, 0, 0.4)',
+                overflow: 'hidden',
+                '--scale-factor': scale
+            }}
         >
-            <canvas ref={canvasRef} />
-            <div ref={textLayerRef} className="textLayer" />
-            <div ref={annotationLayerRef} className="annotationLayer" />
+            <div className="canvasWrapper" style={{ position: 'relative', zIndex: 1 }}>
+                <canvas ref={canvasRef} />
+            </div>
+            <div
+                ref={textLayerRef}
+                className="textLayer"
+                style={{ zIndex: 2 }}
+            />
+            <div
+                ref={annotationLayerRef}
+                className="annotationLayer"
+                style={{ zIndex: 3 }}
+            />
         </div>
     )
 }
