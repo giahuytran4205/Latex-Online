@@ -1,5 +1,6 @@
 import { useRef, useEffect, useState, useCallback } from 'react'
 import { GlobalWorkerOptions, getDocument, AnnotationLayer, TextLayer } from 'pdfjs-dist'
+import { PDFLinkService, EventBus, LinkTarget } from 'pdfjs-dist/web/pdf_viewer.mjs'
 import 'pdfjs-dist/web/pdf_viewer.css'
 import './Preview.css'
 
@@ -320,61 +321,6 @@ function OutlineTree({ items, onNavigate, depth = 0 }) {
     )
 }
 
-/* Adapted from Mozilla PDF.js web/pdf_link_service.js */
-const DEFAULT_LINK_REL = "noopener noreferrer nofollow";
-const LinkTarget = {
-    NONE: 0,
-    SELF: 1,
-    BLANK: 2,
-    PARENT: 3,
-    TOP: 4,
-};
-
-class LinkService {
-    constructor() {
-        this.externalLinkTarget = LinkTarget.BLANK;
-        this.externalLinkRel = DEFAULT_LINK_REL;
-        this.externalLinkEnabled = true;
-    }
-
-    addLinkAttributes(link, url, newWindow = false) {
-        if (!url || typeof url !== "string") {
-            return;
-        }
-        const target = newWindow ? LinkTarget.BLANK : this.externalLinkTarget;
-        const rel = this.externalLinkRel;
-
-        if (this.externalLinkEnabled) {
-            link.href = url;
-        } else {
-            link.href = "";
-            link.title = `Disabled: ${url}`;
-            link.onclick = () => false;
-        }
-
-        let targetStr = "";
-        switch (target) {
-            case LinkTarget.NONE: break;
-            case LinkTarget.SELF: targetStr = "_self"; break;
-            case LinkTarget.BLANK: targetStr = "_blank"; break;
-            case LinkTarget.PARENT: targetStr = "_parent"; break;
-            case LinkTarget.TOP: targetStr = "_top"; break;
-        }
-        link.target = targetStr;
-        link.rel = typeof rel === "string" ? rel : DEFAULT_LINK_REL;
-    }
-
-    getDestinationHash(dest) {
-        if (typeof dest === 'string') return `#${escape(dest)}`;
-        if (Array.isArray(dest)) return `#${escape(JSON.stringify(dest))}`;
-        return '#';
-    }
-
-    getAnchorUrl(hash) {
-        return hash;
-    }
-}
-
 function PdfPage({ pdf, pageNum, scale, onDoubleClick, onInternalNavigate }) {
     const canvasRef = useRef(null)
     const textLayerRef = useRef(null)
@@ -386,85 +332,90 @@ function PdfPage({ pdf, pageNum, scale, onDoubleClick, onInternalNavigate }) {
         const renderPage = async () => {
             if (!pdf || !canvasRef.current) return
 
-            const page = await pdf.getPage(pageNum)
+            try {
+                const page = await pdf.getPage(pageNum)
 
-            // Xử lý scale
-            const renderScale = scale * window.devicePixelRatio * 1.5
-            const viewport = page.getViewport({ scale: renderScale })
-            const displayViewport = page.getViewport({ scale: scale })
+                // Xử lý scale
+                const renderScale = scale * window.devicePixelRatio * 1.5
+                const viewport = page.getViewport({ scale: renderScale })
+                const displayViewport = page.getViewport({ scale: scale })
 
-            // 1. Render Canvas
-            const canvas = canvasRef.current
-            const context = canvas.getContext('2d', { alpha: false })
-            canvas.height = viewport.height
-            canvas.width = viewport.width
-            canvas.style.height = `${displayViewport.height}px`
-            canvas.style.width = `${displayViewport.width}px`
+                // 1. Render Canvas
+                const canvas = canvasRef.current
+                const context = canvas.getContext('2d', { alpha: false })
+                canvas.height = viewport.height
+                canvas.width = viewport.width
+                canvas.style.height = `${displayViewport.height}px`
+                canvas.style.width = `${displayViewport.width}px`
 
-            if (renderTask) renderTask.cancel()
-            renderTask = page.render({ canvasContext: context, viewport: viewport })
-            await renderTask.promise
+                if (renderTask) renderTask.cancel()
+                renderTask = page.render({ canvasContext: context, viewport: viewport })
+                await renderTask.promise
 
-            // 2. Render Text Layer
-            if (textLayerRef.current) {
-                const textContent = await page.getTextContent()
-                const textLayerDiv = textLayerRef.current
+                // 2. Render Text Layer
+                if (textLayerRef.current) {
+                    const textContent = await page.getTextContent()
+                    const textLayerDiv = textLayerRef.current
 
-                textLayerDiv.innerHTML = ''
-                textLayerDiv.style.height = `${displayViewport.height}px`
-                textLayerDiv.style.width = `${displayViewport.width}px`
-                textLayerDiv.style.setProperty('--scale-factor', scale);
+                    textLayerDiv.innerHTML = ''
+                    textLayerDiv.style.height = `${displayViewport.height}px`
+                    textLayerDiv.style.width = `${displayViewport.width}px`
+                    textLayerDiv.style.setProperty('--scale-factor', scale);
 
-                const textLayer = new TextLayer({
-                    textContentSource: textContent,
-                    container: textLayerDiv,
-                    viewport: displayViewport,
-                })
-                await textLayer.render()
-            }
-
-            // 3. Render Annotation Layer (Links)
-            if (annotationLayerRef.current) {
-                const annotations = await page.getAnnotations()
-                const annotationLayerDiv = annotationLayerRef.current
-
-                annotationLayerDiv.innerHTML = ''
-                annotationLayerDiv.style.height = `${displayViewport.height}px`
-                annotationLayerDiv.style.width = `${displayViewport.width}px`
-
-                const linkService = new LinkService()
-
-                const annotationLayer = new AnnotationLayer({
-                    div: annotationLayerDiv,
-                    accessibilityManager: null,
-                    page: page,
-                    viewport: displayViewport,
-                })
-
-                await annotationLayer.render({
-                    annotations: annotations,
-                    viewport: displayViewport,
-                    linkService: linkService,
-                    div: annotationLayerDiv,
-                })
-
-                // Manual Patch for Internal Links to bypass hash navigation
-                const links = annotationLayerDiv.getElementsByTagName('a');
-                for (let i = 0; i < links.length; i++) {
-                    const link = links[i];
-                    const href = link.getAttribute('href');
-                    if (href && href.startsWith('#')) {
-                        link.onclick = (e) => {
-                            e.preventDefault();
-                            // Decode dest
-                            const hash = href.substring(1);
-                            const unescaped = unescape(hash);
-                            let dest = unescaped;
-                            try { dest = JSON.parse(unescaped); } catch (e) { }
-                            onInternalNavigate(dest);
-                        }
-                    }
+                    const textLayer = new TextLayer({
+                        textContentSource: textContent,
+                        container: textLayerDiv,
+                        viewport: displayViewport,
+                    })
+                    await textLayer.render()
                 }
+
+                // 3. Render Annotation Layer (Links)
+                if (annotationLayerRef.current) {
+                    const annotations = await page.getAnnotations()
+                    const annotationLayerDiv = annotationLayerRef.current
+
+                    annotationLayerDiv.innerHTML = ''
+                    annotationLayerDiv.style.height = `${displayViewport.height}px`
+                    annotationLayerDiv.style.width = `${displayViewport.width}px`
+
+                    // Use official LinkService
+                    const eventBus = new EventBus();
+                    const linkService = new PDFLinkService({
+                        eventBus,
+                        externalLinkTarget: LinkTarget.BLANK,
+                        externalLinkRel: "noopener noreferrer nofollow",
+                        externalLinkEnabled: true,
+                    });
+                    linkService.setDocument(pdf);
+                    linkService.setViewer({
+                        scrollPageIntoView: (params) => {
+                            // Manual scroll handling since we don't have full viewer
+                            console.log("LinkService scroll request:", params);
+                            if (params && params.pageNumber) {
+                                // Find page element and scroll
+                                const pageEl = document.querySelector(`.page[data-page-number="${params.pageNumber}"]`);
+                                if (pageEl) pageEl.scrollIntoView({ behavior: 'smooth' });
+                            }
+                        }
+                    });
+
+                    const annotationLayer = new AnnotationLayer({
+                        div: annotationLayerDiv,
+                        accessibilityManager: null,
+                        page: page,
+                        viewport: displayViewport,
+                    })
+
+                    await annotationLayer.render({
+                        annotations: annotations,
+                        viewport: displayViewport,
+                        linkService: linkService,
+                        div: annotationLayerDiv,
+                    })
+                }
+            } catch (error) {
+                console.error("Render Page Error:", error);
             }
         }
 
