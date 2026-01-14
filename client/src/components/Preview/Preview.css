@@ -176,10 +176,28 @@
     background: rgba(var(--accent), 0.3);
 }
 
-.annotationLayer .linkAnnotation>a:hover {
-    background-color: rgba(var(--accent), 0.15);
-    box-shadow: 0 0 4px rgba(var(--accent), 0.3);
+.textLayer {
+    z-index: 2;
 }
+
+.annotationLayer {
+    z-index: 3;
+    pointer-events: none;
+    /* Let clicks pass through to textLayer/page */
+}
+
+.annotationLayer section,
+.annotationLayer .linkAnnotation,
+.annotationLayer .textAnnotation {
+    pointer-events: auto;
+    /* Re-enable for actual links */
+}
+
+.annotationLayer .linkAnnotation>a:hover {
+    background-color: rgba(var(--accent), 0.1);
+    box-shadow: 0 0 4px rgba(var(--accent), 0.2);
+}
+
 
 .btn--dark {
     color: #e8eaed;

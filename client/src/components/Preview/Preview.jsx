@@ -139,8 +139,14 @@ function Preview({ pdfUrl, onSyncTeX }) {
                         <input
                             type="text"
                             className="page-input"
-                            value={currentPage}
-                            readOnly
+                            defaultValue={currentPage}
+                            key={currentPage}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                    const val = parseInt(e.target.value)
+                                    if (val >= 1 && val <= numPages) scrollToPage(val)
+                                }
+                            }}
                         />
                         <span className="page-total">of {numPages}</span>
                         <button className="btn btn--icon btn--dark" onClick={() => scrollToPage(Math.min(numPages, currentPage + 1))} disabled={currentPage >= numPages}>
@@ -334,7 +340,9 @@ function PdfPage({ pdf, pageNum, scale, onDoubleClick, onInternalNavigate }) {
                     getAnchorUrl: (hash) => hash,
                     setParams: () => { },
                     setHash: () => { },
-                    executeNamedAction: (action) => console.log('Action:', action),
+                    executeNamedAction: (action) => {
+                        console.log('Named Action:', action)
+                    },
                     addLinkAttributes: (link, url, newWindow = true) => {
                         link.href = url;
                         if (newWindow) {
