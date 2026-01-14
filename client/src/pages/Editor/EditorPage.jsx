@@ -6,6 +6,8 @@ import Preview from '../../components/Preview/Preview'
 import Toolbar from '../../components/Toolbar/Toolbar'
 import FileTree from '../../components/FileTree/FileTree'
 import Console from '../../components/Console/Console'
+import { useToast } from '../../components/Toast/Toast'
+import { useConfirm } from '../../components/ConfirmDialog/ConfirmDialog'
 import {
     compileLatex,
     getFiles,
@@ -33,6 +35,8 @@ function EditorPage() {
     const { projectId } = useParams()
     const navigate = useNavigate()
     const { user, logout } = useAuth()
+    const toast = useToast()
+    const { confirm } = useConfirm()
 
     const [theme, setTheme] = useState(() => {
         const saved = localStorage.getItem('latex-theme')
@@ -218,7 +222,7 @@ function EditorPage() {
             }
             return true
         } catch (err) {
-            alert('Failed to create file: ' + err.message)
+            toast.error('Failed to create file: ' + err.message)
             return false
         }
     }
@@ -232,7 +236,7 @@ function EditorPage() {
             if (activeFileName === filename) setActiveFileName('main.tex')
             return true
         } catch (err) {
-            alert('Failed to delete file')
+            toast.error('Failed to delete file: ' + err.message)
             return false
         }
     }
@@ -245,7 +249,7 @@ function EditorPage() {
             if (activeFileName === oldName) setActiveFileName(newName)
             return true
         } catch (err) {
-            alert('Failed to rename file')
+            toast.error('Failed to rename file: ' + err.message)
             return false
         }
     }
@@ -290,7 +294,7 @@ function EditorPage() {
             }
             return true
         } catch (err) {
-            alert('Failed to duplicate file: ' + err.message)
+            toast.error('Failed to duplicate file: ' + err.message)
             return false
         }
     }
