@@ -251,8 +251,8 @@ function Preview({ pdfUrl, onSyncTeX }) {
                                     pdf={pdf}
                                     pageNum={i + 1}
                                     scale={scale}
-                                    onDoubleClick={handleSyncTeXClick}
-                                    onInternalNavigate={handleInternalNavigate}
+                                // onDoubleClick={handleSyncTeXClick}
+                                // onInternalNavigate={handleInternalNavigate}
                                 />
                             ))}
                         </div>
