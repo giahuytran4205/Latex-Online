@@ -263,7 +263,6 @@ function runLatexEngine(enginePath, texFile, workDir) {
     return new Promise((resolve, reject) => {
         const args = [
             '-interaction=nonstopmode',
-            '-halt-on-error',
             '-file-line-error',
             `-output-directory=${workDir}`,
             texFile,
