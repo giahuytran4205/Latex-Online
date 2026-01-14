@@ -49,6 +49,7 @@ function EditorPage() {
     const [activeFileName, setActiveFileName] = useState('main.tex')
     const [code, setCode] = useState('')
     const [isLoading, setIsLoading] = useState(true)
+    const [isCodeLoading, setIsCodeLoading] = useState(false)
 
     const [pdfUrl, setPdfUrl] = useState(null)
     const [logs, setLogs] = useState('')
@@ -56,8 +57,18 @@ function EditorPage() {
     const [consoleOpen, setConsoleOpen] = useState(false)
     const [collaborators, setCollaborators] = useState([])
 
-    // Auto-save logic
-    const debouncedCode = useDebounce(code, 1000)
+    // Auto-save logic: Debounce name and code together to prevent race conditions
+    const [debouncedData, setDebouncedData] = useState({ filename: activeFileName, code: code })
+
+    useEffect(() => {
+        // Don't update debounce while a file is loading to prevent race conditions
+        if (isCodeLoading) return
+
+        const handler = setTimeout(() => {
+            setDebouncedData({ filename: activeFileName, code: code })
+        }, 1000)
+        return () => clearTimeout(handler)
+    }, [code, activeFileName, isCodeLoading])
 
     // Resizable panels state
     const [sidebarWidth, setSidebarWidth] = useState(() => parseInt(localStorage.getItem('latex-sidebar-width') || '200'))
@@ -121,6 +132,7 @@ function EditorPage() {
         }
 
         // Fetch from server
+        setIsCodeLoading(true)
         loadingFileRef.current = true
         const fetchContent = async () => {
             try {
@@ -136,6 +148,7 @@ function EditorPage() {
                 lastSavedFileRef.current = activeFileName
             } finally {
                 loadingFileRef.current = false
+                setIsCodeLoading(false)
             }
         }
         fetchContent()
@@ -148,26 +161,33 @@ function EditorPage() {
         }
     }, [code, activeFileName, saveToCache])
 
-    // Auto-save effect (debounced)
+    // Auto-save effect
     useEffect(() => {
-        // Skip if no active file
-        if (!activeFileName) return
-        // Skip folders
-        if (activeFileName.endsWith('/')) return
-        // Skip if still loading initial content
-        if (isLoading || loadingFileRef.current) return
-        // Skip if the debounced code is for a different file
-        if (lastSavedFileRef.current !== activeFileName) return
+        const { filename: debouncedFile, code: debouncedCode } = debouncedData
+
+        // Skip if nothing to save or switching
+        if (!debouncedFile || debouncedFile.endsWith('/')) return
+        if (isLoading || isCodeLoading) return
+
+        // IMPORTANT: Only save if the debounced file is STILL the active file
+        if (debouncedFile !== activeFileName) return
+
+        // Don't save if identical to what we know is already on server/cache
+        if (fileCacheRef.current.get(debouncedFile) === debouncedCode && lastSavedFileRef.current === debouncedFile) {
+            return
+        }
 
         const save = async () => {
             try {
-                await saveFile(projectId, activeFileName, debouncedCode)
+                await saveFile(projectId, debouncedFile, debouncedCode)
+                lastSavedFileRef.current = debouncedFile
+                saveToCache(debouncedFile, debouncedCode)
             } catch (err) {
                 console.error('Auto-save failed:', err)
             }
         }
         save()
-    }, [debouncedCode, projectId])
+    }, [debouncedData, projectId, activeFileName])
 
     const loadFiles = async () => {
         try {
@@ -230,14 +250,28 @@ function EditorPage() {
         }
     }
 
-    const handleUploadFile = async (filename, content) => {
+    const handleUploadFile = async (filename, content, skipReload = false) => {
         try {
             // Create file with overwrite option for upload scenarios
             await createFile(projectId, filename, content, true)
-            await loadFiles()
-            // Clear cache for this file in case it was cached
+
+            // If the uploaded file is the one currently open, update the editor content
+            // to prevent auto-save from overwriting the upload with old content
+            if (filename === activeFileName) {
+                // If it's a binary file (data:...), don't put it in the editor
+                if (typeof content === 'string' && !content.startsWith('data:')) {
+                    setCode(content)
+                    saveToCache(filename, content)
+                }
+            }
+
+            // Clear cache for this file to ensure fresh load next time
             if (fileCacheRef.current.has(filename)) {
                 fileCacheRef.current.delete(filename)
+            }
+
+            if (!skipReload) {
+                await loadFiles()
             }
             return true
         } catch (err) {

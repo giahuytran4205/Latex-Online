@@ -363,7 +363,9 @@ function FileTree({ files, activeFile, onFileSelect, onAddFile, onDeleteFile, on
 
                 const content = await readFileContent(file)
                 if (onUploadFile) {
-                    await onUploadFile(path, content)
+                    // Skip reload for all but the last file to improve performance
+                    const isLast = i === filesToUpload.length - 1
+                    await onUploadFile(path, content, !isLast)
                 }
                 uploaded++
             } catch (err) {
@@ -506,7 +508,9 @@ function FileTree({ files, activeFile, onFileSelect, onAddFile, onDeleteFile, on
 
                 const content = await readFileContent(file)
                 if (onUploadFile) {
-                    await onUploadFile(path, content)
+                    // Skip reload for all but the last file
+                    const isLast = i === allFiles.length - 1
+                    await onUploadFile(path, content, !isLast)
                 }
                 uploaded++
             } catch (err) {
