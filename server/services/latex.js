@@ -264,6 +264,7 @@ function runLatexEngine(enginePath, texFile, workDir) {
         const args = [
             '-interaction=nonstopmode',
             '-file-line-error',
+            '-synctex=1',
             `-output-directory=${workDir}`,
             texFile,
         ]
