@@ -99,9 +99,12 @@ export async function compileLatex({ code, engine, filename, projectId }) {
         headers,
         body: JSON.stringify({ projectId, code, engine, filename }),
     })
-    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
-    const data = await response.json()
-    // Map server's 'pdf' field to client's expected 'pdfUrl'
+    const data = await response.json().catch(() => ({ success: false }))
+
+    if (!response.ok && !data.logs) {
+        throw new Error(data.error || `HTTP error! status: ${response.status}`)
+    }
+
     return {
         ...data,
         pdfUrl: data.pdf

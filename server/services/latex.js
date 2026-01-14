@@ -184,7 +184,9 @@ export async function compileLatex(projectId = 'default-project', engine = 'pdfl
             }
         } else {
             const errors = parseErrors(logContent)
-            if (errors.length === 0) {
+            if (result.signal === 'SIGTERM' || result.signal === 'SIGKILL') {
+                errors.push('Compilation timed out. Your project might be too large or has an infinite loop.')
+            } else if (errors.length === 0) {
                 errors.push('LaTeX compilation failed - no PDF generated')
             }
 
@@ -271,7 +273,7 @@ function runLatexEngine(enginePath, texFile, workDir) {
 
         const proc = spawn(enginePath, args, {
             cwd: workDir,
-            timeout: 60000,
+            timeout: 300000, // Increase to 5 minutes for large projects
             env: process.env
         })
 
@@ -286,9 +288,9 @@ function runLatexEngine(enginePath, texFile, workDir) {
             stderr += d.toString()
         })
 
-        proc.on('close', (code) => {
-            console.log(`[LaTeX] Exit code: ${code}`)
-            resolve({ code, stdout, stderr })
+        proc.on('close', (code, signal) => {
+            console.log(`[LaTeX] Exit code: ${code}, Signal: ${signal}`)
+            resolve({ code, signal, stdout, stderr })
         })
 
         proc.on('error', (err) => {

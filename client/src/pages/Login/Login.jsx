@@ -8,8 +8,18 @@ function Login() {
     const [password, setPassword] = useState('')
     const [error, setError] = useState('')
     const [isLoading, setIsLoading] = useState(false)
-    const { login, isAuthenticated } = useAuth()
+    const { login, isAuthenticated, loading } = useAuth()
     const navigate = useNavigate()
+
+    // Show loading screen while checking auth status
+    if (loading) {
+        return (
+            <div className="loading-screen">
+                <div className="loading-spinner"></div>
+                <span>Initializing...</span>
+            </div>
+        )
+    }
 
     // Redirect if already logged in
     if (isAuthenticated) {

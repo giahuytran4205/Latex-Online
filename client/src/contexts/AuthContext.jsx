@@ -24,9 +24,12 @@ export function AuthProvider({ children }) {
 
     useEffect(() => {
         const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+            // Set basic user info and stop global loading immediately
+            setUser(firebaseUser)
+            setLoading(false)
+
             if (firebaseUser) {
-                setUser(firebaseUser)
-                // Fetch user profile from Firestore
+                // Fetch user profile from Firestore in the background
                 try {
                     const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid))
                     if (userDoc.exists()) {
@@ -50,10 +53,8 @@ export function AuthProvider({ children }) {
                     })
                 }
             } else {
-                setUser(null)
                 setUserProfile(null)
             }
-            setLoading(false)
         })
 
         return () => unsubscribe()
