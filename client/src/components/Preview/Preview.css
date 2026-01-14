@@ -290,9 +290,10 @@
 
 .annotationLayer section,
 .annotationLayer .linkAnnotation,
-.annotationLayer .textAnnotation {
+.annotationLayer .textAnnotation,
+.annotationLayer a {
     pointer-events: auto;
-    /* Re-enable for actual links */
+    cursor: pointer;
 }
 
 .annotationLayer .linkAnnotation>a:hover {

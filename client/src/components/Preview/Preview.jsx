@@ -1,11 +1,118 @@
 import { useRef, useEffect, useState, useCallback } from 'react'
 import * as pdfjsLib from 'pdfjs-dist'
+import { AnnotationLayer } from 'pdfjs-dist/web/pdf_viewer.mjs'
 import 'pdfjs-dist/web/pdf_viewer.css'
 import './Preview.css'
 
 // Set worker path
 import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker
+// ... (rest of imports/component)
+
+// ... inside Preview component ...
+
+useEffect(() => {
+    let renderTask = null
+
+    const renderPage = async () => {
+        if (!pdf || !canvasRef.current) return
+
+        try {
+            const page = await pdf.getPage(pageNum)
+
+            // Xử lý scale
+            const renderScale = scale * window.devicePixelRatio * 1.5
+            const viewport = page.getViewport({ scale: renderScale })
+            const displayViewport = page.getViewport({ scale: scale })
+
+            // 1. Render Canvas
+            const canvas = canvasRef.current
+            const context = canvas.getContext('2d', { alpha: false })
+            canvas.height = viewport.height
+            canvas.width = viewport.width
+            canvas.style.height = `${displayViewport.height}px`
+            canvas.style.width = `${displayViewport.width}px`
+
+            if (renderTask) renderTask.cancel()
+            renderTask = page.render({ canvasContext: context, viewport: viewport })
+            await renderTask.promise
+
+            // 2. Render Text Layer
+            if (textLayerRef.current) {
+                const textContent = await page.getTextContent()
+                const textLayerDiv = textLayerRef.current
+
+                textLayerDiv.innerHTML = ''
+                textLayerDiv.style.height = `${displayViewport.height}px`
+                textLayerDiv.style.width = `${displayViewport.width}px`
+                textLayerDiv.style.setProperty('--scale-factor', scale);
+
+                // Check if renderTextLayer exists on pdfjsLib, otherwise might need import
+                if (pdfjsLib.renderTextLayer) {
+                    pdfjsLib.renderTextLayer({
+                        textContentSource: textContent,
+                        container: textLayerDiv,
+                        viewport: displayViewport,
+                        textDivs: []
+                    })
+                }
+            }
+
+            // 3. Render Annotation Layer (Links)
+            if (annotationLayerRef.current) {
+                const annotations = await page.getAnnotations()
+                const annotationLayerDiv = annotationLayerRef.current
+
+                annotationLayerDiv.innerHTML = ''
+                annotationLayerDiv.style.height = `${displayViewport.height}px`
+                annotationLayerDiv.style.width = `${displayViewport.width}px`
+
+                const linkService = new LinkService()
+
+                // Use the explicitly imported AnnotationLayer
+                const annotationLayer = new AnnotationLayer({
+                    div: annotationLayerDiv,
+                    accessibilityManager: null,
+                    page: page,
+                    viewport: displayViewport,
+                })
+
+                await annotationLayer.render({
+                    annotations: annotations,
+                    viewport: displayViewport,
+                    linkService: linkService,
+                    div: annotationLayerDiv,
+                })
+
+                // Manual Patch for Internal Links to bypass hash navigation
+                const links = annotationLayerDiv.getElementsByTagName('a');
+                for (let i = 0; i < links.length; i++) {
+                    const link = links[i];
+                    const href = link.getAttribute('href');
+                    if (href && href.startsWith('#')) {
+                        link.onclick = (e) => {
+                            e.preventDefault();
+                            // Decode dest
+                            const hash = href.substring(1);
+                            const unescaped = unescape(hash);
+                            let dest = unescaped;
+                            try { dest = JSON.parse(unescaped); } catch (e) { }
+                            onInternalNavigate(dest);
+                        }
+                    }
+                }
+            }
+        } catch (error) {
+            console.error("Render Page Error:", error);
+        }
+    }
+
+    renderPage()
+
+    return () => {
+        if (renderTask) renderTask.cancel()
+    }
+}, [pdf, pageNum, scale, onInternalNavigate])
 
 function Preview({ pdfUrl, onSyncTeX }) {
     const containerRef = useRef(null)
@@ -432,7 +539,7 @@ function PdfPage({ pdf, pageNum, scale, onDoubleClick, onInternalNavigate }) {
 
                 const linkService = new LinkService()
 
-                const annotationLayer = new pdfjsLib.AnnotationLayer({
+                const annotationLayer = new AnnotationLayer({
                     div: annotationLayerDiv,
                     accessibilityManager: null,
                     page: page,
