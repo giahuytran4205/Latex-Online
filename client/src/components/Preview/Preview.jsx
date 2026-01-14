@@ -11,13 +11,17 @@ function Preview({ pdfUrl, onSyncTeX }) {
     const containerRef = useRef(null)
     const [numPages, setNumPages] = useState(0)
     const [pdf, setPdf] = useState(null)
-    const [scale, setScale] = useState(1.5)
+    const [scale, setScale] = useState(1.2)
     const [loading, setLoading] = useState(false)
+    const [currentPage, setCurrentPage] = useState(1)
+    const [outline, setOutline] = useState(null)
+    const [isSidebarOpen, setIsSidebarOpen] = useState(false)
 
     useEffect(() => {
         if (!pdfUrl) {
             setPdf(null)
             setNumPages(0)
+            setOutline(null)
             return
         }
 
@@ -28,6 +32,10 @@ function Preview({ pdfUrl, onSyncTeX }) {
                 const pdfInstance = await loadingTask.promise
                 setPdf(pdfInstance)
                 setNumPages(pdfInstance.numPages)
+
+                // Get Outline
+                const pdfOutline = await pdfInstance.getOutline()
+                setOutline(pdfOutline)
             } catch (err) {
                 console.error('Error loading PDF:', err)
             } finally {
@@ -37,6 +45,34 @@ function Preview({ pdfUrl, onSyncTeX }) {
 
         loadPdf()
     }, [pdfUrl])
+
+    // Visible page tracking
+    useEffect(() => {
+        const container = containerRef.current
+        if (!container) return
+
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    const pageNum = parseInt(entry.target.getAttribute('data-page-number'))
+                    setCurrentPage(pageNum)
+                }
+            })
+        }, {
+            root: container,
+            threshold: 0.5
+        })
+
+        const timer = setTimeout(() => {
+            const pages = container.querySelectorAll('.page')
+            pages.forEach(page => observer.observe(page))
+        }, 500)
+
+        return () => {
+            observer.disconnect()
+            clearTimeout(timer)
+        }
+    }, [pdf, numPages, scale])
 
     const handleDownload = () => {
         if (!pdfUrl) return
@@ -51,34 +87,68 @@ function Preview({ pdfUrl, onSyncTeX }) {
         window.open(pdfUrl, '_blank').print()
     }
 
+    const scrollToPage = useCallback((pageNum) => {
+        if (!containerRef.current) return
+        const pageElement = containerRef.current.querySelector(`.page[data-page-number="${pageNum}"]`)
+        if (pageElement) {
+            pageElement.scrollIntoView({ behavior: 'smooth' })
+        }
+    }, [])
+
+    const handleInternalNavigate = useCallback(async (dest) => {
+        if (!pdf) return
+        try {
+            let destArray = dest
+            if (typeof dest === 'string') {
+                destArray = await pdf.getDestination(dest)
+            }
+
+            if (destArray) {
+                const pageNum = await pdf.getPageIndex(destArray[0]) + 1
+                scrollToPage(pageNum)
+            }
+        } catch (err) {
+            console.error('Internal navigation failed:', err)
+        }
+    }, [pdf, scrollToPage])
+
     const handleSyncTeXClick = useCallback((e, pageNum) => {
         if (!onSyncTeX || !containerRef.current) return
-
         const rect = e.currentTarget.getBoundingClientRect()
-
-        // Coordinates relative to the page wrapper
         const clickX = e.clientX - rect.left
         const clickY = e.clientY - rect.top
-
-        // Convert pixels to PDF points (1/72 inch)
-        // PDF.js uses scale = pixels / PDF_point
-        // SyncTeX 'edit' typically expects coordinates from Top-Left
-        const pdfX = clickX / scale
-        const pdfY = clickY / scale
-
-        onSyncTeX(pageNum, pdfX, pdfY)
+        onSyncTeX(pageNum, clickX / scale, clickY / scale)
     }, [onSyncTeX, scale])
 
     return (
-        <div className="preview-panel">
+        <div className={`preview-panel ${isSidebarOpen ? 'sidebar-open' : ''}`}>
             <div className="preview-panel__header">
-                <div className="preview-panel__title">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                        <polyline points="14 2 14 8 20 8" />
-                    </svg>
-                    <span>PDF Preview</span>
+                <div className="preview-left">
+                    <button
+                        className={`btn btn--icon btn--dark ${isSidebarOpen ? 'active' : ''}`}
+                        title="Toggle Sidebar"
+                        onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+                    >
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2" /><line x1="9" y1="3" x2="9" y2="21" /></svg>
+                    </button>
+                    <div className="separator--dark"></div>
+                    <div className="page-navigation">
+                        <button className="btn btn--icon btn--dark" onClick={() => scrollToPage(Math.max(1, currentPage - 1))} disabled={currentPage <= 1}>
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="15 18 9 12 15 6" /></svg>
+                        </button>
+                        <input
+                            type="text"
+                            className="page-input"
+                            value={currentPage}
+                            readOnly
+                        />
+                        <span className="page-total">of {numPages}</span>
+                        <button className="btn btn--icon btn--dark" onClick={() => scrollToPage(Math.min(numPages, currentPage + 1))} disabled={currentPage >= numPages}>
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="9 18 15 12 9 6" /></svg>
+                        </button>
+                    </div>
                 </div>
+
                 <div className="preview-panel__controls">
                     <div className="zoom-controls">
                         <button className="btn btn--icon btn--dark" title="Zoom Out" onClick={() => setScale(s => Math.max(0.5, s - 0.2))}>
@@ -111,36 +181,69 @@ function Preview({ pdfUrl, onSyncTeX }) {
                 </div>
             </div>
 
-            <div className="preview-panel__content" ref={containerRef}>
-                {!pdfUrl ? (
-                    <div className="preview-panel__empty">
-                        <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1">
-                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                            <polyline points="14 2 14 8 20 8" />
-                        </svg>
-                        <h3>Ready to compile</h3>
-                        <p>Your PDF preview will appear here once you compile your LaTeX project.</p>
-                    </div>
-                ) : (
-                    <div className="pdf-viewer">
-                        {Array.from({ length: numPages }, (_, i) => (
-                            <PdfPage
-                                key={`${pdfUrl}-${i + 1}-${scale}`}
-                                pdf={pdf}
-                                pageNum={i + 1}
-                                scale={scale}
-                                onDoubleClick={handleSyncTeXClick}
-                            />
-                        ))}
+            <div className="main-viewer-area">
+                {isSidebarOpen && (
+                    <div className="pdf-sidebar">
+                        <div className="sidebar-header">OUTLINE</div>
+                        <div className="sidebar-content">
+                            {outline ? (
+                                <OutlineTree items={outline} onNavigate={handleInternalNavigate} />
+                            ) : (
+                                <div className="sidebar-empty">No outline available</div>
+                            )}
+                        </div>
                     </div>
                 )}
-                {loading && (
-                    <div className="preview-loading">
-                        <div className="loading-spinner"></div>
-                    </div>
-                )}
+
+                <div className="preview-panel__content" ref={containerRef}>
+                    {!pdfUrl ? (
+                        <div className="preview-panel__empty">
+                            <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1">
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                                <polyline points="14 2 14 8 20 8" />
+                            </svg>
+                            <h3>Ready to compile</h3>
+                            <p>Your PDF preview will appear here once you compile your LaTeX project.</p>
+                        </div>
+                    ) : (
+                        <div className="pdf-viewer">
+                            {Array.from({ length: numPages }, (_, i) => (
+                                <PdfPage
+                                    key={`${pdfUrl}-${i + 1}-${scale}`}
+                                    pdf={pdf}
+                                    pageNum={i + 1}
+                                    scale={scale}
+                                    onDoubleClick={handleSyncTeXClick}
+                                    onInternalNavigate={handleInternalNavigate}
+                                />
+                            ))}
+                        </div>
+                    )}
+                    {loading && (
+                        <div className="preview-loading">
+                            <div className="loading-spinner"></div>
+                        </div>
+                    )}
+                </div>
             </div>
         </div>
+    )
+}
+
+function OutlineTree({ items, onNavigate, depth = 0 }) {
+    return (
+        <ul className="outline-tree" style={{ paddingLeft: depth > 0 ? '16px' : '0' }}>
+            {items.map((item, idx) => (
+                <li key={idx}>
+                    <div className="outline-item" onClick={() => onNavigate(item.dest)}>
+                        {item.title}
+                    </div>
+                    {item.items && item.items.length > 0 && (
+                        <OutlineTree items={item.items} onNavigate={onNavigate} depth={depth + 1} />
+                    )}
+                </li>
+            ))}
+        </ul>
     )
 }
 
@@ -156,7 +259,7 @@ const textLayerStyle = {
     opacity: 0.2, // Make text selection visible but subtle
 }
 
-function PdfPage({ pdf, pageNum, scale, onDoubleClick }) {
+function PdfPage({ pdf, pageNum, scale, onDoubleClick, onInternalNavigate }) {
     const canvasRef = useRef(null)
     const textLayerRef = useRef(null)
     const annotationLayerRef = useRef(null)
@@ -225,7 +328,7 @@ function PdfPage({ pdf, pageNum, scale, onDoubleClick }) {
                     externalLinkRel: 'noopener noreferrer nofollow',
                     baseUrl: null,
                     navigateTo: (dest) => {
-                        console.log('Navigate to destination:', dest)
+                        onInternalNavigate(dest)
                     },
                     getDestinationHash: (dest) => '#',
                     getAnchorUrl: (hash) => hash,
