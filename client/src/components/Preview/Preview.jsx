@@ -316,6 +316,36 @@ function OutlineTree({ items, onNavigate, depth = 0 }) {
     )
 }
 
+// Simple Link Service for PDF.js - STRICT Interface
+class SimpleLinkService {
+    constructor() {
+        this.externalLinkTarget = 2 // _blank
+        this.externalLinkRel = 'noopener noreferrer nofollow'
+        this.externalLinkEnabled = true
+        this._params = {}
+    }
+
+    getDestinationHash(dest) {
+        return '#'
+    }
+
+    getAnchorUrl(hash) {
+        return hash
+    }
+
+    setHash(hash) { }
+
+    executeNamedAction(action) { }
+
+    navigateTo(dest) { }
+
+    addLinkAttributes(link, url, newWindow = true) {
+        link.href = url
+        link.target = newWindow ? '_blank' : '_self'
+        link.rel = this.externalLinkRel
+    }
+}
+
 function PdfPage({ pdf, pageNum, scale, onDoubleClick, onInternalNavigate }) {
     const canvasRef = useRef(null)
     const textLayerRef = useRef(null)
@@ -380,32 +410,17 @@ function PdfPage({ pdf, pageNum, scale, onDoubleClick, onInternalNavigate }) {
                 annotationLayerDiv.style.height = `${displayViewport.height}px`
                 annotationLayerDiv.style.width = `${displayViewport.width}px`
 
-                const linkService = {
-                    externalLinkTarget: 2, // _blank
-                    externalLinkRel: 'noopener noreferrer nofollow',
-                    baseUrl: null,
-                    navigateTo: (dest) => {
-                        onInternalNavigate(dest)
-                    },
-                    getDestinationHash: (dest) => '#',
-                    getAnchorUrl: (hash) => hash,
-                    setParams: () => { },
-                    setHash: () => { },
-                    executeNamedAction: (action) => {
-                        console.log('Named Action:', action)
-                    },
-                    addLinkAttributes: (link, url, newWindow = true) => {
-                        link.href = url;
-                        if (newWindow) {
-                            link.target = "_blank";
-                            link.rel = "noopener noreferrer nofollow";
-                        }
-                    }
+                // Create a new LinkService for this page
+                const linkService = new SimpleLinkService()
+
+                // Custom override for internal navigate to ensure it uses the prop
+                linkService.navigateTo = (dest) => {
+                    if (onInternalNavigate) onInternalNavigate(dest)
                 }
 
                 const annotationLayer = new pdfjsLib.AnnotationLayer({
                     div: annotationLayerDiv,
-                    accessibilityManager: null,
+                    accessibilityManager: null, // Ensure this isn't undefined if strict
                     page: page,
                     viewport: displayViewport,
                 })
