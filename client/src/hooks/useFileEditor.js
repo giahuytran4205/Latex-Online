@@ -98,24 +98,22 @@ export function useFileEditor(projectId, initialFile = 'main.tex') {
             // 1. Create/Overwrite file on server
             await createFile(projectId, filename, content, true)
 
-            // 2. If it's the active file, update editor and cache
-            if (filename === activeFileName) {
-                if (typeof content === 'string' && !content.startsWith('data:')) {
-                    setCode(content)
-                    setLoadedFileName(filename)
-                    saveToCache(filename, content)
-                }
-            }
-
-            // 3. Clear cache for this file to force fresh fetch in other contexts
+            // 2. Clear cache for this file
             fileCache.current.delete(filename)
+
+            // 3. If it's the active file, force a clean reload from server
+            // Clearing code/loadedFileName forces an unmount and triggers the fetch effect
+            if (filename === activeFileName) {
+                setCode(null)
+                setLoadedFileName(null)
+            }
 
             return true
         } catch (err) {
             console.error('Upload failed:', err)
             return false
         }
-    }, [projectId, activeFileName, saveToCache])
+    }, [projectId, activeFileName])
 
     return {
         activeFileName,
