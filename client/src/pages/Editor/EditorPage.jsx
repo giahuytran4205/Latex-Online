@@ -309,8 +309,7 @@ function EditorPage() {
                 const targetFile = result.file
 
                 // Check if file exists in our project files list
-                // (Normalization: result.file should already be relative to workDir)
-                const fileExists = files.some(f => f.path === targetFile)
+                const fileExists = files.some(f => f.name === targetFile)
 
                 if (fileExists) {
                     if (targetFile !== activeFileName) {

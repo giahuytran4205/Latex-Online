@@ -123,6 +123,8 @@ function Preview({ pdfUrl, onSyncTeX }) {
         const rect = e.currentTarget.getBoundingClientRect()
         const clickX = e.clientX - rect.left
         const clickY = e.clientY - rect.top
+
+        console.log(`SyncTeX Double Click: Page ${pageNum}, X: ${clickX / scale}, Y: ${clickY / scale}`)
         onSyncTeX(pageNum, clickX / scale, clickY / scale)
     }, [onSyncTeX, scale])
 
@@ -278,10 +280,12 @@ function Preview({ pdfUrl, onSyncTeX }) {
                 <div className="preview-panel__content" ref={containerRef}>
                     {!pdfUrl ? (
                         <div className="preview-panel__empty">
-                            <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1">
-                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                                <polyline points="14 2 14 8 20 8" />
-                            </svg>
+                            <div className="document-icon-static">
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                    <polyline points="14 2 14 8 20 8"></polyline>
+                                </svg>
+                            </div>
                             <h3>Ready to compile</h3>
                             <p>Your PDF preview will appear here once you compile your LaTeX project.</p>
                         </div>

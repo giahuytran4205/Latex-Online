@@ -1,5 +1,4 @@
 .preview-panel {
-    position: relative;
     display: flex;
     flex-direction: column;
     height: 100%;
@@ -243,6 +242,7 @@
 
 /* Viewer Content */
 .preview-panel__content {
+    position: relative;
     flex: 1;
     overflow-y: auto;
     padding: 32px 16px;
@@ -251,6 +251,8 @@
     align-items: center;
     justify-content: flex-start;
     scroll-behavior: smooth;
+    background: #1a1a1b;
+    /* Match loading bg */
 }
 
 .pdf-viewer {
@@ -315,14 +317,45 @@
 }
 
 .preview-panel__empty {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    height: 100%;
+    background: #1a1a1b;
     color: #9aa0a6;
-    gap: 24px;
+    gap: 20px;
     text-align: center;
+    z-index: 10;
+}
+
+.preview-panel__empty h3 {
+    color: #f9f9fa;
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin-bottom: 4px;
+}
+
+.preview-panel__empty p {
+    font-size: 0.9rem;
+    max-width: 250px;
+    line-height: 1.5;
+}
+
+.preview-panel__empty .document-icon-static {
+    width: 50px;
+    height: 64px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1.5px solid rgba(255, 255, 255, 0.07);
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: rgba(255, 255, 255, 0.1);
 }
 
 .preview-panel__empty svg {
