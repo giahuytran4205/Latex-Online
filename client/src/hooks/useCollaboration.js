@@ -66,12 +66,22 @@ export function useCollaboration(projectId, userId, userName, activeFile, sid) {
 
         setupProvider()
 
-        return () => {
+        const cleanup = () => {
             if (providerRef.current) {
+                // IMPORTANT: Explicitly set local state to null to notify others we are leaving immediately
+                providerRef.current.awareness.setLocalState(null)
                 providerRef.current.disconnect()
-                providerRef.current.destroy() // Explicitly destroy to clear awareness
+                providerRef.current.destroy()
             }
             providerRef.current = null
+        }
+
+        // Add beforeunload listener to handle browser reload/close
+        window.addEventListener('beforeunload', cleanup)
+
+        return () => {
+            window.removeEventListener('beforeunload', cleanup)
+            cleanup()
         }
     }, [projectId, userId, userName, sid]) // Reconnect if sid changes
 
