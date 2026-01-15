@@ -70,8 +70,8 @@ function EditorPage() {
     const [debouncedData, setDebouncedData] = useState({ filename: activeFileName, code: code })
 
     useEffect(() => {
-        // Don't update debounce while a file is loading or code is cleared
-        if (isCodeLoading || code === null) return
+        // Don't update debounce while a file is loading to prevent race conditions
+        if (isCodeLoading) return
 
         const handler = setTimeout(() => {
             setDebouncedData({ filename: activeFileName, code: code })
@@ -103,7 +103,7 @@ function EditorPage() {
 
     // Save current content to cache before switching files
     const saveToCache = useCallback((filename, content) => {
-        if (filename && content !== null && content !== undefined) {
+        if (filename && content !== undefined) {
             fileCacheRef.current.set(filename, content)
         }
     }, [])
@@ -140,8 +140,6 @@ function EditorPage() {
     useEffect(() => {
         if (!activeFileName || code !== null) return
 
-        let active = true
-
         // Check cache first
         if (fileCacheRef.current.has(activeFileName)) {
             const cachedContent = fileCacheRef.current.get(activeFileName)
@@ -154,34 +152,24 @@ function EditorPage() {
         // Fetch from server
         setIsCodeLoading(true)
         loadingFileRef.current = true
-
         const fetchContent = async () => {
             try {
                 const data = await getFileContent(projectId, activeFileName)
-                if (!active) return
-
                 setCode(data.content || '')
                 setLoadedFileName(activeFileName)
                 saveToCache(activeFileName, data.content || '')
                 lastSavedFileRef.current = activeFileName
             } catch (err) {
-                if (!active) return
                 console.error('Failed to load file content:', err)
                 setCode('')
                 setLoadedFileName(activeFileName)
                 saveToCache(activeFileName, '')
             } finally {
-                if (active) {
-                    loadingFileRef.current = false
-                    setIsCodeLoading(false)
-                }
+                loadingFileRef.current = false
+                setIsCodeLoading(false)
             }
         }
         fetchContent()
-
-        return () => {
-            active = false
-        }
     }, [activeFileName, projectId, code, saveToCache])
 
     // Update cache when code changes
