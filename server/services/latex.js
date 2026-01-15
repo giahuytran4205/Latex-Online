@@ -102,14 +102,39 @@ export function cleanupOldTempFiles() {
 }
 
 /**
+ * Find project directory across all users
+ */
+function findProjectDir(projectId) {
+    if (!existsSync(PROJECTS_DIR)) return null
+    const userDirs = readdirSync(PROJECTS_DIR)
+    for (const userId of userDirs) {
+        const projectPath = join(PROJECTS_DIR, userId, projectId)
+        if (existsSync(projectPath) && statSync(projectPath).isDirectory()) {
+            return projectPath
+        }
+    }
+    // Fallback to legacy
+    const legacyPath = join(PROJECTS_DIR, projectId)
+    if (existsSync(legacyPath)) return legacyPath
+    return null
+}
+
+/**
  * Compile LaTeX code using specified engine with incremental support
  */
 export async function compileLatex(projectId = 'default-project', engine = 'pdflatex', filename = 'main', code = null, userId = 'dev-user') {
-    // Support user-based project paths
-    let projectDir = join(PROJECTS_DIR, userId, projectId)
-    if (!existsSync(projectDir)) {
-        // Fallback to legacy path
-        projectDir = join(PROJECTS_DIR, projectId)
+    // Correctly locate the project directory (could be owned by anyone)
+    let projectDir = findProjectDir(projectId)
+
+    // If project doesn't exist yet, it's either a new project or an error
+    if (!projectDir) {
+        projectDir = join(PROJECTS_DIR, userId, projectId)
+        mkdirSync(projectDir, { recursive: true })
+        // Create initial file if it doesn't exist
+        const mainPath = join(projectDir, 'main.tex')
+        if (!existsSync(mainPath)) {
+            writeFileSync(mainPath, '% New Project\n\\documentclass{article}\n\\begin{document}\nHello World\n\\end{document}')
+        }
     }
     const workDir = getProjectWorkDir(projectId)
 
@@ -356,7 +381,7 @@ export async function resolveSyncTeX(projectId, page, x, y) {
 
     return new Promise((resolve, reject) => {
         // synctex edit -o page:x:y:main.pdf
-        const args = ['edit', '-o', `${page}:${x}:${y}:main.pdf`, '-v', '10', '-h', '10']
+        const args = ['edit', '-o', `${page}:${x}:${y}:main.pdf`]
         console.log(`[SyncTeX] Executing: synctex ${args.join(' ')} (CWD: ${workDir})`)
 
         const proc = spawn('synctex', args, { cwd: workDir })

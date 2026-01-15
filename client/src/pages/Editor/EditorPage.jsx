@@ -327,12 +327,7 @@ function EditorPage() {
 
                     // Small delay ensures Editor reacts to file switch BEFORE line jump
                     setTimeout(() => {
-                        setJumpToLine({
-                            file: actualName,
-                            line: result.line,
-                            column: result.column,
-                            timestamp: Date.now()
-                        })
+                        setJumpToLine({ file: actualName, line: result.line, timestamp: Date.now() })
                         if (isNewFile) toast.success(`Jumped to file: ${actualName}`)
                     }, isNewFile ? 100 : 0)
                 } else {
@@ -433,6 +428,8 @@ function EditorPage() {
         navigate('/')
     }
 
+    const [isShareModalOpen, setIsShareModalOpen] = useState(false)
+
     return (
         <div
             className={`app ${isResizing ? 'resizing' : ''}`}
@@ -454,6 +451,7 @@ function EditorPage() {
                 pdfUrl={pdfUrl}
                 projectName={projectInfo?.name}
                 onBackToHome={handleBackToHome}
+                onShare={() => setIsShareModalOpen(true)}
             />
 
             <FileTree
@@ -480,6 +478,9 @@ function EditorPage() {
                             activeFile={activeFileName}
                             errors={compilationErrors}
                             jumpToLine={jumpToLine}
+                            projectId={projectId}
+                            userId={user?.uid}
+                            userName={user?.displayName || user?.email}
                         />
                         {isCodeLoading && (
                             <div className="editor-loading-overlay">
@@ -521,6 +522,13 @@ function EditorPage() {
                     />
                 </div>
             </div>
+
+            <ShareModal
+                isOpen={isShareModalOpen}
+                onClose={() => setIsShareModalOpen(false)}
+                projectId={projectId}
+                projectName={projectInfo?.name || 'Untitled'}
+            />
         </div>
     )
 }

@@ -47,14 +47,17 @@ server.on('upgrade', (request, socket, head) => {
 })
 
 wss.on('connection', (ws, req) => {
-    const roomName = 'latex-room'
-    console.log(`[WS] Client connected to ${roomName}`)
+    const url = new URL(req.url, `http://${req.headers.host}`)
+    const projectId = url.searchParams.get('projectId') || 'default'
+    const userId = url.searchParams.get('userId') || 'anonymous'
+
+    console.log(`[WS] Client ${userId} connected to project ${projectId}`)
 
     // Get or create room
-    if (!rooms.has(roomName)) {
-        rooms.set(roomName, new Set())
+    if (!rooms.has(projectId)) {
+        rooms.set(projectId, new Set())
     }
-    const room = rooms.get(roomName)
+    const room = rooms.get(projectId)
     room.add(ws)
 
     // Relay messages to all other clients in room
@@ -71,11 +74,11 @@ wss.on('connection', (ws, req) => {
 
     ws.on('close', () => {
         room.delete(ws)
-        console.log(`[WS] Client disconnected from ${roomName}`)
+        console.log(`[WS] Client ${userId} disconnected from ${projectId}`)
 
         // Cleanup empty rooms
         if (room.size === 0) {
-            rooms.delete(roomName)
+            rooms.delete(projectId)
         }
     })
 

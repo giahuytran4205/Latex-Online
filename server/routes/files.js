@@ -76,42 +76,67 @@ router.get('/temp/:filename', (req, res) => {
 // Apply auth middleware to remaining routes
 router.use(verifyToken)
 
-// Helper to get project path (now includes userId)
-const getProjectPath = (userId, projectId) => {
-    // Check user's projects first
-    const userPath = join(PROJECTS_DIR, userId, projectId)
-    if (existsSync(userPath)) {
-        return userPath
+// Helper to find project directory and owner across all users
+const findProjectInfo = (projectId) => {
+    const userDirs = readdirSync(PROJECTS_DIR)
+    for (const userId of userDirs) {
+        const projectPath = join(PROJECTS_DIR, userId, projectId)
+        if (existsSync(projectPath) && statSync(projectPath).isDirectory()) {
+            return { projectPath, ownerId: userId }
+        }
+    }
+    return null
+}
+
+// Helper to get project path with permission check
+const getProjectWithAuth = (req, projectId, requiredPermission = 'view') => {
+    const info = findProjectInfo(projectId)
+    if (!info) return { error: 'Project not found', status: 404 }
+
+    const { projectPath, ownerId } = info
+    const userId = req.user.uid
+
+    // Read metadata for sharing settings
+    const metadataPath = join(projectPath, '.project.json')
+    let metadata = { publicAccess: 'private', collaborators: [] }
+    if (existsSync(metadataPath)) {
+        try {
+            metadata = JSON.parse(readFileSync(metadataPath, 'utf-8'))
+        } catch (e) { }
     }
 
-    // Fallback for legacy projects without user directory
-    const legacyPath = join(PROJECTS_DIR, projectId)
-    if (existsSync(legacyPath)) {
-        return legacyPath
+    const isOwner = ownerId === userId
+    const isCollaborator = metadata.collaborators?.some(c => c.email === req.user.email)
+    const publicLevel = metadata.publicAccess // 'private', 'view', 'edit'
+
+    // Resolve actually granted permission
+    let granted = 'none'
+    if (isOwner) granted = 'owner'
+    else if (isCollaborator) granted = 'edit'
+    else if (publicLevel !== 'private') granted = publicLevel
+
+    // Check if granted meets required
+    const canRead = granted !== 'none'
+    const canWrite = granted === 'owner' || granted === 'edit'
+
+    if (requiredPermission === 'view' && !canRead) {
+        return { error: 'Access denied', status: 403 }
+    }
+    if (requiredPermission === 'edit' && !canWrite) {
+        return { error: 'Write access denied', status: 403 }
     }
 
-    // Create new project in user directory
-    mkdirSync(userPath, { recursive: true })
-    writeFileSync(join(userPath, 'main.tex'), `\\documentclass{article}
-\\usepackage[utf8]{inputenc}
-\\title{New Project}
-\\author{You}
-\\date{\\today}
-\\begin{document}
-\\maketitle
-\\section{Introduction}
-Start typing...
-\\end{document}`)
-
-    return userPath
+    return { projectPath, ownerId, granted }
 }
 
 // Get project files (recursive)
 router.get('/:projectId', (req, res) => {
     try {
-        const userId = req.user?.uid || 'dev-user'
         const { projectId } = req.params
-        const projectPath = getProjectPath(userId, projectId)
+        const auth = getProjectWithAuth(req, projectId, 'view')
+        if (auth.error) return res.status(auth.status).json({ error: auth.error })
+
+        const { projectPath } = auth
 
         // Recursively get all files
         const getAllFiles = (dir, basePath = '') => {
@@ -158,10 +183,12 @@ router.get('/:projectId', (req, res) => {
 // Get file content
 router.get('/:projectId/:filename', (req, res) => {
     try {
-        const userId = req.user?.uid || 'dev-user'
         const { projectId, filename } = req.params
+        const auth = getProjectWithAuth(req, projectId, 'view')
+        if (auth.error) return res.status(auth.status).json({ error: auth.error })
+
         const decodedFilename = decodeURIComponent(filename)
-        const filePath = join(getProjectPath(userId, projectId), decodedFilename)
+        const filePath = join(auth.projectPath, decodedFilename)
 
         if (!existsSync(filePath)) {
             return res.status(404).json({ error: 'File not found' })
@@ -177,10 +204,12 @@ router.get('/:projectId/:filename', (req, res) => {
 // Download file
 router.get('/:projectId/:filename/download', (req, res) => {
     try {
-        const userId = req.user?.uid || 'dev-user'
         const { projectId, filename } = req.params
+        const auth = getProjectWithAuth(req, projectId, 'view')
+        if (auth.error) return res.status(auth.status).json({ error: auth.error })
+
         const decodedFilename = decodeURIComponent(filename)
-        const filePath = join(getProjectPath(userId, projectId), decodedFilename)
+        const filePath = join(auth.projectPath, decodedFilename)
 
         if (!existsSync(filePath)) {
             return res.status(404).json({ error: 'File not found' })
@@ -198,11 +227,13 @@ router.get('/:projectId/:filename/download', (req, res) => {
 // Save file
 router.put('/:projectId/:filename', (req, res) => {
     try {
-        const userId = req.user?.uid || 'dev-user'
         const { projectId, filename } = req.params
+        const auth = getProjectWithAuth(req, projectId, 'edit')
+        if (auth.error) return res.status(auth.status).json({ error: auth.error })
+
         const { content } = req.body
         const decodedFilename = decodeURIComponent(filename)
-        const projectPath = getProjectPath(userId, projectId)
+        const { projectPath, ownerId } = auth
         const filePath = join(projectPath, decodedFilename)
 
         // Ensure parent directory exists
@@ -223,7 +254,7 @@ router.put('/:projectId/:filename', (req, res) => {
         }
 
         // Update project metadata
-        updateProjectTimestamp(userId, projectId)
+        updateProjectTimestamp(ownerId, projectId)
 
         res.json({ success: true, filename: decodedFilename })
     } catch (err) {
@@ -234,13 +265,14 @@ router.put('/:projectId/:filename', (req, res) => {
 // Create file or folder
 router.post('/:projectId', (req, res) => {
     try {
-        const userId = req.user?.uid || 'dev-user'
         const { projectId } = req.params
-        const { filename, content = '', overwrite = false } = req.body
+        const auth = getProjectWithAuth(req, projectId, 'edit')
+        if (auth.error) return res.status(auth.status).json({ error: auth.error })
 
+        const { filename, content = '', overwrite = false } = req.body
         if (!filename) return res.status(400).json({ error: 'Filename required' })
 
-        const projectPath = getProjectPath(userId, projectId)
+        const { projectPath, ownerId } = auth
         const filePath = join(projectPath, filename)
 
         // Check if it's a folder (ends with /)
@@ -271,7 +303,7 @@ router.post('/:projectId', (req, res) => {
         }
 
         // Update project metadata
-        updateProjectTimestamp(userId, projectId)
+        updateProjectTimestamp(ownerId, projectId)
 
         res.json({ success: true, filename })
     } catch (err) {
@@ -282,11 +314,14 @@ router.post('/:projectId', (req, res) => {
 // Delete file or folder
 router.delete('/:projectId/:filename', (req, res) => {
     try {
-        const userId = req.user?.uid || 'dev-user'
         const { projectId, filename } = req.params
+        const auth = getProjectWithAuth(req, projectId, 'edit')
+        if (auth.error) return res.status(auth.status).json({ error: auth.error })
+
         // Handle URL encoded paths (for nested files)
         const decodedFilename = decodeURIComponent(filename)
-        const filePath = join(getProjectPath(userId, projectId), decodedFilename)
+        const { projectPath, ownerId } = auth
+        const filePath = join(projectPath, decodedFilename)
 
         if (existsSync(filePath)) {
             const stats = statSync(filePath)
@@ -299,7 +334,7 @@ router.delete('/:projectId/:filename', (req, res) => {
         }
 
         // Update project metadata
-        updateProjectTimestamp(userId, projectId)
+        updateProjectTimestamp(ownerId, projectId)
 
         res.json({ success: true })
     } catch (err) {
@@ -310,10 +345,12 @@ router.delete('/:projectId/:filename', (req, res) => {
 // Rename file
 router.post('/:projectId/rename', (req, res) => {
     try {
-        const userId = req.user?.uid || 'dev-user'
         const { projectId } = req.params
+        const auth = getProjectWithAuth(req, projectId, 'edit')
+        if (auth.error) return res.status(auth.status).json({ error: auth.error })
+
         const { oldName, newName } = req.body
-        const projectPath = getProjectPath(userId, projectId)
+        const { projectPath, ownerId } = auth
         const oldPath = join(projectPath, oldName)
         const newPath = join(projectPath, newName)
 
@@ -333,7 +370,7 @@ router.post('/:projectId/rename', (req, res) => {
         renameSync(oldPath, newPath)
 
         // Update project metadata
-        updateProjectTimestamp(userId, projectId)
+        updateProjectTimestamp(ownerId, projectId)
 
         res.json({ success: true })
     } catch (err) {
@@ -344,10 +381,12 @@ router.post('/:projectId/rename', (req, res) => {
 // Duplicate file
 router.post('/:projectId/duplicate', (req, res) => {
     try {
-        const userId = req.user?.uid || 'dev-user'
         const { projectId } = req.params
+        const auth = getProjectWithAuth(req, projectId, 'edit')
+        if (auth.error) return res.status(auth.status).json({ error: auth.error })
+
         const { filename } = req.body
-        const projectPath = getProjectPath(userId, projectId)
+        const { projectPath, ownerId } = auth
         const srcPath = join(projectPath, filename)
 
         if (!existsSync(srcPath)) {
@@ -372,7 +411,7 @@ router.post('/:projectId/duplicate', (req, res) => {
         writeFileSync(destPath, content)
 
         // Update project metadata
-        updateProjectTimestamp(userId, projectId)
+        updateProjectTimestamp(ownerId, projectId)
 
         res.json({ success: true, newFilename: newName })
     } catch (err) {
@@ -383,10 +422,12 @@ router.post('/:projectId/duplicate', (req, res) => {
 // Move file (change path)
 router.post('/:projectId/move', (req, res) => {
     try {
-        const userId = req.user?.uid || 'dev-user'
         const { projectId } = req.params
+        const auth = getProjectWithAuth(req, projectId, 'edit')
+        if (auth.error) return res.status(auth.status).json({ error: auth.error })
+
         const { oldPath: oldName, newPath: newName } = req.body
-        const projectPath = getProjectPath(userId, projectId)
+        const { projectPath, ownerId } = auth
         const oldPath = join(projectPath, oldName)
         const newPath = join(projectPath, newName)
 
@@ -406,7 +447,7 @@ router.post('/:projectId/move', (req, res) => {
         renameSync(oldPath, newPath)
 
         // Update project metadata
-        updateProjectTimestamp(userId, projectId)
+        updateProjectTimestamp(ownerId, projectId)
 
         res.json({ success: true })
     } catch (err) {

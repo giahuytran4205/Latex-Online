@@ -1,4 +1,4 @@
-import { useEffect, useRef, useMemo, useCallback } from 'react'
+import { useEffect, useRef, useMemo, useCallback, useState } from 'react'
 import { EditorView, basicSetup } from 'codemirror'
 import { EditorState } from '@codemirror/state'
 import { keymap } from '@codemirror/view'
@@ -8,6 +8,12 @@ import { stex } from '@codemirror/legacy-modes/mode/stex'
 import { autocompletion, startCompletion, completionStatus, acceptCompletion } from '@codemirror/autocomplete'
 import { Decoration, gutter, GutterMarker } from '@codemirror/view'
 import { StateField, StateEffect } from '@codemirror/state'
+
+// Yjs Imports
+import * as Y from 'yjs'
+import { WebsocketProvider } from 'y-websocket'
+import { yCollab } from 'y-codemirror.next'
+
 import './Editor.css'
 
 // Error decorations
@@ -193,20 +199,38 @@ function wrapSelection(view, before, after) {
     return true
 }
 
-function Editor({ code, onChange, onCompile, activeFile, errors = [], jumpToLine }) {
+// User colors for collaboration
+const USER_COLORS = [
+    '#30bced', '#6eeb83', '#ffbc42', '#ecd444', '#ee6352',
+    '#9ac2c9', '#8acb88', '#1be7ff', '#6eeb83', '#e4ff1a',
+    '#e8aa14', '#ff5714', '#ea9ab2', '#7fb069', '#31afb4'
+]
+
+function Editor({
+    code,
+    onChange,
+    onCompile,
+    activeFile,
+    errors = [],
+    jumpToLine,
+    projectId,
+    userId,
+    userName
+}) {
     const editorRef = useRef(null)
     const viewRef = useRef(null)
     const onChangeRef = useRef(onChange)
     const onCompileRef = useRef(onCompile)
     const isInternalChange = useRef(false)
 
-    // Keep refs updated
+    const yDocRef = useRef(null)
+    const providerRef = useRef(null)
+
     useEffect(() => {
         onChangeRef.current = onChange
         onCompileRef.current = onCompile
     }, [onChange, onCompile])
 
-    // Create editor theme
     const editorTheme = useMemo(() => EditorView.theme({
         '&': {
             height: '100%',
@@ -252,11 +276,24 @@ function Editor({ code, onChange, onCompile, activeFile, errors = [], jumpToLine
             paddingLeft: '4px',
             display: 'block',
         },
+        '.cm-ySelection': {
+            opacity: 0.5
+        },
+        '.cm-ySelectionInfo': {
+            fontSize: '0.7rem',
+            padding: '2px 4px',
+            borderRadius: '4px',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            backgroundColor: 'var(--bg-panel)',
+            color: 'var(--text-color)',
+            border: '1px solid var(--border-color)',
+            zIndex: 10
+        }
     }), [])
 
-    // Create keybindings
     const keybindings = useMemo(() => keymap.of([
-        // Tab - accept completion if open, otherwise indent
         {
             key: 'Tab',
             run: (view) => {
@@ -284,30 +321,87 @@ function Editor({ code, onChange, onCompile, activeFile, errors = [], jumpToLine
         },
     ]), [])
 
-    // Initialize editor ONCE
     useEffect(() => {
-        if (!editorRef.current || viewRef.current) return
+        if (!projectId || !activeFile) {
+            if (providerRef.current) {
+                providerRef.current.disconnect()
+                providerRef.current = null
+            }
+            if (yDocRef.current) {
+                yDocRef.current.destroy()
+                yDocRef.current = null
+            }
+            return
+        }
+
+        const ydoc = new Y.Doc()
+        const ytext = ydoc.getText('codemirror')
+
+        if (code && ytext.length === 0) {
+            ytext.insert(0, code)
+        }
+
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+        const host = window.location.host
+        const wsUrl = `${protocol}//${host}/ws?projectId=${projectId}&activeFile=${encodeURIComponent(activeFile)}&userId=${userId || 'anon'}`
+
+        const provider = new WebsocketProvider(wsUrl, `${projectId}-${activeFile}`, ydoc)
+
+        const color = USER_COLORS[Math.floor(Math.random() * USER_COLORS.length)]
+        provider.awareness.setLocalStateField('user', {
+            name: userName || 'Anonymous',
+            color: color,
+            colorLight: color + '33'
+        })
+
+        yDocRef.current = ydoc
+        providerRef.current = provider
+
+        console.log(`[Collab] Connected to ${projectId}/${activeFile}`)
+
+        return () => {
+            provider.disconnect()
+            ydoc.destroy()
+            yDocRef.current = null
+            providerRef.current = null
+        }
+    }, [projectId, activeFile, userId, userName])
+
+    useEffect(() => {
+        if (!editorRef.current) return
+
+        if (viewRef.current) {
+            viewRef.current.destroy()
+            viewRef.current = null
+        }
+
+        const extensions = [
+            basicSetup,
+            keybindings,
+            StreamLanguage.define(stex),
+            editorTheme,
+            autocompletion({
+                override: [latexCompletions],
+                activateOnTyping: true,
+                maxRenderedOptions: 15,
+            }),
+            EditorView.updateListener.of((update) => {
+                if (!projectId && update.docChanged && !isInternalChange.current) {
+                    onChangeRef.current?.(update.state.doc.toString())
+                }
+            }),
+            errorField,
+            errorGutter,
+        ]
+
+        if (projectId && yDocRef.current && providerRef.current) {
+            const ytext = yDocRef.current.getText('codemirror')
+            extensions.push(yCollab(ytext, providerRef.current.awareness))
+        }
 
         const state = EditorState.create({
-            doc: code || '',
-            extensions: [
-                basicSetup,
-                keybindings,
-                StreamLanguage.define(stex),
-                editorTheme,
-                autocompletion({
-                    override: [latexCompletions],
-                    activateOnTyping: true,
-                    maxRenderedOptions: 15,
-                }),
-                EditorView.updateListener.of((update) => {
-                    if (update.docChanged && !isInternalChange.current) {
-                        onChangeRef.current?.(update.state.doc.toString())
-                    }
-                }),
-                errorField,
-                errorGutter,
-            ],
+            doc: (projectId && yDocRef.current) ? yDocRef.current.getText('codemirror').toString() : (code || ''),
+            extensions
         })
 
         const view = new EditorView({
@@ -320,15 +414,13 @@ function Editor({ code, onChange, onCompile, activeFile, errors = [], jumpToLine
             view.destroy()
             viewRef.current = null
         }
-    }, [editorTheme, keybindings])
+    }, [editorTheme, keybindings, projectId, activeFile, yDocRef.current, providerRef.current])
 
-    // Update content when code prop changes (fast update, no recreate)
     useEffect(() => {
-        if (!viewRef.current) return
+        if (!viewRef.current || projectId) return
 
         const currentContent = viewRef.current.state.doc.toString()
 
-        // Only update if actually different
         if (code !== currentContent) {
             isInternalChange.current = true
             viewRef.current.dispatch({
@@ -340,9 +432,8 @@ function Editor({ code, onChange, onCompile, activeFile, errors = [], jumpToLine
             })
             isInternalChange.current = false
         }
-    }, [code])
+    }, [code, projectId])
 
-    // Update error decorations
     useEffect(() => {
         if (!viewRef.current || !activeFile) return
 
@@ -353,7 +444,6 @@ function Editor({ code, onChange, onCompile, activeFile, errors = [], jumpToLine
             if (err.line >= 1 && err.line <= viewRef.current.state.doc.lines) {
                 try {
                     const line = viewRef.current.state.doc.line(err.line)
-                    // Add both line decoration and gutter marker
                     deco.push(errorMark.range(line.from))
                     deco.push(errorGutterMarker.range(line.from))
                 } catch (e) {
@@ -362,7 +452,6 @@ function Editor({ code, onChange, onCompile, activeFile, errors = [], jumpToLine
             }
         }
 
-        // Sort decorations by position (required for Decoration.set)
         deco.sort((a, b) => a.from - b.from)
 
         viewRef.current.dispatch({
@@ -372,44 +461,29 @@ function Editor({ code, onChange, onCompile, activeFile, errors = [], jumpToLine
 
     const lastJumpRef = useRef(null)
 
-    // Handle SyncTeX jump
     useEffect(() => {
         if (!viewRef.current || !jumpToLine) return
 
-        // Prevent jumping multiple times for the same event
         if (lastJumpRef.current === jumpToLine.timestamp) return
 
-        const { line, file, column } = jumpToLine
+        const { line, file } = jumpToLine
 
         if (file && file !== activeFile) return
-
-        // Wait until the editor's content actually matches the code prop
-        // This ensures we aren't jumping in a stale document from a previous file
         if (viewRef.current.state.doc.toString() !== code) return
 
-        // Only jump if we have the correct document content
         if (line >= 1 && line <= viewRef.current.state.doc.lines) {
             const lineInfo = viewRef.current.state.doc.line(line)
 
-            // SyncTeX columns are usually 1-indexed. CodeMirror is 0-indexed.
-            // If column is provided and > 0, we try to move to that position.
-            let pos = lineInfo.from
-            if (column && column > 0) {
-                // Limit to line length to avoid overflow
-                pos = Math.min(lineInfo.from + column - 1, lineInfo.to)
-            }
-
             viewRef.current.dispatch({
-                selection: { anchor: pos, head: pos },
+                selection: { anchor: lineInfo.from, head: lineInfo.from },
                 scrollIntoView: true,
                 userEvent: 'select'
             })
             viewRef.current.focus()
             lastJumpRef.current = jumpToLine.timestamp
         }
-    }, [jumpToLine, code, activeFile]) // Re-run when code or activeFile updates
+    }, [jumpToLine, code, activeFile])
 
-    // Get display filename
     const displayName = activeFile ? activeFile.split('/').pop() : 'main.tex'
 
     return (

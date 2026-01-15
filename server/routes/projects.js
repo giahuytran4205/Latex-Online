@@ -223,26 +223,47 @@ router.get('/storage', (req, res) => {
     }
 })
 
+// Helper to find project directory across all users
+const findProjectDir = (projectId) => {
+    const userDirs = readdirSync(PROJECTS_DIR)
+    for (const userId of userDirs) {
+        const projectPath = join(PROJECTS_DIR, userId, projectId)
+        if (existsSync(projectPath) && statSync(projectPath).isDirectory()) {
+            return { projectPath, ownerId: userId }
+        }
+    }
+    return null
+}
+
 // Get single project info
 router.get('/:projectId', (req, res) => {
     try {
         const userId = req.user.uid
         const { projectId } = req.params
-        const projectPath = join(PROJECTS_DIR, userId, projectId)
 
-        if (!existsSync(projectPath)) {
+        const projectInfo = findProjectDir(projectId)
+
+        if (!projectInfo) {
             return res.status(404).json({ error: 'Project not found' })
         }
 
+        const { projectPath, ownerId } = projectInfo
         const metadataPath = join(projectPath, '.project.json')
-        let metadata = { name: projectId, template: 'blank' }
+        let metadata = { name: projectId, template: 'blank', publicAccess: 'private', collaborators: [] }
 
         if (existsSync(metadataPath)) {
             try {
                 metadata = JSON.parse(readFileSync(metadataPath, 'utf-8'))
-            } catch (e) {
-                // Use default
-            }
+            } catch (e) { }
+        }
+
+        // Permission check
+        const isOwner = ownerId === userId
+        const isCollaborator = metadata.collaborators?.some(c => c.email === req.user.email)
+        const hasPublicAccess = metadata.publicAccess !== 'private'
+
+        if (!isOwner && !isCollaborator && !hasPublicAccess) {
+            return res.status(403).json({ error: 'Access denied' })
         }
 
         const stat = statSync(projectPath)
@@ -254,7 +275,10 @@ router.get('/:projectId', (req, res) => {
             createdAt: metadata.createdAt || stat.birthtime,
             updatedAt: metadata.updatedAt || stat.mtime,
             size: getDirectorySize(projectPath),
-            owner: userId
+            owner: ownerId,
+            publicAccess: metadata.publicAccess,
+            collaborators: metadata.collaborators,
+            permission: isOwner ? 'owner' : (isCollaborator ? 'edit' : (hasPublicAccess ? metadata.publicAccess : 'none'))
         })
     } catch (error) {
         console.error('[Projects] Error getting project:', error)
@@ -377,24 +401,44 @@ router.post('/:projectId/duplicate', (req, res) => {
     }
 })
 
-// Share project (placeholder - would need more complex implementation)
+// Share project
 router.post('/:projectId/share', (req, res) => {
     try {
         const userId = req.user.uid
         const { projectId } = req.params
-        const { email, permission = 'view' } = req.body
+        const { publicAccess, collaborators } = req.body
 
-        const projectPath = join(PROJECTS_DIR, userId, projectId)
-        if (!existsSync(projectPath)) {
+        const projectInfo = findProjectDir(projectId)
+        if (!projectInfo) {
             return res.status(404).json({ error: 'Project not found' })
         }
 
-        // TODO: Implement actual sharing logic with Firestore
-        console.log(`[Projects] Share request: ${projectId} with ${email} (${permission})`)
+        const { projectPath, ownerId } = projectInfo
+
+        // Only owner can change sharing settings
+        if (ownerId !== userId) {
+            return res.status(403).json({ error: 'Only project owner can change sharing settings' })
+        }
+
+        const metadataPath = join(projectPath, '.project.json')
+        let metadata = {}
+
+        if (existsSync(metadataPath)) {
+            metadata = JSON.parse(readFileSync(metadataPath, 'utf-8'))
+        }
+
+        // Update settings
+        if (publicAccess !== undefined) metadata.publicAccess = publicAccess
+        if (collaborators !== undefined) metadata.collaborators = collaborators
+
+        writeFileSync(metadataPath, JSON.stringify(metadata, null, 2))
+
+        console.log(`[Projects] Updated sharing for ${projectId}: Access=${metadata.publicAccess}, Collabs=${metadata.collaborators?.length}`)
 
         res.json({
             success: true,
-            message: `Project shared with ${email}`
+            publicAccess: metadata.publicAccess,
+            collaborators: metadata.collaborators
         })
     } catch (error) {
         console.error('[Projects] Error sharing project:', error)
