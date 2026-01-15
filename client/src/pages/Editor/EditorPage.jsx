@@ -6,6 +6,7 @@ import Preview from '../../components/Preview/Preview'
 import Toolbar from '../../components/Toolbar/Toolbar'
 import FileTree from '../../components/FileTree/FileTree'
 import Console from '../../components/Console/Console'
+import ShareModal from '../../components/ShareModal/ShareModal'
 import { useToast } from '../../components/Toast/Toast'
 import { useConfirm } from '../../components/ConfirmDialog/ConfirmDialog'
 import {
