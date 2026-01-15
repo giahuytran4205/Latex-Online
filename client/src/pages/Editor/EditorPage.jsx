@@ -131,6 +131,9 @@ function EditorPage() {
         }
         prevActiveFileRef.current = activeFileName
 
+        // Clear content immediately while loading to prevent "bleeding" from previous file
+        setCode(null)
+
         // Check cache first
         if (fileCacheRef.current.has(activeFileName)) {
             const cachedContent = fileCacheRef.current.get(activeFileName)
@@ -473,17 +476,19 @@ function EditorPage() {
             <div className="content-area" ref={contentAreaRef}>
                 <div className="main-content" ref={mainContentRef}>
                     <div className={`editor-container ${isCodeLoading ? 'editor-container--loading' : ''}`}>
-                        <Editor
-                            code={code}
-                            onChange={setCode}
-                            onCompile={handleCompile}
-                            activeFile={activeFileName}
-                            errors={compilationErrors}
-                            jumpToLine={jumpToLine}
-                            projectId={projectId}
-                            userId={user?.uid}
-                            userName={user?.displayName || user?.email}
-                        />
+                        {code !== null && (
+                            <Editor
+                                code={code}
+                                onChange={setCode}
+                                onCompile={handleCompile}
+                                activeFile={activeFileName}
+                                errors={compilationErrors}
+                                jumpToLine={jumpToLine}
+                                projectId={projectId}
+                                userId={user?.uid}
+                                userName={user?.displayName || user?.email}
+                            />
+                        )}
                         {isCodeLoading && (
                             <div className="editor-loading-overlay">
                                 <div className="loading-spinner"></div>
