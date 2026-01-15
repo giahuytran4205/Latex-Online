@@ -100,6 +100,7 @@ function EditorPage() {
     const lastSavedFileRef = useRef(activeFileName)
     const loadingFileRef = useRef(false)
     const prevActiveFileRef = useRef(null)
+    const isSwitchingRef = useRef(false)
 
     // Save current content to cache before switching files
     const saveToCache = useCallback((filename, content) => {
@@ -122,38 +123,42 @@ function EditorPage() {
 
     // Unified file switch handler to prevent race conditions
     const handleFileSelect = useCallback((filename) => {
-        if (!filename || filename === activeFileName) return
-        if (filename.endsWith('/')) return // Skip folders
+        if (!filename || filename === activeFileName || isSwitchingRef.current) return
+        if (filename.endsWith('/')) return
+
+        console.log(`[Editor] Switching to: ${filename}`)
+        isSwitchingRef.current = true
 
         // 1. Save current content to cache
         saveToCache(activeFileName, code)
 
-        // 2. Clear content immediately so Editor unmounts
-        setCode(null)
+        // 2. Reset states synchronously
         setLoadedFileName(null)
+        setCode(null)
+        setIsCodeLoading(true)
 
-        // 3. Update active filename which triggers the fetch/load effect
+        // 3. Update active filename
         setActiveFileName(filename)
     }, [activeFileName, code, saveToCache])
 
     // Load file content when active file changes
     useEffect(() => {
-        if (!activeFileName || code !== null) return
+        // Only run if code is null (set by handleFileSelect) and we are in switching mode
+        if (!activeFileName || code !== null || !isSwitchingRef.current) return
 
-        // Check cache first
-        if (fileCacheRef.current.has(activeFileName)) {
-            const cachedContent = fileCacheRef.current.get(activeFileName)
-            setCode(cachedContent)
-            setLoadedFileName(activeFileName)
-            lastSavedFileRef.current = activeFileName
-            return
-        }
-
-        // Fetch from server
-        setIsCodeLoading(true)
-        loadingFileRef.current = true
-        const fetchContent = async () => {
+        const load = async () => {
             try {
+                // Check cache first
+                if (fileCacheRef.current.has(activeFileName)) {
+                    const cachedContent = fileCacheRef.current.get(activeFileName)
+                    setCode(cachedContent)
+                    setLoadedFileName(activeFileName)
+                    lastSavedFileRef.current = activeFileName
+                    return
+                }
+
+                // Fetch from server
+                loadingFileRef.current = true
                 const data = await getFileContent(projectId, activeFileName)
                 setCode(data.content || '')
                 setLoadedFileName(activeFileName)
@@ -167,9 +172,10 @@ function EditorPage() {
             } finally {
                 loadingFileRef.current = false
                 setIsCodeLoading(false)
+                isSwitchingRef.current = false
             }
         }
-        fetchContent()
+        load()
     }, [activeFileName, projectId, code, saveToCache])
 
     // Update cache when code changes
