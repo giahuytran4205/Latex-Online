@@ -18,9 +18,6 @@ function Preview({ pdfUrl, onSyncTeX }) {
     const [isSidebarOpen, setIsSidebarOpen] = useState(false)
     const [sidebarView, setSidebarView] = useState('thumbnails') // 'thumbnails' | 'outline'
 
-    // State for virtualization
-    const [pageHeight, setPageHeight] = useState(800)
-
     // Callback when document loads successfully
     function onDocumentLoadSuccess(pdf) {
         setNumPages(pdf.numPages)
@@ -34,23 +31,15 @@ function Preview({ pdfUrl, onSyncTeX }) {
             console.error('Error retrieving outline:', err)
             setOutline(null)
         })
-
-        // Estimate page height from first page for virtualization placeholders
-        pdf.getPage(1).then(page => {
-            const viewport = page.getViewport({ scale: scale })
-            setPageHeight(viewport.height)
-        }).catch(e => console.error("Error getting page 1 info", e))
     }
 
-    // Update page height when scale changes
-    useEffect(() => {
-        if (pdfDocument) {
-            pdfDocument.getPage(1).then(page => {
-                const viewport = page.getViewport({ scale: scale })
-                setPageHeight(viewport.height)
-            })
-        }
-    }, [scale, pdfDocument])
+    // Callback for loading errors
+    function onDocumentLoadError(error) {
+        console.error('Error loading PDF Document:', error)
+        setNumPages(0)
+        setPdfDocument(null)
+        setOutline(null)
+    }
 
     // Scroll helper
     const scrollToPage = useCallback((pageNum) => {
@@ -100,7 +89,7 @@ function Preview({ pdfUrl, onSyncTeX }) {
             })
         }, {
             root: container,
-            threshold: 0.1 // Lower threshold for better detection
+            threshold: 0.3
         })
 
         // Slight delay to ensure DOM is ready
@@ -274,41 +263,28 @@ function Preview({ pdfUrl, onSyncTeX }) {
                             loading={<div className="preview-loading"><div className="loading-spinner"></div></div>}
                             className="pdf-document"
                         >
-                            {Array.from({ length: numPages }, (_, i) => {
-                                const pageNum = i + 1;
-                                // Simple virtualization: only render pages close to current page
-                                const isVisible = Math.abs(pageNum - currentPage) < 10;
-
-                                return (
-                                    <div
-                                        key={`page-${pageNum}`}
-                                        className="page-wrapper"
-                                        data-page-number={pageNum}
-                                        style={{
-                                            margin: '20px auto',
-                                            width: 'fit-content',
-                                            minHeight: isVisible ? 'auto' : `${pageHeight}px`,
-                                            boxShadow: isVisible ? '0 4px 15px rgba(0,0,0,0.4)' : 'none',
-                                            backgroundColor: isVisible ? 'white' : 'transparent'
-                                        }}
-                                        onDoubleClick={(e) => handleDoubleClick(e, pageNum)}
-                                    >
-                                        {isVisible && (
-                                            <Page
-                                                pageNumber={pageNum}
-                                                scale={scale}
-                                                renderTextLayer={true}
-                                                renderAnnotationLayer={true}
-                                                loading={
-                                                    <div style={{ height: pageHeight, width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                                        <div className="loading-spinner"></div>
-                                                    </div>
-                                                }
-                                            />
-                                        )}
-                                    </div>
-                                )
-                            })}
+                            {Array.from({ length: numPages }, (_, i) => (
+                                <div
+                                    key={`page-${i + 1}`}
+                                    className="page-wrapper"
+                                    data-page-number={i + 1}
+                                    style={{
+                                        margin: '20px auto',
+                                        width: 'fit-content',
+                                        boxShadow: '0 4px 15px rgba(0,0,0,0.4)',
+                                        backgroundColor: 'white'
+                                    }}
+                                    onDoubleClick={(e) => handleDoubleClick(e, i + 1)}
+                                >
+                                    <Page
+                                        pageNumber={i + 1}
+                                        scale={scale}
+                                        renderTextLayer={true}
+                                        renderAnnotationLayer={true}
+                                        loading={null}
+                                    />
+                                </div>
+                            ))}
                         </Document>
                     )}
                 </div>
