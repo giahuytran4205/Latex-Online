@@ -306,7 +306,8 @@ function EditorPage() {
         try {
             const result = await resolveSyncTeX(projectId, page, x, y)
             if (result.success) {
-                const targetFile = result.file
+                // Normalize path: SyncTeX often returns ./filename.tex
+                const targetFile = result.file.replace(/^\.\//, '')
 
                 // Check if file exists in our project files list
                 const fileExists = files.some(f => f.name === targetFile)
