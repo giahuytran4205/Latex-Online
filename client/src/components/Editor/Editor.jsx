@@ -215,16 +215,15 @@ function Editor({
     jumpToLine,
     projectId,
     userId,
-    userName
+    userName,
+    yDoc,
+    awareness
 }) {
     const editorRef = useRef(null)
     const viewRef = useRef(null)
     const onChangeRef = useRef(onChange)
     const onCompileRef = useRef(onCompile)
     const isInternalChange = useRef(false)
-
-    const yDocRef = useRef(null)
-    const providerRef = useRef(null)
 
     useEffect(() => {
         onChangeRef.current = onChange
@@ -324,31 +323,7 @@ function Editor({
     useEffect(() => {
         if (!editorRef.current) return
 
-        let workspace = { ydoc: null, provider: null, view: null }
-
-        // 1. Setup Yjs
-        if (projectId && activeFile) {
-            const ydoc = new Y.Doc()
-            const ytext = ydoc.getText('codemirror')
-            if (code && ytext.length === 0) ytext.insert(0, code)
-
-            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-            const host = window.location.host
-            const wsUrl = `${protocol}//${host}/ws?projectId=${projectId}&activeFile=${encodeURIComponent(activeFile)}&userId=${userId || 'anon'}`
-
-            const provider = new WebsocketProvider(wsUrl, `${projectId}-${activeFile}`, ydoc)
-            const color = USER_COLORS[Math.floor(Math.random() * USER_COLORS.length)]
-            provider.awareness.setLocalStateField('user', {
-                name: userName || 'Anonymous',
-                color: color,
-                colorLight: color + '33'
-            })
-
-            workspace.ydoc = ydoc
-            workspace.provider = provider
-        }
-
-        // 2. Setup CodeMirror
+        // Setup CodeMirror
         const extensions = [
             basicSetup,
             keybindings,
@@ -356,6 +331,15 @@ function Editor({
             editorTheme,
             autocompletion({ override: [latexCompletions], activateOnTyping: true, maxRenderedOptions: 15 }),
             EditorView.updateListener.of((update) => {
+                // Track cursor position in awareness
+                if (update.selectionSet && awareness) {
+                    const pos = update.state.selection.main.head
+                    awareness.setLocalStateField('user', {
+                        ...awareness.getLocalState().user,
+                        cursor: pos
+                    })
+                }
+
                 if (!projectId && update.docChanged && !isInternalChange.current) {
                     onChangeRef.current?.(update.state.doc.toString())
                 }
@@ -364,29 +348,32 @@ function Editor({
             errorGutter,
         ]
 
-        if (workspace.ydoc && workspace.provider) {
-            const ytext = workspace.ydoc.getText('codemirror')
-            extensions.push(yCollab(ytext, workspace.provider.awareness))
+        if (yDoc && awareness && activeFile) {
+            // Use file-specific text branch
+            const ytext = yDoc.getText(activeFile)
+            extensions.push(yCollab(ytext, awareness))
+
+            // Initial content if empty
+            if (code && ytext.length === 0) {
+                ytext.insert(0, code)
+            }
         }
 
         const view = new EditorView({
             state: EditorState.create({
-                doc: workspace.ydoc ? workspace.ydoc.getText('codemirror').toString() : (code || ''),
+                doc: yDoc && activeFile ? yDoc.getText(activeFile).toString() : (code || ''),
                 extensions
             }),
             parent: editorRef.current,
         })
 
-        workspace.view = view
         viewRef.current = view
 
         return () => {
-            if (workspace.view) workspace.view.destroy()
-            if (workspace.provider) workspace.provider.disconnect()
-            if (workspace.ydoc) workspace.ydoc.destroy()
+            if (view) view.destroy()
             viewRef.current = null
         }
-    }, [projectId, activeFile, userId, userName, editorTheme, keybindings])
+    }, [yDoc, awareness, activeFile, editorTheme, keybindings])
 
     useEffect(() => {
         if (!viewRef.current || projectId) return
@@ -438,12 +425,25 @@ function Editor({
 
         if (lastJumpRef.current === jumpToLine.timestamp) return
 
-        const { line, file } = jumpToLine
+        const { line, file, cursor, isUserJump } = jumpToLine
 
         if (file && file !== activeFile) return
-        if (viewRef.current.state.doc.toString() !== code) return
 
-        if (line >= 1 && line <= viewRef.current.state.doc.lines) {
+        // Skip code match check for user jump as it might be mid-sync
+        if (!isUserJump && viewRef.current.state.doc.toString() !== code) return
+
+        if (isUserJump && cursor !== undefined) {
+            // Jump by cursor index (for collaborator jump)
+            const safePos = Math.min(cursor, viewRef.current.state.doc.length)
+            viewRef.current.dispatch({
+                selection: { anchor: safePos, head: safePos },
+                scrollIntoView: true,
+                userEvent: 'select'
+            })
+            viewRef.current.focus()
+            lastJumpRef.current = jumpToLine.timestamp
+        } else if (line >= 1 && line <= viewRef.current.state.doc.lines) {
+            // Jump by line number (existing logic)
             const lineInfo = viewRef.current.state.doc.line(line)
 
             viewRef.current.dispatch({

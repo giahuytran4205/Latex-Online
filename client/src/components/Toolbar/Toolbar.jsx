@@ -14,6 +14,7 @@ function Toolbar({
     onRenameProject,
     onBackToHome,
     onShare,
+    onJumpToUser,
 }) {
     const [isEditing, setIsEditing] = useState(false)
     const [newName, setNewName] = useState(projectName || '')
@@ -98,19 +99,28 @@ function Toolbar({
                 {/* Collaborators */}
                 {collaborators.length > 0 && (
                     <div className="collaborators">
-                        {collaborators.slice(0, 3).map((user, i) => (
-                            <div
-                                key={i}
-                                className="collaborator-avatar"
-                                style={{ backgroundColor: user.color }}
-                                title={user.name}
-                            >
-                                {user.name[0]}
-                            </div>
-                        ))}
-                        {collaborators.length > 3 && (
-                            <div className="collaborator-avatar" style={{ backgroundColor: '#64748b' }}>
-                                +{collaborators.length - 3}
+                        {collaborators
+                            .filter(collab => !collab.isSelf)
+                            .slice(0, 5)
+                            .map((collab, i) => (
+                                <div
+                                    key={i}
+                                    className="collaborator-avatar"
+                                    style={{
+                                        border: `2px solid ${collab.color}`,
+                                        cursor: 'pointer'
+                                    }}
+                                    title={`${collab.name} ${collab.activeFile ? `(in ${collab.activeFile})` : '(connecting...)'}`}
+                                    onClick={() => onJumpToUser?.(collab)}
+                                >
+                                    <span style={{ color: collab.color, fontWeight: 'bold' }}>
+                                        {collab.name[0].toUpperCase()}
+                                    </span>
+                                </div>
+                            ))}
+                        {collaborators.filter(c => !c.isSelf).length > 5 && (
+                            <div className="collaborator-avatar" style={{ backgroundColor: 'var(--bg-tertiary)' }}>
+                                <span style={{ fontSize: '0.7rem' }}>+{collaborators.filter(c => !c.isSelf).length - 5}</span>
                             </div>
                         )}
                     </div>

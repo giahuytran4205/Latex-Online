@@ -21,6 +21,7 @@ import { useProject } from '../../hooks/useProject'
 import { useFileEditor } from '../../hooks/useFileEditor'
 import { useCompiler } from '../../hooks/useCompiler'
 import { useAutoSave } from '../../hooks/useAutoSave'
+import { useCollaboration } from '../../hooks/useCollaboration'
 
 import './EditorPage.css'
 
@@ -35,7 +36,7 @@ function EditorPage() {
     const { sidebarWidth, editorWidth, consoleHeight, isResizing, handleMouseDown } = useResizable()
 
     // 2. Project & Files List
-    const { projectInfo, setProjectInfo, files, isLoading, collaborators, refreshFiles } = useProject(projectId)
+    const { projectInfo, setProjectInfo, files, isLoading, collaborators: projectCollaborators, refreshFiles } = useProject(projectId)
 
     // 3. File Editing Content
     const {
@@ -62,7 +63,10 @@ function EditorPage() {
         compile
     } = useCompiler(projectId)
 
-    // 5. Auto-save
+    // 5. Collaboration
+    const { yDoc, collaborators: liveCollaborators, awareness } = useCollaboration(projectId, user?.uid, user?.displayName || user?.email, activeFileName)
+
+    // 6. Auto-save
     useAutoSave(projectId, activeFileName, code, triggerSave, isCodeLoading, isLoading)
 
     // UI States
@@ -146,6 +150,22 @@ function EditorPage() {
         } catch (err) { console.error(err) }
     }
 
+    const handleJumpToUser = useCallback((collab) => {
+        if (!collab || collab.isSelf) return
+        if (collab.activeFile && collab.activeFile !== activeFileName) {
+            handleFileSelect(collab.activeFile)
+            // The Editor will handle jumping to their position once it loads
+        }
+        // If in same file, we'll signal the Editor to jump
+        setJumpToLine({
+            file: collab.activeFile,
+            cursor: collab.cursor, // We'll update useCollaboration to track this
+            userId: collab.id,
+            timestamp: Date.now(),
+            isUserJump: true
+        })
+    }, [activeFileName, handleFileSelect])
+
     const onUploadFile = async (name, content, skipReload) => {
         const success = await handleUploadFile(name, content, skipReload)
         if (success && !skipReload) await refreshFiles()
@@ -196,10 +216,11 @@ function EditorPage() {
                 isCompiling={isCompiling}
                 theme={theme}
                 onThemeChange={setTheme}
-                collaborators={collaborators}
                 pdfUrl={pdfUrl}
                 projectName={projectInfo?.name}
                 onRenameProject={handleRenameProject}
+                collaborators={liveCollaborators}
+                onJumpToUser={handleJumpToUser}
                 onBackToHome={() => navigate('/')}
                 onShare={() => setIsShareModalOpen(true)}
             />
@@ -234,6 +255,8 @@ function EditorPage() {
                                 projectId={projectId}
                                 userId={user?.uid}
                                 userName={user?.displayName || user?.email}
+                                yDoc={yDoc}
+                                awareness={awareness}
                             />
                         )}
                         {isCodeLoading && (
