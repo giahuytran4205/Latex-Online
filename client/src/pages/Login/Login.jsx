@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate, Navigate } from 'react-router-dom'
+import { useNavigate, Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import './Login.css'
 
@@ -10,6 +10,9 @@ function Login() {
     const [isLoading, setIsLoading] = useState(false)
     const { login, isAuthenticated, loading } = useAuth()
     const navigate = useNavigate()
+    const location = useLocation()
+
+    const from = location.state?.from?.pathname + (location.state?.from?.search || '') || '/'
 
     // Show loading screen while checking auth status
     if (loading) {
@@ -23,7 +26,7 @@ function Login() {
 
     // Redirect if already logged in
     if (isAuthenticated) {
-        return <Navigate to="/" replace />
+        return <Navigate to={from} replace />
     }
 
     const handleSubmit = async (e) => {
@@ -34,7 +37,7 @@ function Login() {
         const result = await login(email, password)
 
         if (result.success) {
-            navigate('/')
+            navigate(from, { replace: true })
         } else {
             setError(result.error)
         }

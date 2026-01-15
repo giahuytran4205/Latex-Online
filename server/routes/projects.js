@@ -117,7 +117,27 @@ Write your conclusions.
 \\end{document}`
 }
 
-// Apply auth middleware to all routes
+// Resolve shareId to projectId - PUBLIC
+router.get('/resolve/:shareId', (req, res) => {
+    try {
+        const { shareId } = req.params
+        const info = findProjectByShareId(shareId)
+
+        if (!info) {
+            return res.status(404).json({ error: 'Share link invalid or expired' })
+        }
+
+        // We return the projectId so the frontend can navigate
+        res.json({
+            projectId: info.projectId,
+            ownerId: info.ownerId
+        })
+    } catch (error) {
+        res.status(500).json({ error: error.message })
+    }
+})
+
+// Apply auth middleware to all routes below
 router.use(verifyToken)
 
 // Get all projects for user
@@ -231,17 +251,18 @@ router.get('/:projectId', (req, res) => {
             return res.status(auth.status).json({ error: auth.error })
         }
 
-        const { projectPath, ownerId, granted } = auth
-        const metadataPath = join(projectPath, '.project.json')
-        let metadata = { name: projectId, template: 'blank', publicAccess: 'private', collaborators: [] }
+        const { projectPath, ownerId, granted, metadata } = auth
+        const stat = statSync(projectPath)
 
-        if (existsSync(metadataPath)) {
-            try {
-                metadata = JSON.parse(readFileSync(metadataPath, 'utf-8'))
-            } catch (e) { }
+        // Ensure shareId exists in metadata and mapping
+        if (!metadata.shareId) {
+            metadata.shareId = uuidv4()
+            const metadataPath = join(projectPath, '.project.json')
+            writeFileSync(metadataPath, JSON.stringify(metadata, null, 2))
         }
 
-        const stat = statSync(projectPath)
+        // Always ensure mapping is registered
+        registerShareMapping(metadata.shareId, projectId, ownerId)
 
         res.json({
             id: projectId,
@@ -251,6 +272,7 @@ router.get('/:projectId', (req, res) => {
             updatedAt: metadata.updatedAt || stat.mtime,
             size: getDirectorySize(projectPath),
             owner: ownerId,
+            shareId: metadata.shareId,
             publicAccess: metadata.publicAccess,
             collaborators: metadata.collaborators,
             permission: granted
@@ -451,6 +473,12 @@ router.post('/:projectId/share', (req, res) => {
         if (publicAccess !== undefined) metadata.publicAccess = publicAccess
         if (collaborators !== undefined) metadata.collaborators = collaborators
 
+        // Ensure shareId exists even when just updating share settings
+        if (!metadata.shareId) {
+            metadata.shareId = uuidv4()
+            registerShareMapping(metadata.shareId, projectId, ownerId)
+        }
+
         writeFileSync(metadataPath, JSON.stringify(metadata, null, 2))
 
         console.log(`[Projects] Updated sharing for ${projectId}: Access=${metadata.publicAccess}, Collabs=${metadata.collaborators?.length}`)
@@ -458,7 +486,8 @@ router.post('/:projectId/share', (req, res) => {
         res.json({
             success: true,
             publicAccess: metadata.publicAccess,
-            collaborators: metadata.collaborators
+            collaborators: metadata.collaborators,
+            shareId: metadata.shareId
         })
     } catch (error) {
         console.error('[Projects] Error sharing project:', error)
@@ -487,26 +516,6 @@ function getDirectorySize(dirPath) {
     }
     return size
 }
-
-// Resolve shareId to projectId
-router.get('/resolve/:shareId', (req, res) => {
-    try {
-        const { shareId } = req.params
-        const info = findProjectByShareId(shareId)
-
-        if (!info) {
-            return res.status(404).json({ error: 'Share link invalid or expired' })
-        }
-
-        // We return the projectId so the frontend can navigate
-        res.json({
-            projectId: info.projectId,
-            ownerId: info.ownerId
-        })
-    } catch (error) {
-        res.status(500).json({ error: error.message })
-    }
-})
 
 export default router
 

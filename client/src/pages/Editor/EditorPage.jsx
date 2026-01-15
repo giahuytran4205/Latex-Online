@@ -41,7 +41,7 @@ function EditorPage() {
     const { sidebarWidth, editorWidth, consoleHeight, isResizing, handleMouseDown } = useResizable()
 
     // 2. Project & Files List
-    const { projectInfo, setProjectInfo, files, isLoading, collaborators: projectCollaborators, refreshFiles } = useProject(projectId, sid)
+    const { projectInfo, setProjectInfo, files, isLoading, error, collaborators: projectCollaborators, refreshFiles } = useProject(projectId, sid)
 
     // 3. File Editing Content
     const {
@@ -83,6 +83,20 @@ function EditorPage() {
     const [consoleOpen, setConsoleOpen] = useState(false)
     const [isShareModalOpen, setIsShareModalOpen] = useState(false)
     const [jumpToLine, setJumpToLine] = useState(null)
+
+    // Handle Access Denied / Error
+    useEffect(() => {
+        if (error) {
+            confirm({
+                title: 'Access Denied',
+                message: 'You do not have permission to access this project or it does not exist.',
+                confirmText: 'OK',
+                showCancel: false
+            }).then(() => {
+                navigate('/')
+            })
+        }
+    }, [error, confirm, navigate])
 
     // Ref handlers for child actions
     const handleAddFile = async (name) => {
@@ -303,6 +317,7 @@ function EditorPage() {
                 onClose={() => setIsShareModalOpen(false)}
                 projectId={projectId}
                 projectName={projectInfo?.name || 'Untitled'}
+                sid={sid}
             />
         </div>
     )

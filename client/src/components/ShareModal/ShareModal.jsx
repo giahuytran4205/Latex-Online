@@ -3,7 +3,7 @@ import { getProjectInfo, shareProject } from '../../services/api'
 import { useToast } from '../Toast/Toast'
 import './ShareModal.css'
 
-function ShareModal({ isOpen, onClose, projectId, projectName }) {
+function ShareModal({ isOpen, onClose, projectId, projectName, sid }) {
     const [sharingSettings, setSharingSettings] = useState({
         publicAccess: 'private', // private, view, edit
         collaborators: [],
@@ -19,7 +19,7 @@ function ShareModal({ isOpen, onClose, projectId, projectName }) {
         if (isOpen && projectId) {
             const fetchSettings = async () => {
                 try {
-                    const data = await getProjectInfo(projectId)
+                    const data = await getProjectInfo(projectId, sid)
                     setSharingSettings({
                         publicAccess: data.publicAccess || 'private',
                         collaborators: data.collaborators || [],
@@ -36,7 +36,7 @@ function ShareModal({ isOpen, onClose, projectId, projectName }) {
     const handleSave = async () => {
         setIsLoading(true)
         try {
-            await shareProject(projectId, sharingSettings)
+            await shareProject(projectId, sharingSettings, sid)
             toast.success('Sharing settings updated')
             onClose()
         } catch (err) {
@@ -91,8 +91,9 @@ function ShareModal({ isOpen, onClose, projectId, projectName }) {
                             <input
                                 type="text"
                                 readOnly
-                                value={getShareUrl()}
+                                value={sharingSettings.shareId ? getShareUrl() : 'Generating link...'}
                                 className="share-link-input"
+                                placeholder="Generating shareable link..."
                             />
                             <button
                                 className={`copy-btn ${copySuccess ? 'copy-btn--success' : ''}`}

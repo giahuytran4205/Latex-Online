@@ -5,6 +5,7 @@ export function useProject(projectId, sid) {
     const [projectInfo, setProjectInfo] = useState(null)
     const [files, setFiles] = useState([])
     const [isLoading, setIsLoading] = useState(true)
+    const [error, setError] = useState(null)
     const [collaborators, setCollaborators] = useState([])
 
     const loadProject = useCallback(async () => {
@@ -18,9 +19,10 @@ export function useProject(projectId, sid) {
             setProjectInfo(info)
             setFiles(filesData.files)
             setCollaborators(info.collaborators || [])
+            setError(null)
         } catch (err) {
             console.error('Failed to load project:', err)
-            throw err
+            setError(err)
         } finally {
             setIsLoading(false)
         }
@@ -35,6 +37,7 @@ export function useProject(projectId, sid) {
         setProjectInfo,
         files,
         isLoading,
+        error,
         collaborators,
         refreshFiles: loadProject
     }

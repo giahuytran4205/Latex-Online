@@ -84,9 +84,10 @@ export async function renameProject(projectId, name, sid) {
     return response.json()
 }
 
-export async function shareProject(projectId, settings) {
+export async function shareProject(projectId, settings, sid) {
     const headers = await getAuthHeaders()
-    const response = await fetch(`${API_BASE}/projects/${projectId}/share`, {
+    const url = `${API_BASE}/projects/${projectId}/share` + (sid ? `?sid=${sid}` : '')
+    const response = await fetch(url, {
         method: 'POST',
         headers,
         body: JSON.stringify(settings),
