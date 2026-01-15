@@ -59,9 +59,10 @@ export function useFileEditor(projectId, initialFile = 'main.tex') {
 
                 // CRITICAL: Only update if the user hasn't switched files since we started
                 if (currentFetchToken.current === fetchToken) {
-                    setCode(data.content || '')
+                    const content = data.isBinary ? data : (data.content || '')
+                    setCode(content)
                     setLoadedFileName(activeFileName)
-                    saveToCache(activeFileName, data.content || '')
+                    saveToCache(activeFileName, content)
                 } else {
                     console.log(`[Race Condition] Dropping stale result for ${activeFileName}`)
                 }

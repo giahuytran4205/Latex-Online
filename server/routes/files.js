@@ -25,7 +25,9 @@ if (!existsSync(TEMP_DIR)) {
 // Middleware to verify Firebase token
 const verifyToken = async (req, res, next) => {
     const authHeader = req.headers.authorization
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    const queryToken = req.query.token
+
+    if (!authHeader && !queryToken) {
         // For temp files, allow without auth
         if (req.path.startsWith('/temp/')) {
             return next()
@@ -33,7 +35,7 @@ const verifyToken = async (req, res, next) => {
         return res.status(401).json({ error: 'Unauthorized - No token provided' })
     }
 
-    const token = authHeader.split('Bearer ')[1]
+    const token = authHeader ? authHeader.split('Bearer ')[1] : queryToken
     try {
         if (!admin.apps.length) {
             // For development, use mock auth

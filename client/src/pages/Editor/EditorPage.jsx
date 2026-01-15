@@ -13,7 +13,10 @@ import { useToast } from '../../components/Toast/Toast'
 import { useConfirm } from '../../components/ConfirmDialog/ConfirmDialog'
 
 // Services
-import { createFile, deleteFile, renameFile, duplicateFile, resolveSyncTeX, renameProject } from '../../services/api'
+import { createFile, deleteFile, renameFile, duplicateFile, resolveSyncTeX, renameProject, getFileUrl } from '../../services/api'
+
+// Components
+import FileViewer from '../../components/FileViewer/FileViewer'
 
 // Hooks
 import { useResizable } from '../../hooks/useResizable'
@@ -244,20 +247,34 @@ function EditorPage() {
                 <div className="main-content" ref={mainContentRef}>
                     <div className={`editor-container ${isCodeLoading ? 'editor-container--loading' : ''}`}>
                         {loadedFileName === activeFileName && code !== null && (
-                            <Editor
-                                key={activeFileName}
-                                code={code}
-                                onChange={setCode}
-                                onCompile={onCompile}
-                                activeFile={activeFileName}
-                                errors={compilationErrors}
-                                jumpToLine={jumpToLine}
-                                projectId={projectId}
-                                userId={user?.uid}
-                                userName={user?.displayName || user?.email}
-                                yDoc={yDoc}
-                                awareness={awareness}
-                            />
+                            typeof code === 'string' ? (
+                                <Editor
+                                    key={activeFileName}
+                                    code={code}
+                                    onChange={setCode}
+                                    onCompile={onCompile}
+                                    activeFile={activeFileName}
+                                    errors={compilationErrors}
+                                    jumpToLine={jumpToLine}
+                                    projectId={projectId}
+                                    userId={user?.uid}
+                                    userName={user?.displayName || user?.email}
+                                    yDoc={yDoc}
+                                    awareness={awareness}
+                                />
+                            ) : (
+                                <FileViewer
+                                    filename={activeFileName}
+                                    url={code.url}
+                                    onDownload={async () => {
+                                        const url = await getFileUrl(projectId, activeFileName)
+                                        const a = document.createElement('a')
+                                        a.href = url
+                                        a.download = activeFileName.split('/').pop()
+                                        a.click()
+                                    }}
+                                />
+                            )
                         )}
                         {isCodeLoading && (
                             <div className="editor-loading-overlay">

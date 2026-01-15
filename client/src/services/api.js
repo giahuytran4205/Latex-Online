@@ -143,10 +143,21 @@ export async function getFiles(projectId) {
 }
 
 export async function getFileContent(projectId, filename) {
+    const isBinary = /\.(png|jpg|jpeg|gif|ico|pdf|sty|cls|zip|gz|tar|bib)$/i.test(filename)
+    if (isBinary) {
+        return { isBinary: true, url: await getFileUrl(projectId, filename) }
+    }
+
     const headers = await getAuthHeaders()
     const response = await fetch(`${API_BASE}/files/${projectId}/${encodeFilename(filename)}`, { headers })
     if (!response.ok) throw new Error('Failed to fetch file content')
     return response.json()
+}
+
+export async function getFileUrl(projectId, filename) {
+    const user = auth.currentUser
+    const token = user ? await user.getIdToken() : ''
+    return `${API_BASE}/files/${projectId}/${encodeFilename(filename)}/download?token=${token}`
 }
 
 export async function saveFile(projectId, filename, content) {
