@@ -41,18 +41,29 @@ function Preview({ pdfUrl, onSyncTeX }) {
         setOutline(null)
     }
 
+    const isManualScroll = useRef(false)
+
     // Scroll helper
     const scrollToPage = useCallback((pageNum) => {
-        if (!containerRef.current) return
+        if (!containerRef.current || pageNum < 1 || pageNum > numPages) return
         const pageElement = containerRef.current.querySelector(`.page-wrapper[data-page-number="${pageNum}"]`)
         if (pageElement) {
-            pageElement.scrollIntoView({ behavior: 'smooth' })
-        }
-    }, [])
+            isManualScroll.current = true
+            setCurrentPage(pageNum) // Update UI immediately for button clicks
+            pageElement.scrollIntoView({ behavior: 'smooth', block: 'start' })
 
-    // Set Page Number helper (just wraps scrollToPage for clarity in some contexts)
+            // Re-enable observer after animation roughly finishes
+            setTimeout(() => {
+                isManualScroll.current = false
+            }, 800)
+        }
+    }, [numPages])
+
+    // Set Page Number helper
     const setPageNumber = (num) => {
-        scrollToPage(num)
+        if (num >= 1 && num <= numPages) {
+            scrollToPage(num)
+        }
     }
 
     // Internal Navigation (Outline/Links)
@@ -79,8 +90,10 @@ function Preview({ pdfUrl, onSyncTeX }) {
         if (!container || !pdfDocument) return
 
         const observer = new IntersectionObserver((entries) => {
+            if (isManualScroll.current) return // Don't update from observer during manual jumps
+
             entries.forEach(entry => {
-                if (entry.isIntersecting) {
+                if (entry.isIntersecting && entry.intersectionRatio >= 0.5) {
                     const pageNum = parseInt(entry.target.getAttribute('data-page-number'))
                     if (!isNaN(pageNum)) {
                         setCurrentPage(pageNum)
@@ -89,7 +102,7 @@ function Preview({ pdfUrl, onSyncTeX }) {
             })
         }, {
             root: container,
-            threshold: 0.3
+            threshold: 0.5
         })
 
         // Slight delay to ensure DOM is ready
