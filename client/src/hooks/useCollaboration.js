@@ -15,6 +15,10 @@ export function useCollaboration(projectId, userId, userName, activeFile, sid) {
     const [collaborators, setCollaborators] = useState([])
     const [isSynced, setIsSynced] = useState(false)
 
+    // Stable user color to persist across re-renders
+    const userColorRef = useRef(USER_COLORS[Math.floor(Math.random() * USER_COLORS.length)])
+
+    // 1. Connection Effect - Only re-runs if Project ID or Share ID changes
     useEffect(() => {
         if (!projectId) return
 
@@ -22,27 +26,13 @@ export function useCollaboration(projectId, userId, userName, activeFile, sid) {
             const token = auth.currentUser ? await auth.currentUser.getIdToken() : ''
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
             const host = window.location.host
-            const wsUrl = `${protocol}//${host}/ws` // Base URL, room name appended by provider
+            const wsUrl = `${protocol}//${host}/ws`
 
-            const params = { token: token || '', projectId } // projectId also in params for redundancy/compatibility
+            const params = { token: token || '', projectId }
             if (sid) params.sid = sid
 
             const provider = new WebsocketProvider(wsUrl, projectId, ydocRef.current, { params })
             providerRef.current = provider
-
-            const color = USER_COLORS[Math.floor(Math.random() * USER_COLORS.length)]
-
-            // Initial state definition - prepare but don't force broadcast yet
-            // Broadcasting happens automatically when we setLocalStateField
-            const initialState = {
-                name: userName || 'Anonymous',
-                color: color,
-                colorLight: color + '33',
-                activeFile: activeFile,
-                id: userId || 'anon'
-            }
-
-            provider.awareness.setLocalStateField('user', initialState)
 
             const handleAwarenessUpdate = () => {
                 const states = provider.awareness.getStates()
@@ -64,11 +54,6 @@ export function useCollaboration(projectId, userId, userName, activeFile, sid) {
 
             provider.on('sync', (isSynced) => {
                 setIsSynced(isSynced)
-                if (isSynced) {
-                    // Force broadcast presence immediately upon sync
-                    // This ensures other clients see us right away without needing an action
-                    provider.awareness.setLocalStateField('user', initialState)
-                }
             })
         }
 
@@ -84,24 +69,32 @@ export function useCollaboration(projectId, userId, userName, activeFile, sid) {
             providerRef.current = null
         }
 
-        // Add beforeunload listener to handle browser reload/close
         window.addEventListener('beforeunload', cleanup)
 
         return () => {
             window.removeEventListener('beforeunload', cleanup)
             cleanup()
         }
-    }, [projectId, userId, userName, sid]) // Reconnect if sid changes
+    }, [projectId, sid])
 
-    // Update active file in awareness when it changes
+    // 2. User State Effect - Updates awareness when user info or file changes
     useEffect(() => {
-        if (providerRef.current) {
-            providerRef.current.awareness.setLocalStateField('user', {
-                ...providerRef.current.awareness.getLocalState().user,
-                activeFile: activeFile
-            })
+        const provider = providerRef.current
+        if (!provider || !provider.awareness) return
+
+        const userState = {
+            name: userName || 'Anonymous',
+            color: userColorRef.current,
+            colorLight: userColorRef.current + '33',
+            activeFile: activeFile,
+            id: userId || 'anon',
+            fileSystemUpdate: Date.now()
         }
-    }, [activeFile])
+
+        // Broacast user state immediately
+        provider.awareness.setLocalStateField('user', userState)
+
+    }, [userId, userName, activeFile, isSynced])
 
     return {
         yDoc: ydocRef.current,
