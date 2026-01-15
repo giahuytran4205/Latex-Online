@@ -307,28 +307,32 @@ function EditorPage() {
             const result = await resolveSyncTeX(projectId, page, x, y)
             if (result.success) {
                 // Normalize path: SyncTeX often returns ./filename.tex
-                const targetFile = result.file.replace(/^\.\//, '')
+                const fileName = result.file.replace(/^\.\//, '')
 
-                // Check if file exists in our project files list
-                const fileExists = files.some(f => f.name === targetFile)
+                // Find the actual file in our project files list (exact or fuzzy match)
+                const targetFile = files.find(f => f.name === fileName) ||
+                    files.find(f => f.name.endsWith('/' + fileName))
 
-                if (fileExists) {
-                    if (targetFile !== activeFileName) {
-                        setActiveFileName(targetFile)
+                if (targetFile) {
+                    const actualName = targetFile.name
+                    const isNewFile = actualName !== activeFileName
+
+                    if (isNewFile) {
+                        console.log(`SyncTeX: Switching to ${actualName}`)
+                        setActiveFileName(actualName)
                     }
-                    // Pass filename to ensure editor jumps in the correct file
-                    setJumpToLine({ file: targetFile, line: result.line, timestamp: Date.now() })
 
-                    // Show message if we switched files
-                    if (targetFile !== activeFileName) {
-                        toast.success(`Jumped to ${targetFile}`)
-                    }
+                    // Small delay ensures Editor reacts to file switch BEFORE line jump
+                    setTimeout(() => {
+                        setJumpToLine({ file: actualName, line: result.line, timestamp: Date.now() })
+                        if (isNewFile) toast.success(`Jumped to file: ${actualName}`)
+                    }, isNewFile ? 100 : 0)
                 } else {
-                    console.warn('SyncTeX target file not found in project:', targetFile)
+                    console.warn(`SyncTeX Match: '${fileName}' not found in project. Current files:`, files.map(f => f.name))
                 }
             }
         } catch (err) {
-            console.error('SyncTeX failed:', err)
+            console.error('SyncTeX handler failed:', err)
         }
     }
 
@@ -415,7 +419,7 @@ function EditorPage() {
             document.removeEventListener('mousemove', handleMouseMove)
             document.removeEventListener('mouseup', handleMouseUp)
         }
-    }, [isResizing, sidebarWidth, editorWidth])
+    }, [isResizing, sidebarWidth, editorWidth, consoleHeight])
 
     const handleBackToHome = () => {
         navigate('/')

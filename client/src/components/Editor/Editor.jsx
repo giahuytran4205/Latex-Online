@@ -383,8 +383,11 @@ function Editor({ code, onChange, onCompile, activeFile, errors = [], jumpToLine
 
         if (file && file !== activeFile) return
 
+        // Wait until the editor's content actually matches the code prop
+        // This ensures we aren't jumping in a stale document from a previous file
+        if (viewRef.current.state.doc.toString() !== code) return
+
         // Only jump if we have the correct document content
-        // If code is still the old one, we wait for it to update (this effect will re-run)
         if (line >= 1 && line <= viewRef.current.state.doc.lines) {
             const lineInfo = viewRef.current.state.doc.line(line)
 
