@@ -188,7 +188,7 @@ function latexCompletions(context) {
 
 // Syntax Highlighting Style
 const latexHighlightStyle = HighlightStyle.define([
-    { tag: [t.keyword, t.builtin, t.name, t.function(t.name), t.processingInstruction, t.namespace], color: 'var(--syntax-keyword, #047857)' },
+    { tag: [t.keyword, t.builtin, t.name], color: 'var(--syntax-keyword, #047857)' },
     { tag: [t.variableName, t.propertyName, t.typeName, t.labelName, t.className], color: 'var(--syntax-variable, #b45309)' },
     { tag: t.atom, color: 'var(--syntax-atom, #1d4ed8)' },
     { tag: t.number, color: 'var(--syntax-number, #be123c)' },
