@@ -60,5 +60,11 @@
 
 .file-viewer--unsupported p {
     color: var(--text-secondary);
-    margin-bottom: 24px;
+    margin-bottom: 8px;
+}
+
+.file-viewer__hint {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    font-style: italic;
 }

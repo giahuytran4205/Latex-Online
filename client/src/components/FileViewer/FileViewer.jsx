@@ -1,6 +1,6 @@
 import './FileViewer.css'
 
-const FileViewer = ({ filename, url, onDownload }) => {
+const FileViewer = ({ filename, url }) => {
     const isImage = /\.(png|jpg|jpeg|gif|ico|svg)$/i.test(filename)
     const isPdf = /\.pdf$/i.test(filename)
 
@@ -12,9 +12,6 @@ const FileViewer = ({ filename, url, onDownload }) => {
                 </div>
                 <div className="file-viewer__footer">
                     <span className="file-viewer__filename">{filename}</span>
-                    <button className="btn btn--secondary" onClick={onDownload}>
-                        Download
-                    </button>
                 </div>
             </div>
         )
@@ -28,9 +25,6 @@ const FileViewer = ({ filename, url, onDownload }) => {
                 </div>
                 <div className="file-viewer__footer">
                     <span className="file-viewer__filename">{filename}</span>
-                    <button className="btn btn--secondary" onClick={onDownload}>
-                        Download
-                    </button>
                 </div>
             </div>
         )
@@ -46,9 +40,7 @@ const FileViewer = ({ filename, url, onDownload }) => {
                     </svg>
                 </div>
                 <p>This file type cannot be displayed directly.</p>
-                <button className="btn btn--primary" onClick={onDownload}>
-                    Download File to View
-                </button>
+                <p className="file-viewer__hint">Right-click the file in the sidebar to download it.</p>
             </div>
             <div className="file-viewer__footer">
                 <span className="file-viewer__filename">{filename}</span>

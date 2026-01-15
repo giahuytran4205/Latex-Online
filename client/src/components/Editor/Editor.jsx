@@ -1,13 +1,12 @@
 import { useEffect, useRef, useMemo, useCallback, useState } from 'react'
 import { EditorView, basicSetup } from 'codemirror'
-import { EditorState } from '@codemirror/state'
-import { keymap } from '@codemirror/view'
+import { EditorState, StateField, StateEffect } from '@codemirror/state'
+import { keymap, Decoration, gutter, GutterMarker } from '@codemirror/view'
 import { indentWithTab } from '@codemirror/commands'
-import { StreamLanguage } from '@codemirror/language'
+import { StreamLanguage, HighlightStyle, syntaxHighlighting } from '@codemirror/language'
+import { tags as t } from '@lezer/highlight'
 import { stex } from '@codemirror/legacy-modes/mode/stex'
 import { autocompletion, startCompletion, completionStatus, acceptCompletion } from '@codemirror/autocomplete'
-import { Decoration, gutter, GutterMarker } from '@codemirror/view'
-import { StateField, StateEffect } from '@codemirror/state'
 
 // Yjs Imports
 import * as Y from 'yjs'
@@ -187,6 +186,22 @@ function latexCompletions(context) {
     }
 }
 
+// Syntax Highlighting Style
+const latexHighlightStyle = HighlightStyle.define([
+    { tag: t.keyword, color: 'var(--syntax-keyword)' }, // \command
+    { tag: t.atom, color: 'var(--syntax-atom)' },       // special values
+    { tag: t.variableName, color: 'var(--syntax-variable)' }, // {arg}
+    { tag: t.number, color: 'var(--syntax-number)' },
+    { tag: t.string, color: 'var(--syntax-string)' },
+    { tag: t.comment, color: 'var(--syntax-comment)', fontStyle: 'italic' },
+    { tag: t.punctuation, color: 'var(--syntax-punctuation)' },
+    { tag: t.bracket, color: 'var(--syntax-punctuation)' },
+    { tag: t.operator, color: 'var(--syntax-punctuation)' },
+    { tag: t.meta, color: 'var(--syntax-keyword)' },    // preamble stuff
+    { tag: t.definition(t.name), color: 'var(--syntax-keyword)' },
+    { tag: t.propertyName, color: 'var(--syntax-variable)' },
+])
+
 // Wrap selection with LaTeX command
 function wrapSelection(view, before, after) {
     const { from, to } = view.state.selection.main
@@ -234,6 +249,11 @@ function Editor({
         '&': {
             height: '100%',
             fontSize: '14px',
+            backgroundColor: 'var(--bg-primary)',
+            color: 'var(--text-primary)',
+        },
+        '&.cm-focused': {
+            outline: 'none',
         },
         '.cm-scroller': {
             fontFamily: "'JetBrains Mono', 'Fira Code', 'Consolas', monospace",
@@ -326,6 +346,7 @@ function Editor({
         // Setup CodeMirror
         const extensions = [
             basicSetup,
+            syntaxHighlighting(latexHighlightStyle),
             keybindings,
             StreamLanguage.define(stex),
             editorTheme,

@@ -266,14 +266,6 @@ function EditorPage() {
                                 <FileViewer
                                     filename={activeFileName}
                                     url={code.url}
-                                    onDownload={async () => {
-                                        const baseUrl = await getFileUrl(projectId, activeFileName)
-                                        const downloadUrl = baseUrl.replace('&mode=view', '')
-                                        const a = document.createElement('a')
-                                        a.href = downloadUrl
-                                        a.download = activeFileName.split('/').pop()
-                                        a.click()
-                                    }}
                                 />
                             )
                         )}
