@@ -137,22 +137,18 @@ function Preview({ pdfUrl, onSyncTeX }) {
         const clickY = e.clientY - rect.top
 
         // Calculate points relative to the PDF page
-        // react-pdf scale 1.0 typically maps 1pt to 1px
+        // Convert browser pixels (96 DPI) to PDF points (72 DPI)
+        // Ratio: 72 / 96 = 0.75
         const s = scale || 1
-        const mouseX = (clickX / s)
-        const mouseY = (clickY / s)
+        const xPoints = (clickX / s) * 0.75
+        const yPoints = (clickY / s) * 0.75
 
-        // SyncTeX usually expects Y from bottom for the 'edit' command
-        const yInverted = pageHeight - mouseY
+        console.log(`[SyncTeX] Double Click (Page ${pageNum}) - Top-Down:`)
+        console.log(`  - Pixels: X=${clickX.toFixed(0)}, Y=${clickY.toFixed(0)}`)
+        console.log(`  - Points (0.75 scale): X=${xPoints.toFixed(1)}pt, Y=${yPoints.toFixed(1)}pt`)
 
-        console.log(`[SyncTeX] Double Click (Page ${pageNum}):`)
-        console.log(`  - Browser Pixels: X=${clickX.toFixed(0)}, Y=${clickY.toFixed(0)}`)
-        console.log(`  - PDF Points (Top-Down): X=${mouseX.toFixed(1)}, Y=${mouseY.toFixed(1)}`)
-        console.log(`  - PDF Points (Bottom-Up): X=${mouseX.toFixed(1)}, Y=${yInverted.toFixed(1)} (Page H=${pageHeight.toFixed(1)})`)
-
-        // We send bottom-up as it previously worked for returning sub-files
-        onSyncTeX(pageNum, mouseX, yInverted)
-    }, [onSyncTeX, scale, pageHeight])
+        onSyncTeX(pageNum, xPoints, yPoints)
+    }, [onSyncTeX, scale])
 
     const handleDownload = () => {
         if (!pdfUrl) return
