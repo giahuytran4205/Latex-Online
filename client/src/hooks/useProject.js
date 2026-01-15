@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { getFiles, getProjectInfo } from '../services/api'
 
-export function useProject(projectId) {
+export function useProject(projectId, sid) {
     const [projectInfo, setProjectInfo] = useState(null)
     const [files, setFiles] = useState([])
     const [isLoading, setIsLoading] = useState(true)
@@ -12,8 +12,8 @@ export function useProject(projectId) {
         try {
             setIsLoading(true)
             const [info, filesData] = await Promise.all([
-                getProjectInfo(projectId),
-                getFiles(projectId)
+                getProjectInfo(projectId, sid),
+                getFiles(projectId, sid)
             ])
             setProjectInfo(info)
             setFiles(filesData.files)

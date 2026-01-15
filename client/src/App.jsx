@@ -6,6 +6,7 @@ import ProtectedRoute from './components/ProtectedRoute'
 import Login from './pages/Login/Login'
 import Home from './pages/Home/Home'
 import EditorPage from './pages/Editor/EditorPage'
+import ShareRedirect from './pages/ShareRedirect/ShareRedirect'
 
 function App() {
     return (
@@ -16,6 +17,7 @@ function App() {
                         <Routes>
                             {/* Public routes */}
                             <Route path="/login" element={<Login />} />
+                            <Route path="/s/:shareId" element={<ShareRedirect />} />
 
                             {/* Protected routes */}
                             <Route

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { getFileContent, saveFile, createFile } from '../services/api'
 
-export function useFileEditor(projectId, initialFile = 'main.tex') {
+export function useFileEditor(projectId, sid, initialFile = 'main.tex') {
     const [activeFileName, setActiveFileName] = useState(initialFile)
     const [loadedFileName, setLoadedFileName] = useState(null)
     const [code, setCode] = useState(null)
@@ -55,7 +55,7 @@ export function useFileEditor(projectId, initialFile = 'main.tex') {
         setIsCodeLoading(true)
         const fetchFile = async () => {
             try {
-                const data = await getFileContent(projectId, activeFileName)
+                const data = await getFileContent(projectId, activeFileName, sid)
 
                 // CRITICAL: Only update if the user hasn't switched files since we started
                 if (currentFetchToken.current === fetchToken) {
@@ -86,7 +86,7 @@ export function useFileEditor(projectId, initialFile = 'main.tex') {
     const triggerSave = useCallback(async (content = code) => {
         if (!projectId || !activeFileName || content === null) return
         try {
-            await saveFile(projectId, activeFileName, content)
+            await saveFile(projectId, activeFileName, content, sid)
             saveToCache(activeFileName, content)
             return true
         } catch (err) {
@@ -98,7 +98,7 @@ export function useFileEditor(projectId, initialFile = 'main.tex') {
     const handleUploadFile = useCallback(async (filename, content, skipReload = false) => {
         try {
             // 1. Create/Overwrite file on server
-            await createFile(projectId, filename, content, true)
+            await createFile(projectId, filename, content, true, sid)
 
             // 2. Clear cache for this file
             fileCache.current.delete(filename)

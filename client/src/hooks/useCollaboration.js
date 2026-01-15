@@ -9,7 +9,7 @@ const USER_COLORS = [
     '#e8aa14', '#ff5714', '#ea9ab2', '#7fb069', '#31afb4'
 ]
 
-export function useCollaboration(projectId, userId, userName, activeFile) {
+export function useCollaboration(projectId, userId, userName, activeFile, sid) {
     const ydocRef = useRef(new Y.Doc())
     const providerRef = useRef(null)
     const [collaborators, setCollaborators] = useState([])
@@ -21,7 +21,7 @@ export function useCollaboration(projectId, userId, userName, activeFile) {
             const token = auth.currentUser ? await auth.currentUser.getIdToken() : ''
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
             const host = window.location.host
-            const wsUrl = `${protocol}//${host}/ws?projectId=${projectId}&token=${token}`
+            const wsUrl = `${protocol}//${host}/ws?projectId=${projectId}&token=${token}${sid ? `&sid=${sid}` : ''}`
 
             const provider = new WebsocketProvider(wsUrl, projectId, ydocRef.current)
             providerRef.current = provider

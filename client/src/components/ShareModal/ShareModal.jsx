@@ -6,7 +6,8 @@ import './ShareModal.css'
 function ShareModal({ isOpen, onClose, projectId, projectName }) {
     const [sharingSettings, setSharingSettings] = useState({
         publicAccess: 'private', // private, view, edit
-        collaborators: []
+        collaborators: [],
+        shareId: ''
     })
     const [email, setEmail] = useState('')
     const [isLoading, setIsLoading] = useState(false)
@@ -21,7 +22,8 @@ function ShareModal({ isOpen, onClose, projectId, projectName }) {
                     const data = await getProjectInfo(projectId)
                     setSharingSettings({
                         publicAccess: data.publicAccess || 'private',
-                        collaborators: data.collaborators || []
+                        collaborators: data.collaborators || [],
+                        shareId: data.shareId || ''
                     })
                 } catch (err) {
                     console.error('Failed to fetch settings:', err)
@@ -44,8 +46,13 @@ function ShareModal({ isOpen, onClose, projectId, projectName }) {
         }
     }
 
+    const getShareUrl = () => {
+        if (!sharingSettings.shareId) return window.location.origin
+        return `${window.location.origin}/s/${sharingSettings.shareId}`
+    }
+
     const handleCopyLink = () => {
-        const url = window.location.href
+        const url = getShareUrl()
         navigator.clipboard.writeText(url)
         setCopySuccess(true)
         setTimeout(() => setCopySuccess(false), 2000)
@@ -84,7 +91,7 @@ function ShareModal({ isOpen, onClose, projectId, projectName }) {
                             <input
                                 type="text"
                                 readOnly
-                                value={window.location.href}
+                                value={getShareUrl()}
                                 className="share-link-input"
                             />
                             <button

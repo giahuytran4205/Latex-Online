@@ -15,9 +15,10 @@ router.post('/', async (req, res) => {
     try {
         const userId = req.user.uid
         const { projectId, filename, engine, code } = req.body
+        const shareId = req.query.sid || req.body.shareId || req.headers['x-share-id']
 
         // Check permissions
-        const auth = getProjectWithAuth(req.user, projectId, 'edit')
+        const auth = getProjectWithAuth(req.user, projectId, 'edit', shareId)
         if (auth.error) {
             return res.status(auth.status).json({ success: false, error: auth.error })
         }
@@ -53,12 +54,12 @@ router.post('/', async (req, res) => {
 // GET /api/compile/synctex
 router.get('/synctex', async (req, res) => {
     try {
-        const { projectId, page, x, y } = req.query
+        const { projectId, page, x, y, sid } = req.query
         if (!projectId || !page || !x || !y) {
             return res.status(400).json({ success: false, error: 'Missing parameters' })
         }
 
-        const auth = getProjectWithAuth(req.user, projectId, 'view')
+        const auth = getProjectWithAuth(req.user, projectId, 'view', sid)
         if (auth.error) return res.status(auth.status).json({ success: false, error: auth.error })
 
         const result = await resolveSyncTeX(projectId, parseInt(page), parseFloat(x), parseFloat(y))

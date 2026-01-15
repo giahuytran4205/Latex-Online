@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, statSync, readFileSync } from 'fs'
+import { existsSync, readdirSync, statSync, readFileSync, mkdirSync, writeFileSync } from 'fs'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
 
@@ -6,6 +6,12 @@ const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
 
 const PROJECTS_DIR = join(__dirname, '../../projects')
+const SHARES_DIR = join(PROJECTS_DIR, '.shares')
+
+// Ensure shares directory exists
+if (!existsSync(SHARES_DIR)) {
+    mkdirSync(SHARES_DIR, { recursive: true })
+}
 
 /**
  * Find project directory and owner across all users
@@ -24,7 +30,7 @@ export const findProjectInfo = (projectId, currentUserId) => {
         try {
             const userDirs = readdirSync(PROJECTS_DIR)
             for (const userId of userDirs) {
-                if (userId === currentUserId) continue
+                if (userId === currentUserId || userId === '.shares') continue
                 const projectPath = join(PROJECTS_DIR, userId, projectId)
                 if (existsSync(projectPath) && statSync(projectPath).isDirectory()) {
                     return { projectPath, ownerId: userId }
@@ -35,23 +41,73 @@ export const findProjectInfo = (projectId, currentUserId) => {
         }
     }
 
-    // 3. Check legacy path (root of PROJECTS_DIR)
-    const legacyPath = join(PROJECTS_DIR, projectId)
-    if (existsSync(legacyPath) && statSync(legacyPath).isDirectory()) {
-        return { projectPath: legacyPath, ownerId: 'legacy' }
-    }
-
     return null
 }
 
 /**
- * Get project path with permission check
+ * Find project by shareId
  */
-export const getProjectWithAuth = (user, projectId, requiredPermission = 'view') => {
+export const findProjectByShareId = (shareId) => {
+    if (!shareId) return null
+    const sharePath = join(SHARES_DIR, `${shareId}.json`)
+    if (existsSync(sharePath)) {
+        try {
+            const data = JSON.parse(readFileSync(sharePath, 'utf-8'))
+            const projectPath = join(PROJECTS_DIR, data.ownerId, data.projectId)
+            if (existsSync(projectPath)) {
+                return {
+                    projectPath,
+                    ownerId: data.ownerId,
+                    projectId: data.projectId,
+                    isSharedLink: true
+                }
+            }
+        } catch (e) {
+            console.error('[ProjectUtils] Error reading share file:', e)
+        }
+    }
+    return null
+}
+
+/**
+ * Register or update a shareId mapping
+ */
+export const registerShareMapping = (shareId, projectId, ownerId) => {
+    const sharePath = join(SHARES_DIR, `${shareId}.json`)
+    writeFileSync(sharePath, JSON.stringify({ projectId, ownerId }, null, 2))
+}
+
+/**
+ * Get project path with permission check
+ * @param {Object} user - Authenticated user object (req.user)
+ * @param {string} projectIdOrShareId - Either projectId or shareId
+ * @param {string} requiredPermission - 'view' or 'edit' or 'owner'
+ * @param {string} providedShareId - Optional shareId provided in query/headers
+ */
+export const getProjectWithAuth = (user, projectId, requiredPermission = 'view', providedShareId = null) => {
     if (!user || !user.uid) return { error: 'Unauthorized', status: 401 }
 
     const userId = user.uid
-    const info = findProjectInfo(projectId, userId)
+    let info = null
+    let usedShareId = false
+
+    // 1. Try finding by shareId if provided or if projectId looks like a shareId
+    // Actually, let's stick to explicit providedShareId for clarity
+    if (providedShareId) {
+        info = findProjectByShareId(providedShareId)
+        if (info && info.projectId === projectId) {
+            usedShareId = true
+        } else if (info && !projectId) {
+            // Found by shareId alone (e.g. from /s/:id route)
+            usedShareId = true
+        }
+    }
+
+    // 2. Fallback to normal projectId lookup if not found or no shareId
+    if (!info) {
+        info = findProjectInfo(projectId, userId)
+    }
+
     if (!info) return { error: 'Project not found', status: 404 }
 
     const { projectPath, ownerId } = info
@@ -69,28 +125,41 @@ export const getProjectWithAuth = (user, projectId, requiredPermission = 'view')
     const isCollaborator = metadata.collaborators?.some(c => c.email === user.email)
     const publicLevel = metadata.publicAccess // 'private', 'view', 'edit'
 
+    // Verify shareId matches if it was used for access
+    const shareIdValid = providedShareId && metadata.shareId === providedShareId
+
     // Resolve actually granted permission
     let granted = 'none'
-    if (isOwner) granted = 'owner'
-    else if (isCollaborator) granted = 'edit'
-    else if (publicLevel !== 'private') {
+    if (isOwner) {
+        granted = 'owner'
+    } else if (isCollaborator) {
+        granted = 'edit'
+    } else if (publicLevel !== 'private' && shareIdValid) {
+        // Access via valid share link
         granted = publicLevel // 'view' or 'edit'
-    } else if (ownerId === 'legacy') {
-        granted = 'view' // Legacy projects are read-only for others
     }
 
     // Check if granted meets required
     const canRead = granted !== 'none'
     const canWrite = granted === 'owner' || granted === 'edit'
 
-    if (requiredPermission === 'view' && !canRead) {
-        return { error: 'Access denied', status: 403 }
+    if (requiredPermission === 'owner' && granted !== 'owner') {
+        return { error: 'Only owner has this permission', status: 403 }
     }
     if (requiredPermission === 'edit' && !canWrite) {
         return { error: 'Write access denied', status: 403 }
     }
+    if (requiredPermission === 'view' && !canRead) {
+        return { error: 'Access denied', status: 403 }
+    }
 
-    return { projectPath, ownerId, granted }
+    return {
+        projectPath,
+        ownerId,
+        projectId: info.projectId || projectId,
+        granted,
+        metadata
+    }
 }
 
-export default { findProjectInfo, getProjectWithAuth }
+export default { findProjectInfo, findProjectByShareId, registerShareMapping, getProjectWithAuth }

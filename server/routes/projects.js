@@ -5,7 +5,7 @@ import { fileURLToPath } from 'url'
 import { v4 as uuidv4 } from 'uuid'
 import admin from 'firebase-admin'
 import { verifyToken } from '../services/auth.js'
-import { findProjectInfo, getProjectWithAuth } from '../utils/project.js'
+import { findProjectInfo, getProjectWithAuth, registerShareMapping, findProjectByShareId } from '../utils/project.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -224,7 +224,8 @@ const findProjectDir = (projectId, userId) => {
 router.get('/:projectId', (req, res) => {
     try {
         const { projectId } = req.params
-        const auth = getProjectWithAuth(req.user, projectId, 'view')
+        const shareId = req.query.sid || req.headers['x-share-id']
+        const auth = getProjectWithAuth(req.user, projectId, 'view', shareId)
 
         if (auth.error) {
             return res.status(auth.status).json({ error: auth.error })
@@ -271,6 +272,7 @@ router.post('/', (req, res) => {
         }
 
         const projectId = uuidv4().substring(0, 12)
+        const shareId = uuidv4()
         const userProjectsDir = join(PROJECTS_DIR, userId)
         const projectPath = join(userProjectsDir, projectId)
 
@@ -287,15 +289,22 @@ router.post('/', (req, res) => {
             template,
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
-            owner: userId
+            owner: userId,
+            shareId: shareId,
+            publicAccess: 'private',
+            collaborators: []
         }
         writeFileSync(join(projectPath, '.project.json'), JSON.stringify(metadata, null, 2))
+
+        // Register share mapping
+        registerShareMapping(shareId, projectId, userId)
 
         console.log(`[Projects] Created project ${projectId} for user ${userId}`)
 
         res.json({
             success: true,
             projectId,
+            shareId,
             name: metadata.name
         })
     } catch (error) {
@@ -381,7 +390,8 @@ router.patch('/:projectId', (req, res) => {
         const userId = req.user.uid
         const { projectId } = req.params
         const { name } = req.body
-        const auth = getProjectWithAuth(req.user, projectId, 'edit')
+        const shareId = req.query.sid || req.headers['x-share-id']
+        const auth = getProjectWithAuth(req.user, projectId, 'edit', shareId)
         if (auth.error) return res.status(auth.status).json({ error: auth.error })
 
         const { projectPath, ownerId } = auth
@@ -417,7 +427,8 @@ router.post('/:projectId/share', (req, res) => {
         const userId = req.user.uid
         const { projectId } = req.params
         const { publicAccess, collaborators } = req.body
-        const auth = getProjectWithAuth(req.user, projectId, 'owner')
+        const shareId = req.query.sid || req.headers['x-share-id']
+        const auth = getProjectWithAuth(req.user, projectId, 'owner', shareId)
         if (auth.error) {
             // Check if it's just 'edit' vs 'owner'
             const viewAuth = getProjectWithAuth(req.user, projectId, 'edit')
@@ -476,6 +487,26 @@ function getDirectorySize(dirPath) {
     }
     return size
 }
+
+// Resolve shareId to projectId
+router.get('/resolve/:shareId', (req, res) => {
+    try {
+        const { shareId } = req.params
+        const info = findProjectByShareId(shareId)
+
+        if (!info) {
+            return res.status(404).json({ error: 'Share link invalid or expired' })
+        }
+
+        // We return the projectId so the frontend can navigate
+        res.json({
+            projectId: info.projectId,
+            ownerId: info.ownerId
+        })
+    } catch (error) {
+        res.status(500).json({ error: error.message })
+    }
+})
 
 export default router
 

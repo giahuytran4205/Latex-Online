@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 
 // Components
@@ -30,6 +30,8 @@ import './EditorPage.css'
 
 function EditorPage() {
     const { projectId } = useParams()
+    const [searchParams] = useSearchParams()
+    const sid = searchParams.get('sid')
     const navigate = useNavigate()
     const { user } = useAuth()
     const toast = useToast()
@@ -39,7 +41,7 @@ function EditorPage() {
     const { sidebarWidth, editorWidth, consoleHeight, isResizing, handleMouseDown } = useResizable()
 
     // 2. Project & Files List
-    const { projectInfo, setProjectInfo, files, isLoading, collaborators: projectCollaborators, refreshFiles } = useProject(projectId)
+    const { projectInfo, setProjectInfo, files, isLoading, collaborators: projectCollaborators, refreshFiles } = useProject(projectId, sid)
 
     // 3. File Editing Content
     const {
@@ -52,7 +54,7 @@ function EditorPage() {
         triggerSave,
         handleUploadFile,
         saveToCache
-    } = useFileEditor(projectId)
+    } = useFileEditor(projectId, sid)
 
     // 4. Compiler & PDF
     const {
@@ -64,10 +66,10 @@ function EditorPage() {
         compilationErrors,
         setCompilationErrors,
         compile
-    } = useCompiler(projectId)
+    } = useCompiler(projectId, sid)
 
     // 5. Collaboration
-    const { yDoc, collaborators: liveCollaborators, awareness } = useCollaboration(projectId, user?.uid, user?.displayName || user?.email, activeFileName)
+    const { yDoc, collaborators: liveCollaborators, awareness } = useCollaboration(projectId, user?.uid, user?.displayName || user?.email, activeFileName, sid)
 
     // 6. Auto-save
     useAutoSave(projectId, activeFileName, code, triggerSave, isCodeLoading, isLoading)
@@ -85,7 +87,7 @@ function EditorPage() {
     // Ref handlers for child actions
     const handleAddFile = async (name) => {
         try {
-            await createFile(projectId, name)
+            await createFile(projectId, name, '', false, sid)
             await refreshFiles()
             if (!name.endsWith('/')) handleFileSelect(name)
             return true
@@ -98,7 +100,7 @@ function EditorPage() {
     const handleDeleteFile = async (name) => {
         if (name === 'main.tex') return false
         try {
-            await deleteFile(projectId, name)
+            await deleteFile(projectId, name, sid)
             await refreshFiles()
             if (activeFileName === name) handleFileSelect('main.tex')
             return true
@@ -111,7 +113,7 @@ function EditorPage() {
     const handleRenameFile = async (oldName, newName) => {
         if (oldName === 'main.tex') return false
         try {
-            await renameFile(projectId, oldName, newName)
+            await renameFile(projectId, oldName, newName, sid)
             await refreshFiles()
             if (activeFileName === oldName) handleFileSelect(newName)
             return true
@@ -123,7 +125,7 @@ function EditorPage() {
 
     const handleDuplicateFile = async (name) => {
         try {
-            const res = await duplicateFile(projectId, name)
+            const res = await duplicateFile(projectId, name, sid)
             await refreshFiles()
             if (res.newFilename) handleFileSelect(res.newFilename)
             return true
@@ -135,7 +137,7 @@ function EditorPage() {
 
     const handleSyncTeX = async (page, x, y) => {
         try {
-            const res = await resolveSyncTeX(projectId, page, x, y)
+            const res = await resolveSyncTeX(projectId, page, x, y, sid)
             if (res.success) {
                 const fileName = res.file.replace(/^\.\//, '')
                 const target = files.find(f => f.name === fileName) || files.find(f => f.name.endsWith('/' + fileName))
@@ -177,7 +179,7 @@ function EditorPage() {
 
     const handleRenameProject = async (newName) => {
         try {
-            const res = await renameProject(projectId, newName)
+            const res = await renameProject(projectId, newName, sid)
             if (res.success) {
                 setProjectInfo(prev => ({ ...prev, name: res.name }))
                 toast.success('Project renamed')

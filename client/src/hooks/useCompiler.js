@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react'
 import { compileLatex } from '../services/api'
 
-export function useCompiler(projectId) {
+export function useCompiler(projectId, sid) {
     const [pdfUrl, setPdfUrl] = useState(null)
     const [logs, setLogs] = useState('')
     const [isCompiling, setIsCompiling] = useState(false)
@@ -21,7 +21,8 @@ export function useCompiler(projectId) {
                 projectId,
                 code: '', // backend reads from disk
                 engine,
-                filename: 'main'
+                filename: 'main',
+                sid
             })
 
             if (result.success) {

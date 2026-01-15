@@ -57,7 +57,8 @@ router.use(verifyToken)
 router.get('/:projectId', (req, res) => {
     try {
         const { projectId } = req.params
-        const auth = getProjectWithAuth(req.user, projectId, 'view')
+        const shareId = req.query.sid || req.headers['x-share-id']
+        const auth = getProjectWithAuth(req.user, projectId, 'view', shareId)
         if (auth.error) return res.status(auth.status).json({ error: auth.error })
 
         const { projectPath } = auth
@@ -108,7 +109,8 @@ router.get('/:projectId', (req, res) => {
 router.get('/:projectId/:filename', (req, res) => {
     try {
         const { projectId, filename } = req.params
-        const auth = getProjectWithAuth(req.user, projectId, 'view')
+        const shareId = req.query.sid || req.headers['x-share-id']
+        const auth = getProjectWithAuth(req.user, projectId, 'view', shareId)
         if (auth.error) return res.status(auth.status).json({ error: auth.error })
 
         const decodedFilename = decodeURIComponent(filename)
@@ -129,7 +131,8 @@ router.get('/:projectId/:filename', (req, res) => {
 router.get('/:projectId/:filename/download', (req, res) => {
     try {
         const { projectId, filename } = req.params
-        const auth = getProjectWithAuth(req.user, projectId, 'view')
+        const shareId = req.query.sid || req.headers['x-share-id']
+        const auth = getProjectWithAuth(req.user, projectId, 'view', shareId)
         if (auth.error) return res.status(auth.status).json({ error: auth.error })
 
         const decodedFilename = decodeURIComponent(filename)
@@ -167,7 +170,8 @@ router.get('/:projectId/:filename/download', (req, res) => {
 router.put('/:projectId/:filename', (req, res) => {
     try {
         const { projectId, filename } = req.params
-        const auth = getProjectWithAuth(req.user, projectId, 'edit')
+        const shareId = req.query.sid || req.headers['x-share-id']
+        const auth = getProjectWithAuth(req.user, projectId, 'edit', shareId)
         if (auth.error) return res.status(auth.status).json({ error: auth.error })
 
         const { content } = req.body
@@ -205,7 +209,8 @@ router.put('/:projectId/:filename', (req, res) => {
 router.post('/:projectId', (req, res) => {
     try {
         const { projectId } = req.params
-        const auth = getProjectWithAuth(req.user, projectId, 'edit')
+        const shareId = req.query.sid || req.headers['x-share-id']
+        const auth = getProjectWithAuth(req.user, projectId, 'edit', shareId)
         if (auth.error) return res.status(auth.status).json({ error: auth.error })
 
         const { filename, content = '', overwrite = false } = req.body
@@ -254,7 +259,8 @@ router.post('/:projectId', (req, res) => {
 router.delete('/:projectId/:filename', (req, res) => {
     try {
         const { projectId, filename } = req.params
-        const auth = getProjectWithAuth(req.user, projectId, 'edit')
+        const shareId = req.query.sid || req.headers['x-share-id']
+        const auth = getProjectWithAuth(req.user, projectId, 'edit', shareId)
         if (auth.error) return res.status(auth.status).json({ error: auth.error })
 
         // Handle URL encoded paths (for nested files)
@@ -285,7 +291,8 @@ router.delete('/:projectId/:filename', (req, res) => {
 router.post('/:projectId/rename', (req, res) => {
     try {
         const { projectId } = req.params
-        const auth = getProjectWithAuth(req.user, projectId, 'edit')
+        const shareId = req.query.sid || req.headers['x-share-id']
+        const auth = getProjectWithAuth(req.user, projectId, 'edit', shareId)
         if (auth.error) return res.status(auth.status).json({ error: auth.error })
 
         const { oldName, newName } = req.body
@@ -321,7 +328,8 @@ router.post('/:projectId/rename', (req, res) => {
 router.post('/:projectId/duplicate', (req, res) => {
     try {
         const { projectId } = req.params
-        const auth = getProjectWithAuth(req.user, projectId, 'edit')
+        const shareId = req.query.sid || req.headers['x-share-id']
+        const auth = getProjectWithAuth(req.user, projectId, 'edit', shareId)
         if (auth.error) return res.status(auth.status).json({ error: auth.error })
 
         const { filename } = req.body
@@ -362,7 +370,8 @@ router.post('/:projectId/duplicate', (req, res) => {
 router.post('/:projectId/move', (req, res) => {
     try {
         const { projectId } = req.params
-        const auth = getProjectWithAuth(req.user, projectId, 'edit')
+        const shareId = req.query.sid || req.headers['x-share-id']
+        const auth = getProjectWithAuth(req.user, projectId, 'edit', shareId)
         if (auth.error) return res.status(auth.status).json({ error: auth.error })
 
         const { oldPath: oldName, newPath: newName } = req.body

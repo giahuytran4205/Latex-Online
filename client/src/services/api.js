@@ -27,9 +27,10 @@ export async function getProjects() {
     return response.json()
 }
 
-export async function getProjectInfo(projectId) {
+export async function getProjectInfo(projectId, sid) {
     const headers = await getAuthHeaders()
-    const response = await fetch(`${API_BASE}/projects/${projectId}`, { headers })
+    const url = `${API_BASE}/projects/${projectId}` + (sid ? `?sid=${sid}` : '')
+    const response = await fetch(url, { headers })
     if (!response.ok) throw new Error('Failed to fetch project info')
     return response.json()
 }
@@ -68,9 +69,10 @@ export async function duplicateProject(projectId) {
     return response.json()
 }
 
-export async function renameProject(projectId, name) {
+export async function renameProject(projectId, name, sid) {
     const headers = await getAuthHeaders()
-    const response = await fetch(`${API_BASE}/projects/${projectId}`, {
+    const url = `${API_BASE}/projects/${projectId}` + (sid ? `?sid=${sid}` : '')
+    const response = await fetch(url, {
         method: 'PATCH',
         headers,
         body: JSON.stringify({ name }),
@@ -93,6 +95,12 @@ export async function shareProject(projectId, settings) {
     return response.json()
 }
 
+export async function resolveShareId(shareId) {
+    const response = await fetch(`${API_BASE}/projects/resolve/${shareId}`)
+    if (!response.ok) throw new Error('Invalid or expired share link')
+    return response.json()
+}
+
 export async function getUserStorageInfo() {
     const headers = await getAuthHeaders()
     // Use projects router which has proper auth middleware
@@ -106,12 +114,13 @@ export async function getUserStorageInfo() {
 
 // ============ COMPILATION ============
 
-export async function compileLatex({ code, engine, filename, projectId }) {
+export async function compileLatex({ code, engine, filename, projectId, sid }) {
     const headers = await getAuthHeaders()
-    const response = await fetch(`${API_BASE}/compile`, {
+    const url = `${API_BASE}/compile` + (sid ? `?sid=${sid}` : '')
+    const response = await fetch(url, {
         method: 'POST',
         headers,
-        body: JSON.stringify({ projectId, code, engine, filename }),
+        body: JSON.stringify({ projectId, code, engine, filename, shareId: sid }),
     })
     const data = await response.json().catch(() => ({ success: false }))
 
@@ -125,9 +134,11 @@ export async function compileLatex({ code, engine, filename, projectId }) {
     }
 }
 
-export async function resolveSyncTeX(projectId, page, x, y) {
+export async function resolveSyncTeX(projectId, page, x, y, sid) {
     const headers = await getAuthHeaders()
-    const query = new URLSearchParams({ projectId, page, x, y }).toString()
+    const params = { projectId, page, x, y }
+    if (sid) params.sid = sid
+    const query = new URLSearchParams(params).toString()
     const response = await fetch(`${API_BASE}/compile/synctex?${query}`, { headers })
     if (!response.ok) throw new Error('SyncTeX resolution failed')
     return response.json()
@@ -135,34 +146,39 @@ export async function resolveSyncTeX(projectId, page, x, y) {
 
 // ============ FILE OPERATIONS ============
 
-export async function getFiles(projectId) {
+export async function getFiles(projectId, sid) {
     const headers = await getAuthHeaders()
-    const response = await fetch(`${API_BASE}/files/${projectId}`, { headers })
+    const url = `${API_BASE}/files/${projectId}` + (sid ? `?sid=${sid}` : '')
+    const response = await fetch(url, { headers })
     if (!response.ok) throw new Error('Failed to fetch files')
     return response.json()
 }
 
-export async function getFileContent(projectId, filename) {
+export async function getFileContent(projectId, filename, sid) {
     const isBinary = /\.(png|jpg|jpeg|gif|ico|pdf|sty|cls|zip|gz|tar|bib)$/i.test(filename)
     if (isBinary) {
-        return { isBinary: true, url: await getFileUrl(projectId, filename) }
+        return { isBinary: true, url: await getFileUrl(projectId, filename, sid) }
     }
 
     const headers = await getAuthHeaders()
-    const response = await fetch(`${API_BASE}/files/${projectId}/${encodeFilename(filename)}`, { headers })
+    const url = `${API_BASE}/files/${projectId}/${encodeFilename(filename)}` + (sid ? `?sid=${sid}` : '')
+    const response = await fetch(url, { headers })
     if (!response.ok) throw new Error('Failed to fetch file content')
     return response.json()
 }
 
-export async function getFileUrl(projectId, filename) {
+export async function getFileUrl(projectId, filename, sid) {
     const user = auth.currentUser
     const token = user ? await user.getIdToken() : ''
-    return `${API_BASE}/files/${projectId}/${encodeFilename(filename)}/download?token=${token}&mode=view`
+    let url = `${API_BASE}/files/${projectId}/${encodeFilename(filename)}/download?token=${token}&mode=view`
+    if (sid) url += `&sid=${sid}`
+    return url
 }
 
-export async function saveFile(projectId, filename, content) {
+export async function saveFile(projectId, filename, content, sid) {
     const headers = await getAuthHeaders()
-    const response = await fetch(`${API_BASE}/files/${projectId}/${encodeFilename(filename)}`, {
+    const url = `${API_BASE}/files/${projectId}/${encodeFilename(filename)}` + (sid ? `?sid=${sid}` : '')
+    const response = await fetch(url, {
         method: 'PUT',
         headers,
         body: JSON.stringify({ content }),
@@ -171,9 +187,10 @@ export async function saveFile(projectId, filename, content) {
     return response.json()
 }
 
-export async function createFile(projectId, filename, content = '', overwrite = false) {
+export async function createFile(projectId, filename, content = '', overwrite = false, sid) {
     const headers = await getAuthHeaders()
-    const response = await fetch(`${API_BASE}/files/${projectId}`, {
+    const url = `${API_BASE}/files/${projectId}` + (sid ? `?sid=${sid}` : '')
+    const response = await fetch(url, {
         method: 'POST',
         headers,
         body: JSON.stringify({ filename, content, overwrite }),
@@ -182,9 +199,10 @@ export async function createFile(projectId, filename, content = '', overwrite = 
     return response.json()
 }
 
-export async function deleteFile(projectId, filename) {
+export async function deleteFile(projectId, filename, sid) {
     const headers = await getAuthHeaders()
-    const response = await fetch(`${API_BASE}/files/${projectId}/${encodeFilename(filename)}`, {
+    const url = `${API_BASE}/files/${projectId}/${encodeFilename(filename)}` + (sid ? `?sid=${sid}` : '')
+    const response = await fetch(url, {
         method: 'DELETE',
         headers,
     })
@@ -192,9 +210,10 @@ export async function deleteFile(projectId, filename) {
     return response.json()
 }
 
-export async function renameFile(projectId, oldName, newName) {
+export async function renameFile(projectId, oldName, newName, sid) {
     const headers = await getAuthHeaders()
-    const response = await fetch(`${API_BASE}/files/${projectId}/rename`, {
+    const url = `${API_BASE}/files/${projectId}/rename` + (sid ? `?sid=${sid}` : '')
+    const response = await fetch(url, {
         method: 'POST',
         headers,
         body: JSON.stringify({ oldName, newName }),
@@ -203,9 +222,10 @@ export async function renameFile(projectId, oldName, newName) {
     return response.json()
 }
 
-export async function duplicateFile(projectId, filename) {
+export async function duplicateFile(projectId, filename, sid) {
     const headers = await getAuthHeaders()
-    const response = await fetch(`${API_BASE}/files/${projectId}/duplicate`, {
+    const url = `${API_BASE}/files/${projectId}/duplicate` + (sid ? `?sid=${sid}` : '')
+    const response = await fetch(url, {
         method: 'POST',
         headers,
         body: JSON.stringify({ filename }),
@@ -214,9 +234,10 @@ export async function duplicateFile(projectId, filename) {
     return response.json()
 }
 
-export async function moveFile(projectId, oldPath, newPath) {
+export async function moveFile(projectId, oldPath, newPath, sid) {
     const headers = await getAuthHeaders()
-    const response = await fetch(`${API_BASE}/files/${projectId}/move`, {
+    const url = `${API_BASE}/files/${projectId}/move` + (sid ? `?sid=${sid}` : '')
+    const response = await fetch(url, {
         method: 'POST',
         headers,
         body: JSON.stringify({ oldPath, newPath }),

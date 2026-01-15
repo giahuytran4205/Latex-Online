@@ -44,6 +44,7 @@ server.on('upgrade', async (request, socket, head) => {
             const url = new URL(request.url, `http://${request.headers.host}`)
             const projectId = url.searchParams.get('projectId')
             const token = url.searchParams.get('token')
+            const sid = url.searchParams.get('sid')
 
             if (!projectId) {
                 socket.write('HTTP/1.1 400 Bad Request\r\n\r\nMissing projectId')
@@ -60,7 +61,7 @@ server.on('upgrade', async (request, socket, head) => {
             }
 
             // Verify Permission (need at least 'view' to collaborate, but usually 'edit')
-            const authStatus = getProjectWithAuth(user, projectId, 'view')
+            const authStatus = getProjectWithAuth(user, projectId, 'view', sid)
             if (authStatus.error) {
                 socket.write(`HTTP/1.1 403 Forbidden\r\n\r\n${authStatus.error}`)
                 socket.destroy()
