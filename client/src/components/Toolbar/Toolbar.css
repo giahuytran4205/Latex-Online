@@ -18,6 +18,24 @@
     color: var(--accent);
 }
 
+.toolbar__project-name-container {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: var(--radius);
+    transition: background-color var(--transition);
+}
+
+.toolbar__project-name-container:hover {
+    background-color: var(--hover-color);
+}
+
+.toolbar__project-name-container:hover .toolbar__edit-icon {
+    opacity: 1;
+}
+
 .toolbar__project-name {
     font-weight: 600;
     color: var(--text-primary);
@@ -25,6 +43,25 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+.toolbar__edit-icon {
+    opacity: 0;
+    color: var(--text-muted);
+    transition: opacity var(--transition);
+}
+
+.toolbar__project-input {
+    font-weight: 600;
+    color: var(--text-primary);
+    background: var(--bg-primary);
+    border: 1px solid var(--accent);
+    padding: 2px 8px;
+    border-radius: var(--radius);
+    outline: none;
+    font-size: 1rem;
+    font-family: inherit;
+    width: 200px;
 }
 
 @media (max-width: 600px) {

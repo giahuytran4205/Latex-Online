@@ -68,6 +68,20 @@ export async function duplicateProject(projectId) {
     return response.json()
 }
 
+export async function renameProject(projectId, name) {
+    const headers = await getAuthHeaders()
+    const response = await fetch(`${API_BASE}/projects/${projectId}`, {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify({ name }),
+    })
+    if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || 'Failed to rename project')
+    }
+    return response.json()
+}
+
 export async function shareProject(projectId, settings) {
     const headers = await getAuthHeaders()
     const response = await fetch(`${API_BASE}/projects/${projectId}/share`, {

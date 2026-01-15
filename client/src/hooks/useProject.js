@@ -32,6 +32,7 @@ export function useProject(projectId) {
 
     return {
         projectInfo,
+        setProjectInfo,
         files,
         isLoading,
         collaborators,

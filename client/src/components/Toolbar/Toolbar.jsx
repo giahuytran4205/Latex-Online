@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react'
 import './Toolbar.css'
 
 function Toolbar({
@@ -10,9 +11,27 @@ function Toolbar({
     collaborators = [],
     pdfUrl,
     projectName,
+    onRenameProject,
     onBackToHome,
     onShare,
 }) {
+    const [isEditing, setIsEditing] = useState(false)
+    const [newName, setNewName] = useState(projectName || '')
+
+    useEffect(() => {
+        setNewName(projectName || '')
+    }, [projectName])
+
+    const handleRenameSubmit = async () => {
+        if (newName.trim() && newName !== projectName) {
+            const success = await onRenameProject(newName.trim())
+            if (success) setIsEditing(false)
+            else setNewName(projectName) // Reset on failure
+        } else {
+            setIsEditing(false)
+            setNewName(projectName)
+        }
+    }
     const handleDownload = () => {
         if (pdfUrl) {
             const a = document.createElement('a')
@@ -44,10 +63,33 @@ function Toolbar({
                         <polyline points="14,2 14,8 20,8" />
                         <path d="M9 15l2 2 4-4" />
                     </svg>
-                    {projectName ? (
-                        <span className="toolbar__project-name">{projectName}</span>
+                    {isEditing ? (
+                        <input
+                            type="text"
+                            className="toolbar__project-input"
+                            value={newName}
+                            onChange={(e) => setNewName(e.target.value)}
+                            onBlur={handleRenameSubmit}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter') handleRenameSubmit()
+                                if (e.key === 'Escape') {
+                                    setIsEditing(false)
+                                    setNewName(projectName)
+                                }
+                            }}
+                            autoFocus
+                        />
                     ) : (
-                        'LaTeX Online'
+                        <div
+                            className="toolbar__project-name-container"
+                            onClick={() => setIsEditing(true)}
+                            title="Click to rename project"
+                        >
+                            <span className="toolbar__project-name">{projectName || 'LaTeX Online'}</span>
+                            <svg className="toolbar__edit-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+                            </svg>
+                        </div>
                     )}
                 </div>
             </div>

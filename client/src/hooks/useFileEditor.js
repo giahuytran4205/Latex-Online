@@ -48,6 +48,7 @@ export function useFileEditor(projectId, initialFile = 'main.tex') {
             const cached = fileCache.current.get(activeFileName)
             setCode(cached)
             setLoadedFileName(activeFileName)
+            setIsCodeLoading(false)
             return
         }
 

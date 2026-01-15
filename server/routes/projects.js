@@ -401,6 +401,50 @@ router.post('/:projectId/duplicate', (req, res) => {
     }
 })
 
+// Update project info (e.g. rename)
+router.patch('/:projectId', (req, res) => {
+    try {
+        const userId = req.user.uid
+        const { projectId } = req.params
+        const { name } = req.body
+
+        const projectInfo = findProjectDir(projectId)
+        if (!projectInfo) {
+            return res.status(404).json({ error: 'Project not found' })
+        }
+
+        const { projectPath, ownerId } = projectInfo
+
+        // Only owner can rename
+        if (ownerId !== userId) {
+            return res.status(403).json({ error: 'Only project owner can rename the project' })
+        }
+
+        const metadataPath = join(projectPath, '.project.json')
+        let metadata = {}
+
+        if (existsSync(metadataPath)) {
+            metadata = JSON.parse(readFileSync(metadataPath, 'utf-8'))
+        }
+
+        if (name) metadata.name = name.trim()
+        metadata.updatedAt = new Date().toISOString()
+
+        writeFileSync(metadataPath, JSON.stringify(metadata, null, 2))
+
+        console.log(`[Projects] Updated project ${projectId}: Name="${metadata.name}"`)
+
+        res.json({
+            success: true,
+            name: metadata.name,
+            updatedAt: metadata.updatedAt
+        })
+    } catch (error) {
+        console.error('[Projects] Error updating project:', error)
+        res.status(500).json({ error: error.message })
+    }
+})
+
 // Share project
 router.post('/:projectId/share', (req, res) => {
     try {

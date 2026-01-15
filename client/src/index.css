@@ -16,6 +16,7 @@
   --accent: #6366f1;
   --accent-hover: #4f46e5;
   --accent-light: rgba(99, 102, 241, 0.1);
+  --bg-active: rgba(99, 102, 241, 0.08);
   --success: #10b981;
   --warning: #f59e0b;
   --error: #ef4444;
@@ -38,6 +39,7 @@
   --accent: #818cf8;
   --accent-hover: #a5b4fc;
   --accent-light: rgba(129, 140, 248, 0.15);
+  --bg-active: rgba(129, 140, 248, 0.2);
   --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.4);
   --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
 }

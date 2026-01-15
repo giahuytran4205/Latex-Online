@@ -13,7 +13,7 @@ import { useToast } from '../../components/Toast/Toast'
 import { useConfirm } from '../../components/ConfirmDialog/ConfirmDialog'
 
 // Services
-import { createFile, deleteFile, renameFile, duplicateFile, resolveSyncTeX } from '../../services/api'
+import { createFile, deleteFile, renameFile, duplicateFile, resolveSyncTeX, renameProject } from '../../services/api'
 
 // Hooks
 import { useResizable } from '../../hooks/useResizable'
@@ -35,7 +35,7 @@ function EditorPage() {
     const { sidebarWidth, editorWidth, consoleHeight, isResizing, handleMouseDown } = useResizable()
 
     // 2. Project & Files List
-    const { projectInfo, files, isLoading, collaborators, refreshFiles } = useProject(projectId)
+    const { projectInfo, setProjectInfo, files, isLoading, collaborators, refreshFiles } = useProject(projectId)
 
     // 3. File Editing Content
     const {
@@ -152,6 +152,20 @@ function EditorPage() {
         return success
     }
 
+    const handleRenameProject = async (newName) => {
+        try {
+            const res = await renameProject(projectId, newName)
+            if (res.success) {
+                setProjectInfo(prev => ({ ...prev, name: res.name }))
+                toast.success('Project renamed')
+                return true
+            }
+        } catch (err) {
+            toast.error(err.message)
+            return false
+        }
+    }
+
     const onCompile = () => {
         setConsoleOpen(true)
         compile(activeFileName, code, engine, triggerSave)
@@ -185,6 +199,7 @@ function EditorPage() {
                 collaborators={collaborators}
                 pdfUrl={pdfUrl}
                 projectName={projectInfo?.name}
+                onRenameProject={handleRenameProject}
                 onBackToHome={() => navigate('/')}
                 onShare={() => setIsShareModalOpen(true)}
             />
