@@ -10,9 +10,6 @@ const FileViewer = ({ filename, url }) => {
                 <div className="file-viewer__content">
                     <img src={url} alt={filename} className="file-viewer__image" />
                 </div>
-                <div className="file-viewer__footer">
-                    <span className="file-viewer__filename">{filename}</span>
-                </div>
             </div>
         )
     }
@@ -22,9 +19,6 @@ const FileViewer = ({ filename, url }) => {
             <div className="file-viewer">
                 <div className="file-viewer__content">
                     <iframe src={url + '#toolbar=0'} title={filename} className="file-viewer__pdf" />
-                </div>
-                <div className="file-viewer__footer">
-                    <span className="file-viewer__filename">{filename}</span>
                 </div>
             </div>
         )
@@ -41,9 +35,7 @@ const FileViewer = ({ filename, url }) => {
                 </div>
                 <p>This file type cannot be displayed directly.</p>
                 <p className="file-viewer__hint">Right-click the file in the sidebar to download it.</p>
-            </div>
-            <div className="file-viewer__footer">
-                <span className="file-viewer__filename">{filename}</span>
+                <div className="file-viewer__filename-hint">{filename}</div>
             </div>
         </div>
     )

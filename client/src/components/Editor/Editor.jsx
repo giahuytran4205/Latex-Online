@@ -188,18 +188,15 @@ function latexCompletions(context) {
 
 // Syntax Highlighting Style
 const latexHighlightStyle = HighlightStyle.define([
-    { tag: t.keyword, color: 'var(--syntax-keyword)' }, // \command
+    { tag: [t.keyword, t.builtin, t.function(t.variableName), t.labelName], color: 'var(--syntax-keyword)' },
     { tag: t.atom, color: 'var(--syntax-atom)' },       // special values
-    { tag: t.variableName, color: 'var(--syntax-variable)' }, // {arg}
+    { tag: [t.variableName, t.propertyName, t.typeName], color: 'var(--syntax-variable)' }, // {arg}
     { tag: t.number, color: 'var(--syntax-number)' },
     { tag: t.string, color: 'var(--syntax-string)' },
     { tag: t.comment, color: 'var(--syntax-comment)', fontStyle: 'italic' },
-    { tag: t.punctuation, color: 'var(--syntax-punctuation)' },
-    { tag: t.bracket, color: 'var(--syntax-punctuation)' },
-    { tag: t.operator, color: 'var(--syntax-punctuation)' },
+    { tag: [t.punctuation, t.bracket, t.operator], color: 'var(--syntax-punctuation)' },
     { tag: t.meta, color: 'var(--syntax-keyword)' },    // preamble stuff
     { tag: t.definition(t.name), color: 'var(--syntax-keyword)' },
-    { tag: t.propertyName, color: 'var(--syntax-variable)' },
 ])
 
 // Wrap selection with LaTeX command
@@ -254,6 +251,9 @@ function Editor({
         },
         '&.cm-focused': {
             outline: 'none',
+        },
+        '.cm-cursor, .cm-dropCursor': {
+            borderLeftColor: 'var(--text-primary)',
         },
         '.cm-scroller': {
             fontFamily: "'JetBrains Mono', 'Fira Code', 'Consolas', monospace",
