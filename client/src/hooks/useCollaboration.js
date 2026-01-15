@@ -21,9 +21,12 @@ export function useCollaboration(projectId, userId, userName, activeFile, sid) {
             const token = auth.currentUser ? await auth.currentUser.getIdToken() : ''
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
             const host = window.location.host
-            const wsUrl = `${protocol}//${host}/ws?projectId=${projectId}&token=${token}${sid ? `&sid=${sid}` : ''}`
+            const wsUrl = `${protocol}//${host}/ws` // Base URL, room name appended by provider
 
-            const provider = new WebsocketProvider(wsUrl, projectId, ydocRef.current)
+            const params = { token: token || '', projectId } // projectId also in params for redundancy/compatibility
+            if (sid) params.sid = sid
+
+            const provider = new WebsocketProvider(wsUrl, projectId, ydocRef.current, { params })
             providerRef.current = provider
 
             const color = USER_COLORS[Math.floor(Math.random() * USER_COLORS.length)]

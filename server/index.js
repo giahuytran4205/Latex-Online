@@ -42,9 +42,18 @@ server.on('upgrade', async (request, socket, head) => {
     try {
         if (request.url.startsWith('/ws')) {
             const url = new URL(request.url, `http://${request.headers.host}`)
-            const projectId = url.searchParams.get('projectId')
+
+            // Try to get projectId from path first (standard y-websocket), then query
+            let projectId = url.searchParams.get('projectId')
+            if (!projectId) {
+                const match = url.pathname.match(/^\/ws\/([^\/]+)/)
+                if (match) projectId = match[1]
+            }
+
             const token = url.searchParams.get('token')
             const sid = url.searchParams.get('sid')
+
+            console.log(`[WS Upgrade] Project: ${projectId}, SID: ${sid ? sid.substring(0, 8) + '...' : 'None'}`)
 
             if (!projectId) {
                 socket.write('HTTP/1.1 400 Bad Request\r\n\r\nMissing projectId')
@@ -68,8 +77,9 @@ server.on('upgrade', async (request, socket, head) => {
                 return
             }
 
-            // Attach user info to request for the connection handler
+            // Attach user info and projectId to request for the connection handler
             request.user = user
+            request.projectId = projectId
 
             wss.handleUpgrade(request, socket, head, (ws) => {
                 wss.emit('connection', ws, request)
@@ -84,9 +94,9 @@ server.on('upgrade', async (request, socket, head) => {
 })
 
 wss.on('connection', (ws, req) => {
-    const url = new URL(req.url, `http://${req.headers.host}`)
-    const projectId = url.searchParams.get('projectId') || 'default'
-    const user = req.user // Attached during upgrade
+    // projectId is attached during upgrade
+    const projectId = req.projectId || 'default'
+    const user = req.user
     const userId = user?.uid || 'anonymous'
 
     console.log(`[WS] User ${userId} (${user?.email}) joined project ${projectId}`)
