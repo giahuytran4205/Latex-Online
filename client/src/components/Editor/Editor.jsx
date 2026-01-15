@@ -377,7 +377,7 @@ function Editor({ code, onChange, onCompile, activeFile, errors = [], jumpToLine
         if (!viewRef.current || !jumpToLine) return
 
         // Prevent jumping multiple times for the same event
-        if (lastJumpRef.current?.timestamp === jumpToLine.timestamp && lastJumpRef.current?.code === code) return
+        if (lastJumpRef.current === jumpToLine.timestamp) return
 
         const { line, file } = jumpToLine
 
@@ -400,7 +400,7 @@ function Editor({ code, onChange, onCompile, activeFile, errors = [], jumpToLine
                 userEvent: 'select'
             })
             viewRef.current.focus()
-            lastJumpRef.current = { timestamp: jumpToLine.timestamp, code }
+            lastJumpRef.current = jumpToLine.timestamp
         }
     }, [jumpToLine, code, activeFile]) // Re-run when code or activeFile updates
 

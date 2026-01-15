@@ -357,6 +357,7 @@ export async function resolveSyncTeX(projectId, page, x, y) {
     return new Promise((resolve, reject) => {
         // synctex edit -o page:x:y:main.pdf
         const args = ['edit', '-o', `${page}:${x}:${y}:main.pdf`]
+        console.log(`[SyncTeX] Executing: synctex ${args.join(' ')} (CWD: ${workDir})`)
 
         const proc = spawn('synctex', args, { cwd: workDir })
 

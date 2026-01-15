@@ -137,16 +137,14 @@ function Preview({ pdfUrl, onSyncTeX }) {
         const clickY = e.clientY - rect.top
 
         // PDF.js uses 72 DPI but browsers typically use 96 DPI for CSS pixels
-        const xPoints = (clickX / scale) * 0.75
-        const yPointsFromTop = (clickY / scale) * 0.75
+        // Conversion: pixels * (72 / 96) = pixels * 0.75
+        const s = scale || 1
+        const xPoints = (clickX / s) * 0.75
+        const yPoints = (clickY / s) * 0.75
 
-        // IMPORTANT: SyncTeX usually expects Y from bottom for the -o option in many setups
-        // although some versions handle top-left. Let's try inverting it.
-        const yPoints = pageHeight - yPointsFromTop
-
-        console.log(`SyncTeX Double Click: Page ${pageNum}, X(pt): ${xPoints.toFixed(2)}, Y(pt): ${yPoints.toFixed(2)} (Inverted from ${yPointsFromTop.toFixed(2)})`)
+        console.log(`[SyncTeX] Double Click (Page ${pageNum}): X=${xPoints.toFixed(1)}pt, Y=${yPoints.toFixed(1)}pt`)
         onSyncTeX(pageNum, xPoints, yPoints)
-    }, [onSyncTeX, scale, pageHeight])
+    }, [onSyncTeX, scale])
 
     const handleDownload = () => {
         if (!pdfUrl) return
