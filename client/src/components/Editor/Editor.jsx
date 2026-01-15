@@ -379,7 +379,7 @@ function Editor({ code, onChange, onCompile, activeFile, errors = [], jumpToLine
         // Prevent jumping multiple times for the same event
         if (lastJumpRef.current === jumpToLine.timestamp) return
 
-        const { line, file } = jumpToLine
+        const { line, file, column } = jumpToLine
 
         if (file && file !== activeFile) return
 
@@ -391,11 +391,16 @@ function Editor({ code, onChange, onCompile, activeFile, errors = [], jumpToLine
         if (line >= 1 && line <= viewRef.current.state.doc.lines) {
             const lineInfo = viewRef.current.state.doc.line(line)
 
-            // Check if the current line content matches what we expect or just jump
-            // Actually, we just need to make sure the document has enough lines
+            // SyncTeX columns are usually 1-indexed. CodeMirror is 0-indexed.
+            // If column is provided and > 0, we try to move to that position.
+            let pos = lineInfo.from
+            if (column && column > 0) {
+                // Limit to line length to avoid overflow
+                pos = Math.min(lineInfo.from + column - 1, lineInfo.to)
+            }
 
             viewRef.current.dispatch({
-                selection: { anchor: lineInfo.from, head: lineInfo.from },
+                selection: { anchor: pos, head: pos },
                 scrollIntoView: true,
                 userEvent: 'select'
             })

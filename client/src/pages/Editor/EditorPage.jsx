@@ -327,7 +327,12 @@ function EditorPage() {
 
                     // Small delay ensures Editor reacts to file switch BEFORE line jump
                     setTimeout(() => {
-                        setJumpToLine({ file: actualName, line: result.line, timestamp: Date.now() })
+                        setJumpToLine({
+                            file: actualName,
+                            line: result.line,
+                            column: result.column,
+                            timestamp: Date.now()
+                        })
                         if (isNewFile) toast.success(`Jumped to file: ${actualName}`)
                     }, isNewFile ? 100 : 0)
                 } else {
