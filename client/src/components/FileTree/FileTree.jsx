@@ -21,6 +21,29 @@ function FileTree({ projectId, files, activeFile, onFileSelect, onAddFile, onDel
     })
     const [uploadProgress, setUploadProgress] = useState(null) // { current, total, filename }
 
+    // Sync selectedFiles with activeFile when it determines the current editor file
+    useEffect(() => {
+        if (activeFile) {
+            setSelectedFiles(new Set([activeFile]))
+            // Also ensure the folder containing the active file is expanded
+            const parts = activeFile.split('/')
+            if (parts.length > 1) {
+                const parentPath = parts.slice(0, -1).join('/')
+                setExpandedFolders(prev => {
+                    // Naive check: if parent not expanded, add it. 
+                    // Better: add all parent paths
+                    const next = new Set(prev)
+                    let currentPath = ''
+                    for (let i = 0; i < parts.length - 1; i++) {
+                        currentPath = currentPath ? `${currentPath}/${parts[i]}` : parts[i]
+                        next.add(currentPath)
+                    }
+                    return next
+                })
+            }
+        }
+    }, [activeFile])
+
     const fileInputRef = useRef(null)
     const folderInputRef = useRef(null)
 
