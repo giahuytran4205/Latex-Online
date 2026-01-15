@@ -303,8 +303,11 @@ function EditorPage() {
     }
 
     const handleSyncTeX = async (page, x, y) => {
+        console.log(`[EditorPage] SyncTeX Triggered: Page ${page}`)
         try {
             const result = await resolveSyncTeX(projectId, page, x, y)
+            console.log('[EditorPage] SyncTeX Result:', result)
+
             if (result.success) {
                 // Normalize path: SyncTeX often returns ./filename.tex
                 const fileName = result.file.replace(/^\.\//, '')
