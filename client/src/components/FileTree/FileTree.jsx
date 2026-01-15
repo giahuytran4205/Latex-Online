@@ -716,7 +716,7 @@ function FileTree({ projectId, files, activeFile, onFileSelect, onAddFile, onDel
         return (
             <div key={item.path || 'root'} className="file-tree__node">
                 <div
-                    className={`file-tree__item ${isActive ? 'file-tree__item--active' : ''} ${isSelected ? 'file-tree__item--selected' : ''} ${isFolder ? 'file-tree__item--folder' : ''}`}
+                    className={`file-tree__item ${isActive || isSelected ? 'file-tree__item--selected' : ''} ${isFolder ? 'file-tree__item--folder' : ''}`}
                     style={{ paddingLeft: `${12 + depth * 16}px` }}
                     draggable
                     onDragStart={(e) => handleDragStartItem(e, item)}
