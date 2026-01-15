@@ -361,7 +361,10 @@ export async function resolveSyncTeX(projectId, page, x, y) {
         const proc = spawn('synctex', args, { cwd: workDir })
 
         let output = ''
-        proc.stdout.on('data', (d) => output += d.toString())
+        proc.stdout.on('data', (d) => {
+            output += d.toString()
+            console.log('[SyncTeX] Raw Output:', d.toString())
+        })
         proc.stderr.on('data', (d) => console.error('[SyncTeX] Error:', d.toString()))
 
         proc.on('close', (code) => {

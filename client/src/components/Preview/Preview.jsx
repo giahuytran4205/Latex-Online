@@ -124,8 +124,14 @@ function Preview({ pdfUrl, onSyncTeX }) {
         const clickX = e.clientX - rect.left
         const clickY = e.clientY - rect.top
 
-        console.log(`SyncTeX Double Click: Page ${pageNum}, X: ${clickX / scale}, Y: ${clickY / scale}`)
-        onSyncTeX(pageNum, clickX / scale, clickY / scale)
+        // PDF.js uses 72 DPI but browsers typically use 96 DPI for CSS pixels
+        // SyncTeX expects points (1/72 inch). 
+        // Conversion: pixels * (72 / 96) = pixels * 0.75
+        const xPoints = (clickX / scale) * 0.75
+        const yPoints = (clickY / scale) * 0.75
+
+        console.log(`SyncTeX Double Click: Page ${pageNum}, X(pt): ${xPoints.toFixed(2)}, Y(pt): ${yPoints.toFixed(2)}`)
+        onSyncTeX(pageNum, xPoints, yPoints)
     }, [onSyncTeX, scale])
 
     const handleDownload = () => {
