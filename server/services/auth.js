@@ -127,4 +127,39 @@ export const verifyToken = async (req, res, next) => {
     }
 }
 
-export default { verifyToken }
+/**
+ * Middleware that makes token verification optional
+ */
+export const verifyTokenOptional = async (req, res, next) => {
+    const authHeader = req.headers.authorization
+    const queryToken = req.query.token
+    const token = authHeader ? authHeader.split('Bearer ')[1] : queryToken
+
+    if (!token) {
+        req.user = null
+        return next()
+    }
+
+    try {
+        if (admin.apps.length) {
+            try {
+                const decodedToken = await admin.auth().verifyIdToken(token)
+                req.user = decodedToken
+                return next()
+            } catch (err) {
+                // Token was provided but invalid - we still allow req.user to be null
+                req.user = null
+                return next()
+            }
+        }
+
+        const decoded = decodeTokenUnsafe(token)
+        req.user = decoded || null
+        return next()
+    } catch (error) {
+        req.user = null
+        return next()
+    }
+}
+
+export default { verifyToken, verifyTokenOptional }

@@ -4,7 +4,7 @@ import { join, dirname, extname } from 'path'
 import { fileURLToPath } from 'url'
 import { getProjectWithAuth } from '../utils/project.js'
 import admin from 'firebase-admin'
-import { verifyToken } from '../services/auth.js'
+import { verifyToken, verifyTokenOptional } from '../services/auth.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -48,8 +48,8 @@ router.get('/temp/:filename', (req, res) => {
     }
 })
 
-// Apply auth middleware to remaining routes
-router.use(verifyToken)
+// Apply auth middleware to remaining routes (optional if share ID provided)
+router.use(verifyTokenOptional)
 
 // getProjectWithAuth and findProjectInfo are now imported from ../utils/project.js
 

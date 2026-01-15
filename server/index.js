@@ -52,9 +52,9 @@ server.on('upgrade', async (request, socket, head) => {
                 return
             }
 
-            // Verify User
+            // Verify User (optional if sid is provided)
             const user = await decodeAndVerifyToken(token)
-            if (!user) {
+            if (!user && !sid) {
                 socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n')
                 socket.destroy()
                 return

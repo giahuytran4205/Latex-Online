@@ -40,7 +40,7 @@ export function useCompiler(projectId, sid) {
         } finally {
             setIsCompiling(false)
         }
-    }, [projectId])
+    }, [projectId, sid])
 
     return {
         pdfUrl,

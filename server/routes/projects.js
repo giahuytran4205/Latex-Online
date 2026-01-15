@@ -4,7 +4,7 @@ import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
 import { v4 as uuidv4 } from 'uuid'
 import admin from 'firebase-admin'
-import { verifyToken } from '../services/auth.js'
+import { verifyToken, verifyTokenOptional } from '../services/auth.js'
 import { findProjectInfo, getProjectWithAuth, registerShareMapping, findProjectByShareId } from '../utils/project.js'
 
 const __filename = fileURLToPath(import.meta.url)
@@ -138,10 +138,8 @@ router.get('/resolve/:shareId', (req, res) => {
 })
 
 // Apply auth middleware to all routes below
-router.use(verifyToken)
-
-// Get all projects for user
-router.get('/', (req, res) => {
+// Routes that strictly require authentication
+router.get('/', verifyToken, (req, res) => {
     try {
         const userId = req.user.uid
         const userProjectsDir = join(PROJECTS_DIR, userId)
@@ -192,7 +190,7 @@ router.get('/', (req, res) => {
 })
 
 // Get user storage info - MUST be before /:projectId route
-router.get('/storage', (req, res) => {
+router.get('/storage', verifyToken, (req, res) => {
     try {
         const userId = req.user.uid
         const userProjectsDir = join(PROJECTS_DIR, userId)
@@ -241,7 +239,7 @@ const findProjectDir = (projectId, userId) => {
 }
 
 // Get single project info
-router.get('/:projectId', (req, res) => {
+router.get('/:projectId', verifyTokenOptional, (req, res) => {
     try {
         const { projectId } = req.params
         const shareId = req.query.sid || req.headers['x-share-id']
@@ -294,7 +292,7 @@ router.get('/:projectId', (req, res) => {
 })
 
 // Create new project
-router.post('/', (req, res) => {
+router.post('/', verifyToken, (req, res) => {
     try {
         const userId = req.user.uid
         const { name, template = 'blank' } = req.body
@@ -350,11 +348,14 @@ router.post('/', (req, res) => {
 })
 
 // Delete project
-router.delete('/:projectId', (req, res) => {
+router.delete('/:projectId', verifyTokenOptional, (req, res) => {
     try {
-        const userId = req.user.uid
         const { projectId } = req.params
-        const projectPath = join(PROJECTS_DIR, userId, projectId)
+        const shareId = req.query.sid || req.headers['x-share-id']
+        const auth = getProjectWithAuth(req.user, projectId, 'owner', shareId)
+        if (auth.error) return res.status(auth.status).json({ error: auth.error })
+
+        const { projectPath, ownerId } = auth
 
         if (!existsSync(projectPath)) {
             return res.status(404).json({ error: 'Project not found' })
@@ -371,11 +372,14 @@ router.delete('/:projectId', (req, res) => {
 })
 
 // Duplicate project
-router.post('/:projectId/duplicate', (req, res) => {
+router.post('/:projectId/duplicate', verifyTokenOptional, (req, res) => {
     try {
-        const userId = req.user.uid
         const { projectId } = req.params
-        const srcPath = join(PROJECTS_DIR, userId, projectId)
+        const shareId = req.query.sid || req.headers['x-share-id']
+        const auth = getProjectWithAuth(req.user, projectId, 'view', shareId)
+        if (auth.error) return res.status(auth.status).json({ error: auth.error })
+
+        const { projectPath: srcPath, ownerId } = auth
 
         if (!existsSync(srcPath)) {
             return res.status(404).json({ error: 'Project not found' })
@@ -421,9 +425,8 @@ router.post('/:projectId/duplicate', (req, res) => {
 })
 
 // Update project info (e.g. rename)
-router.patch('/:projectId', (req, res) => {
+router.patch('/:projectId', verifyTokenOptional, (req, res) => {
     try {
-        const userId = req.user.uid
         const { projectId } = req.params
         const { name } = req.body
         const shareId = req.query.sid || req.headers['x-share-id']
@@ -458,17 +461,17 @@ router.patch('/:projectId', (req, res) => {
 })
 
 // Share project
-router.post('/:projectId/share', (req, res) => {
+router.post('/:projectId/share', verifyTokenOptional, (req, res) => {
     try {
-        const userId = req.user.uid
         const { projectId } = req.params
         const { publicAccess, collaborators } = req.body
         const shareId = req.query.sid || req.headers['x-share-id']
         const auth = getProjectWithAuth(req.user, projectId, 'owner', shareId)
         if (auth.error) {
-            // Check if it's just 'edit' vs 'owner'
-            const viewAuth = getProjectWithAuth(req.user, projectId, 'edit')
-            if (!viewAuth.error && viewAuth.ownerId !== userId) {
+            // Check if it's just 'edit' vs 'owner' (collaborators might have edit but not owner)
+            const viewAuth = getProjectWithAuth(req.user, projectId, 'edit', shareId)
+            const userId = req.user?.uid
+            if (!viewAuth.error && viewAuth.ownerId !== userId && userId) {
                 return res.status(403).json({ error: 'Only project owner can change sharing settings' })
             }
             return res.status(auth.status || 403).json({ error: auth.error })

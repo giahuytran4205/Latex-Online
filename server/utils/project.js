@@ -86,9 +86,7 @@ export const registerShareMapping = (shareId, projectId, ownerId, level = 'view'
  * @param {string} providedShareId - Optional shareId provided in query/headers
  */
 export const getProjectWithAuth = (user, projectId, requiredPermission = 'view', providedShareId = null) => {
-    if (!user || !user.uid) return { error: 'Unauthorized', status: 401 }
-
-    const userId = user.uid
+    const userId = user?.uid || null
     let info = null
     let usedShareId = false
 

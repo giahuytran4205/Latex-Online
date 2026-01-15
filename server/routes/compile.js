@@ -1,19 +1,18 @@
 import express from 'express'
 import { compileLatex, resolveSyncTeX } from '../services/latex.js'
 import admin from 'firebase-admin'
-import { verifyToken } from '../services/auth.js'
+import { verifyTokenOptional } from '../services/auth.js'
 import { getProjectWithAuth } from '../utils/project.js'
 
 const router = express.Router()
 
-// verifyToken is imported from services/auth.js
-
-router.use(verifyToken)
+// Allow compilation via share link (sid)
+router.use(verifyTokenOptional)
 
 // POST /api/compile
 router.post('/', async (req, res) => {
     try {
-        const userId = req.user.uid
+        const userId = req.user?.uid || null
         const { projectId, filename, engine, code } = req.body
         const shareId = req.query.sid || req.body.shareId || req.headers['x-share-id']
 
@@ -23,7 +22,7 @@ router.post('/', async (req, res) => {
             return res.status(auth.status).json({ success: false, error: auth.error })
         }
 
-        console.log(`[Compile] Request for project ${projectId} by user ${userId} (${engine || 'pdflatex'})`)
+        console.log(`[Compile] Request for project ${projectId} by user ${userId || 'anonymous'} (${engine || 'pdflatex'})`)
 
         const result = await compileLatex(projectId, engine, filename, code, userId)
 

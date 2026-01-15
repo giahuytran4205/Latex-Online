@@ -361,7 +361,8 @@ function Editor({
                     })
                 }
 
-                if (!projectId && update.docChanged && !isInternalChange.current) {
+                // Always report changes if they are internal (user input)
+                if (update.docChanged && !isInternalChange.current) {
                     onChangeRef.current?.(update.state.doc.toString())
                 }
             }),

@@ -26,7 +26,7 @@ export function useProject(projectId, sid) {
         } finally {
             setIsLoading(false)
         }
-    }, [projectId])
+    }, [projectId, sid])
 
     useEffect(() => {
         loadProject()
