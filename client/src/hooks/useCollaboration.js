@@ -64,7 +64,7 @@ export function useCollaboration(projectId, userId, userName, activeFile, sid) {
         return () => {
             if (providerRef.current) {
                 providerRef.current.disconnect()
-                // cleanup if needed
+                providerRef.current.destroy() // Explicitly destroy to clear awareness
             }
             providerRef.current = null
         }

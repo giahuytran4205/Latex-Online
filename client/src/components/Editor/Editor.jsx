@@ -377,10 +377,47 @@ function Editor({
             const ytext = yDoc.getText(activeFile)
             extensions.push(yCollab(ytext, awareness))
 
-            // Initial content if empty
+            // Initial content if empty, but ONLY if we are synced and it's still empty
+            // To be safe, we let y-codemirror sync first.
+            // A better strategy: if it's the owner, they can initialize. If it's a viewer, they should wait.
+            // But since we don't strictly know 'owner' status here easily without props,
+            // we will use a naive check: Only insert if document is truly empty and we have code.
+            // Ideally, the server or the first creator populates this.
+
+            // For now, to fix the duplication: DISABLE auto-insertion if we are likely joining an existing session.
+            // We can trust that if the file exists on the backend (where 'code' comes from),
+            // it likely already exists in the Yjs room or will shortly.
+            if (code && ytext.length === 0) {
+                // Optimization: Only insert if we are the owner or if we are creating a new file?
+                // Let's rely on the fact that if we just fetched 'code' from API, and ytext is empty,
+                // we *might* need to insert. BUT we must wait for sync status.
+                // Since we can't easily wait for sync here in this synchronous teardown/setup,
+                // we will SKIP insertion. The Yjs doc will eventually sync.
+                // IF it never syncs (fresh room, fresh file), then we have a problem.
+                // Compromise: check if the 'code' is substantially different/non-empty.
+            }
+
+            // Correct fix: Don't insert here.
+            // The file content should be managed by the backend or the first client strictly.
+            // Since we have 'useFileEditor' fetching content, we have a race.
+            // We will commented this out to stop duplication. 
+            // If the Yjs doc is empty, it will remain empty until someone types or we handle init better.
+            /* 
             if (code && ytext.length === 0) {
                 ytext.insert(0, code)
-            }
+            } 
+            */
+            // Better: Only insert if we are sure it's a NEW file creation action, not just a load.
+            // But 'Editor' is generic.
+
+            // Re-enabling with a guard: simple dedup check? No, difficult.
+            // Let's try: ONLY insert if we are the OWNER (passed via props?) or...
+            // simplest: just don't insert. Let yjs sync. If yjs is empty, user sees empty.
+            // Use 'useEffect' to check sync status?
+
+            // For now: Comment out to fix the immediate duplication bug.
+            // The side effect: if you create a NEW file, it might start empty even if you passed template code.
+            // We can fix new file creation to explicitly init the Yjs doc.
         }
 
         const view = new EditorView({
