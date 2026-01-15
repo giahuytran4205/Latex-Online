@@ -402,11 +402,9 @@ function Editor({
             // Since we have 'useFileEditor' fetching content, we have a race.
             // We will commented this out to stop duplication. 
             // If the Yjs doc is empty, it will remain empty until someone types or we handle init better.
-            /* 
             if (code && ytext.length === 0) {
                 ytext.insert(0, code)
-            } 
-            */
+            }
             // Better: Only insert if we are sure it's a NEW file creation action, not just a load.
             // But 'Editor' is generic.
 
