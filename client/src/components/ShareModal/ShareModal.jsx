@@ -7,8 +7,9 @@ function ShareModal({ isOpen, onClose, projectId, projectName, sid }) {
     const [sharingSettings, setSharingSettings] = useState({
         publicAccess: 'private', // private, view, edit
         collaborators: [],
-        shareId: ''
+        shares: { view: '', edit: '' }
     })
+    const [linkLevel, setLinkLevel] = useState('view') // 'view' or 'edit'
     const [email, setEmail] = useState('')
     const [isLoading, setIsLoading] = useState(false)
     const [copySuccess, setCopySuccess] = useState(false)
@@ -23,7 +24,7 @@ function ShareModal({ isOpen, onClose, projectId, projectName, sid }) {
                     setSharingSettings({
                         publicAccess: data.publicAccess || 'private',
                         collaborators: data.collaborators || [],
-                        shareId: data.shareId || ''
+                        shares: data.shares || { view: '', edit: '' }
                     })
                 } catch (err) {
                     console.error('Failed to fetch settings:', err)
@@ -47,15 +48,38 @@ function ShareModal({ isOpen, onClose, projectId, projectName, sid }) {
     }
 
     const getShareUrl = () => {
-        if (!sharingSettings.shareId) return window.location.origin
-        return `${window.location.origin}/s/${sharingSettings.shareId}`
+        const sid = sharingSettings.shares?.[linkLevel]
+        if (!sid) return ''
+        return `${window.location.origin}/s/${sid}`
     }
 
-    const handleCopyLink = () => {
+    const handleCopyLink = async () => {
         const url = getShareUrl()
-        navigator.clipboard.writeText(url)
-        setCopySuccess(true)
-        setTimeout(() => setCopySuccess(false), 2000)
+        if (!url) return
+
+        try {
+            if (navigator.clipboard && window.isSecureContext) {
+                await navigator.clipboard.writeText(url)
+                setCopySuccess(true)
+                setTimeout(() => setCopySuccess(false), 2000)
+            } else {
+                throw new Error('Clipboard API unavailable')
+            }
+        } catch (err) {
+            // Fallback
+            const input = document.createElement('input')
+            input.value = url
+            document.body.appendChild(input)
+            input.select()
+            try {
+                document.execCommand('copy')
+                setCopySuccess(true)
+                setTimeout(() => setCopySuccess(false), 2000)
+            } catch (e) {
+                toast.error('Failed to copy link')
+            }
+            document.body.removeChild(input)
+        }
     }
 
     const handleAddCollaborator = (e) => {
@@ -87,11 +111,25 @@ function ShareModal({ isOpen, onClose, projectId, projectName, sid }) {
                 <div className="share-modal__content">
                     <div className="share-section">
                         <h3>Link Sharing</h3>
+                        <div className="share-link-selector">
+                            <button
+                                className={`level-tab ${linkLevel === 'view' ? 'active' : ''}`}
+                                onClick={() => setLinkLevel('view')}
+                            >
+                                View Link
+                            </button>
+                            <button
+                                className={`level-tab ${linkLevel === 'edit' ? 'active' : ''}`}
+                                onClick={() => setLinkLevel('edit')}
+                            >
+                                Edit Link
+                            </button>
+                        </div>
                         <div className="share-link-box">
                             <input
                                 type="text"
                                 readOnly
-                                value={sharingSettings.shareId ? getShareUrl() : 'Generating link...'}
+                                value={getShareUrl() || 'Generating link...'}
                                 className="share-link-input"
                                 placeholder="Generating shareable link..."
                             />

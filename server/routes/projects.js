@@ -254,15 +254,25 @@ router.get('/:projectId', (req, res) => {
         const { projectPath, ownerId, granted, metadata } = auth
         const stat = statSync(projectPath)
 
-        // Ensure shareId exists in metadata and mapping
-        if (!metadata.shareId) {
-            metadata.shareId = uuidv4()
+        // Ensure shares exist in metadata and mapping
+        let metadataUpdated = false
+        if (!metadata.shares) {
+            metadata.shares = {
+                view: metadata.shareId || uuidv4(),
+                edit: uuidv4()
+            }
+            delete metadata.shareId
+            metadataUpdated = true
+        }
+
+        if (metadataUpdated) {
             const metadataPath = join(projectPath, '.project.json')
             writeFileSync(metadataPath, JSON.stringify(metadata, null, 2))
         }
 
-        // Always ensure mapping is registered
-        registerShareMapping(metadata.shareId, projectId, ownerId)
+        // Always ensure mappings are registered
+        registerShareMapping(metadata.shares.view, projectId, ownerId, 'view')
+        registerShareMapping(metadata.shares.edit, projectId, ownerId, 'edit')
 
         res.json({
             id: projectId,
@@ -272,7 +282,7 @@ router.get('/:projectId', (req, res) => {
             updatedAt: metadata.updatedAt || stat.mtime,
             size: getDirectorySize(projectPath),
             owner: ownerId,
-            shareId: metadata.shareId,
+            shares: metadata.shares,
             publicAccess: metadata.publicAccess,
             collaborators: metadata.collaborators,
             permission: granted
@@ -294,7 +304,10 @@ router.post('/', (req, res) => {
         }
 
         const projectId = uuidv4().substring(0, 12)
-        const shareId = uuidv4()
+        const shares = {
+            view: uuidv4(),
+            edit: uuidv4()
+        }
         const userProjectsDir = join(PROJECTS_DIR, userId)
         const projectPath = join(userProjectsDir, projectId)
 
@@ -312,21 +325,22 @@ router.post('/', (req, res) => {
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
             owner: userId,
-            shareId: shareId,
+            shares,
             publicAccess: 'private',
             collaborators: []
         }
         writeFileSync(join(projectPath, '.project.json'), JSON.stringify(metadata, null, 2))
 
-        // Register share mapping
-        registerShareMapping(shareId, projectId, userId)
+        // Register share mappings
+        registerShareMapping(shares.view, projectId, userId, 'view')
+        registerShareMapping(shares.edit, projectId, userId, 'edit')
 
         console.log(`[Projects] Created project ${projectId} for user ${userId}`)
 
         res.json({
             success: true,
             projectId,
-            shareId,
+            shares,
             name: metadata.name
         })
     } catch (error) {
@@ -473,10 +487,15 @@ router.post('/:projectId/share', (req, res) => {
         if (publicAccess !== undefined) metadata.publicAccess = publicAccess
         if (collaborators !== undefined) metadata.collaborators = collaborators
 
-        // Ensure shareId exists even when just updating share settings
-        if (!metadata.shareId) {
-            metadata.shareId = uuidv4()
-            registerShareMapping(metadata.shareId, projectId, ownerId)
+        // Ensure shares exist
+        if (!metadata.shares) {
+            metadata.shares = {
+                view: metadata.shareId || uuidv4(),
+                edit: uuidv4()
+            }
+            delete metadata.shareId
+            registerShareMapping(metadata.shares.view, projectId, ownerId, 'view')
+            registerShareMapping(metadata.shares.edit, projectId, ownerId, 'edit')
         }
 
         writeFileSync(metadataPath, JSON.stringify(metadata, null, 2))
@@ -487,7 +506,7 @@ router.post('/:projectId/share', (req, res) => {
             success: true,
             publicAccess: metadata.publicAccess,
             collaborators: metadata.collaborators,
-            shareId: metadata.shareId
+            shares: metadata.shares
         })
     } catch (error) {
         console.error('[Projects] Error sharing project:', error)

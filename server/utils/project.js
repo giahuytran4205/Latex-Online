@@ -59,6 +59,7 @@ export const findProjectByShareId = (shareId) => {
                     projectPath,
                     ownerId: data.ownerId,
                     projectId: data.projectId,
+                    level: data.level || 'view',
                     isSharedLink: true
                 }
             }
@@ -72,9 +73,9 @@ export const findProjectByShareId = (shareId) => {
 /**
  * Register or update a shareId mapping
  */
-export const registerShareMapping = (shareId, projectId, ownerId) => {
+export const registerShareMapping = (shareId, projectId, ownerId, level = 'view') => {
     const sharePath = join(SHARES_DIR, `${shareId}.json`)
-    writeFileSync(sharePath, JSON.stringify({ projectId, ownerId }, null, 2))
+    writeFileSync(sharePath, JSON.stringify({ projectId, ownerId, level }, null, 2))
 }
 
 /**
@@ -125,8 +126,8 @@ export const getProjectWithAuth = (user, projectId, requiredPermission = 'view',
     const isCollaborator = metadata.collaborators?.some(c => c.email === user.email)
     const publicLevel = metadata.publicAccess // 'private', 'view', 'edit'
 
-    // Verify shareId matches if it was used for access
-    const shareIdValid = providedShareId && metadata.shareId === providedShareId
+    // Determine level from share connection
+    const shareLevel = (info && info.isSharedLink) ? info.level : null
 
     // Resolve actually granted permission
     let granted = 'none'
@@ -134,9 +135,13 @@ export const getProjectWithAuth = (user, projectId, requiredPermission = 'view',
         granted = 'owner'
     } else if (isCollaborator) {
         granted = 'edit'
-    } else if (publicLevel !== 'private' && shareIdValid) {
-        // Access via valid share link
-        granted = publicLevel // 'view' or 'edit'
+    } else if (publicLevel !== 'private' && shareLevel) {
+        // Link level must be allowed by public setting
+        if (shareLevel === 'edit' && publicLevel === 'edit') {
+            granted = 'edit'
+        } else if (shareLevel === 'view' && (publicLevel === 'view' || publicLevel === 'edit')) {
+            granted = 'view'
+        }
     }
 
     // Check if granted meets required

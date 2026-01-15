@@ -71,6 +71,34 @@
     color: var(--text-muted, #9aa0a6);
 }
 
+.share-link-selector {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 8px;
+    background: var(--bg-secondary);
+    padding: 3px;
+    border-radius: 8px;
+    width: fit-content;
+}
+
+.level-tab {
+    background: transparent;
+    border: none;
+    padding: 6px 12px;
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: var(--text-muted);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.level-tab.active {
+    background: var(--bg-primary);
+    color: var(--accent);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
 .share-link-box {
     display: flex;
     gap: 8px;
