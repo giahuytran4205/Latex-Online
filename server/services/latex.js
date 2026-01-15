@@ -379,8 +379,9 @@ export async function resolveSyncTeX(projectId, page, x, y) {
             for (const line of lines) {
                 if (line.startsWith('File:')) {
                     const filePath = line.substring(line.indexOf(':') + 1).trim()
-                    // Return path relative to workDir, normalized with forward slashes
-                    result.file = relative(workDir, filePath).replace(/\\/g, '/')
+                    // Resolve path correctly relative to workDir
+                    const absolutePath = fs.existsSync(filePath) ? filePath : join(workDir, filePath)
+                    result.file = relative(workDir, absolutePath).replace(/\\/g, '/')
                 }
                 if (line.startsWith('Line:')) result.line = parseInt(line.split(':')[1].trim())
                 if (line.startsWith('Column:')) result.column = parseInt(line.split(':')[1].trim())

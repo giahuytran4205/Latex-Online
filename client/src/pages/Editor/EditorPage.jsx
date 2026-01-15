@@ -315,9 +315,9 @@ function EditorPage() {
                 if (fileExists) {
                     if (targetFile !== activeFileName) {
                         setActiveFileName(targetFile)
-                        // setJumpToLine will be processed by Editor after code loads
                     }
-                    setJumpToLine({ line: result.line, timestamp: Date.now() })
+                    // Pass filename to ensure editor jumps in the correct file
+                    setJumpToLine({ file: targetFile, line: result.line, timestamp: Date.now() })
 
                     // Show message if we switched files
                     if (targetFile !== activeFileName) {

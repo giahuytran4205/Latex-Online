@@ -377,9 +377,11 @@ function Editor({ code, onChange, onCompile, activeFile, errors = [], jumpToLine
         if (!viewRef.current || !jumpToLine) return
 
         // Prevent jumping multiple times for the same event
-        if (lastJumpRef.current === jumpToLine.timestamp) return
+        if (lastJumpRef.current?.timestamp === jumpToLine.timestamp && lastJumpRef.current?.code === code) return
 
-        const { line } = jumpToLine
+        const { line, file } = jumpToLine
+
+        if (file && file !== activeFile) return
 
         // Only jump if we have the correct document content
         // If code is still the old one, we wait for it to update (this effect will re-run)
@@ -395,9 +397,9 @@ function Editor({ code, onChange, onCompile, activeFile, errors = [], jumpToLine
                 userEvent: 'select'
             })
             viewRef.current.focus()
-            lastJumpRef.current = jumpToLine.timestamp
+            lastJumpRef.current = { timestamp: jumpToLine.timestamp, code }
         }
-    }, [jumpToLine, code]) // Re-run when code updates too
+    }, [jumpToLine, code, activeFile]) // Re-run when code or activeFile updates
 
     // Get display filename
     const displayName = activeFile ? activeFile.split('/').pop() : 'main.tex'
