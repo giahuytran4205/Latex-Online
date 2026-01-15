@@ -6,39 +6,26 @@ PROJECT_DIR="/data/data/com.termux/files/home/latex-online"
 NGINX_CONF_DIR="/data/data/com.termux/files/usr/etc/nginx/conf.d"
 NGINX_LOG_DIR="/data/data/com.termux/files/usr/var/log/nginx"
 
-echo "💎 Starting Premium Deployment System..."
+echo "💎 Starting Fast Deployment System (Fix Bug Mode)..."
 
 # 1. PREPARE ENVIRONMENT
 mkdir -p "$PROJECT_DIR/logs"
 mkdir -p "$NGINX_CONF_DIR"
 mkdir -p "$NGINX_LOG_DIR"
 
-# Simple TeX Live Check - DO NOT install during deploy (takes 30+ minutes)
-check_latex() {
-    echo "📦 Checking LaTeX..."
-    if command -v pdflatex &> /dev/null; then
-        echo "✅ pdflatex found: $(which pdflatex)"
-    else
-        echo "⚠️  WARNING: pdflatex not found!"
-        echo "⚠️  Please install manually ONCE by running:"
-        echo "⚠️  pkg install texlive-bin texlive-installer"
-        echo "⚠️  Continuing without LaTeX (compilation will fail)..."
-    fi
-}
+# Skip LaTeX check if it's already there
+if ! command -v pdflatex &> /dev/null; then
+    echo "⚠️  pdflatex not found, skipping check..."
+fi
 
-check_latex
+# 2. INSTALL SYSTEM DEPENDENCIES (SKIP UPDATES FOR SPEED)
+# pkg update is EXTREMELY slow, only run if node/nginx is missing
+if ! command -v nginx &> /dev/null || ! command -v node &> /dev/null; then
+    echo "📦 Initializing system packages (one-time setup)..."
+    pkg update -y || true
+    pkg install -y nginx nodejs lsof
+fi
 
-# 2. INSTALL SYSTEM DEPENDENCIES
-echo "📦 Updating system packages..."
-pkg update -y || true
-echo "📦 Installing nginx, nodejs, lsof..."
-echo "📦 Installing nginx, nodejs, lsof..."
-pkg install -y nginx nodejs lsof
-
-# Remove the complex explicit TeX Live check here since we handled it in check_latex wrapper
-# or we can trust check_latex() above.
-
-# PM2 is installed via npm, not pkg
 if ! command -v pm2 &> /dev/null; then
     echo "📦 Installing PM2 globally..."
     npm install -g pm2
@@ -50,9 +37,8 @@ cd "$PROJECT_DIR"
 echo "📦 Building Frontend..."
 cd client
 
-# Create .env.local from GitHub Secrets (passed via SSH env)
+# Sync Firebase config
 if [ -n "$VITE_FIREBASE_API_KEY" ]; then
-    echo "🔐 Creating Firebase config from secrets..."
     cat > .env.local <<EOF
 VITE_FIREBASE_API_KEY=$VITE_FIREBASE_API_KEY
 VITE_FIREBASE_AUTH_DOMAIN=$VITE_FIREBASE_AUTH_DOMAIN
@@ -61,85 +47,43 @@ VITE_FIREBASE_STORAGE_BUCKET=$VITE_FIREBASE_STORAGE_BUCKET
 VITE_FIREBASE_MESSAGING_SENDER_ID=$VITE_FIREBASE_MESSAGING_SENDER_ID
 VITE_FIREBASE_APP_ID=$VITE_FIREBASE_APP_ID
 EOF
-    echo "✅ .env.local created"
-else
-    echo "⚠️  No Firebase secrets found, using existing .env.local or defaults"
 fi
 
-npm install
+# Use --prefer-offline to speed up npm
+npm install --prefer-offline --no-audit --no-fund
 npm run build
 cd ..
 
 echo "🔧 Setting up Backend..."
 cd server
-npm install --production
+npm install --production --prefer-offline --no-audit --no-fund
 cd ..
 
-# 4. CONFIGURE NGINX
-echo "⚙️  Configuring Nginx Reverse Proxy..."
-MAIN_NGINX_CONF="/data/data/com.termux/files/usr/etc/nginx/nginx.conf"
-
-# Create a default nginx.conf if it doesn't exist
-if [ ! -f "$MAIN_NGINX_CONF" ]; then
-    echo "⚠️  nginx.conf missing, creating default..."
-    mkdir -p "$(dirname "$MAIN_NGINX_CONF")"
-    cat > "$MAIN_NGINX_CONF" <<EOF
-worker_processes  1;
-events {
-    worker_connections  1024;
-}
-http {
-    include       mime.types;
-    default_type  application/octet-stream;
-    sendfile        on;
-    keepalive_timeout  65;
-    include $NGINX_CONF_DIR/*.conf;
-}
-EOF
+# 4. CONFIGURE NGINX (Skip if already configured)
+if [ ! -f "$NGINX_CONF_DIR/latex-online.conf" ]; then
+    echo "⚙️  Configuring Nginx..."
+    cp "$PROJECT_DIR/nginx/latex-online.conf" "$NGINX_CONF_DIR/latex-online.conf"
+    nginx -s reload 2>/dev/null || nginx &
 fi
 
-cp "$PROJECT_DIR/nginx/latex-online.conf" "$NGINX_CONF_DIR/latex-online.conf"
+# 5. RESTART SERVICES (Targeted reload, not kill)
+echo "🚀 Reloading Backend via PM2..."
 
-# Ensure nginx main config includes our conf.d
-if ! grep -q "include $NGINX_CONF_DIR/*.conf;" "$MAIN_NGINX_CONF"; then
-    echo "🔗 Linking conf.d to main nginx.conf..."
-    sed -i '/http {/a \    include '"$NGINX_CONF_DIR"'/*.conf;' "$MAIN_NGINX_CONF"
+# SAFETY: Clear port 3005 only if it's dead/hung
+if lsof -Pi :3005 -sTCP:LISTEN -t >/dev/null ; then
+    echo "✅ Port 3005 is alive"
+else
+    echo "🔪 Clearing hung ports..."
+    fuser -k 3005/tcp || true
 fi
 
-# 5. RESTART SERVICES
-echo "🔄 Reloading Nginx..."
-nginx -s reload 2>/dev/null || nginx &
-
-echo "🚀 Restarting Backend via PM2..."
-
-# 💣 Aggressive cleanup
-pm2 kill || true
-
-# SAFETY: Clear port 3005 if it's not held by SSH
-PORT=3005
-PIDS=$(lsof -t -i:$PORT 2>/dev/null || echo "")
-if [ -n "$PIDS" ]; then
-    for PID in $PIDS; do
-        CMD=$(ps -p $PID -o comm= 2>/dev/null || echo "unknown")
-        if [[ "$CMD" == *"sshd"* ]]; then
-            echo "⚠️  Port $PORT held by sshd. Skipping kill."
-        else
-            echo "🔪 Killing process $CMD (PID $PID) on port $PORT..."
-            kill -9 $PID 2>/dev/null || true
-        fi
-    done
+# Use reload for zero-downtime and speed
+if pm2 show latex-api > /dev/null 2>&1; then
+    pm2 reload latex-api --update-env
+else
+    pm2 start ecosystem.config.js --update-env
 fi
 
-# Clean PM2 state (redundant but safe after kill)
-pm2 delete latex-api 2>/dev/null || true
-
-# Start with dynamically found TeX paths
-pm2 start ecosystem.config.js --update-env
 pm2 save
-
-echo "✨ Deployment Complete!"
-echo "------------------------------------------------"
-echo "URL: http://localhost:8080 (Managed by Nginx)"
-echo "Backend: Port 3000 (Managed by PM2)"
-echo "------------------------------------------------"
+echo "✨ Fast Deployment Complete!"
 pm2 list

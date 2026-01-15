@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { getFileContent, saveFile } from '../services/api'
+import { getFileContent, saveFile, createFile } from '../services/api'
 
 export function useFileEditor(projectId, initialFile = 'main.tex') {
     const [activeFileName, setActiveFileName] = useState(initialFile)
