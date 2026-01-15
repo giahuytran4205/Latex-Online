@@ -103,7 +103,7 @@ function EditorPage() {
 
     // Save current content to cache before switching files
     const saveToCache = useCallback((filename, content) => {
-        if (filename && content !== undefined) {
+        if (filename && content !== null && content !== undefined) {
             fileCacheRef.current.set(filename, content)
         }
     }, [])
@@ -174,7 +174,7 @@ function EditorPage() {
 
     // Update cache when code changes
     useEffect(() => {
-        if (activeFileName && !activeFileName.endsWith('/')) {
+        if (activeFileName && !activeFileName.endsWith('/') && code !== null) {
             saveToCache(activeFileName, code)
         }
     }, [code, activeFileName, saveToCache])
@@ -184,7 +184,7 @@ function EditorPage() {
         const { filename: debouncedFile, code: debouncedCode } = debouncedData
 
         // Skip if nothing to save or switching
-        if (!debouncedFile || debouncedFile.endsWith('/')) return
+        if (!debouncedFile || debouncedFile.endsWith('/') || debouncedCode === null) return
         if (isLoading || isCodeLoading) return
 
         // IMPORTANT: Only save if the debounced file is STILL the active file
@@ -485,6 +485,7 @@ function EditorPage() {
                     <div className={`editor-container ${isCodeLoading ? 'editor-container--loading' : ''}`}>
                         {loadedFileName === activeFileName && code !== null && (
                             <Editor
+                                key={activeFileName}
                                 code={code}
                                 onChange={setCode}
                                 onCompile={handleCompile}
@@ -543,7 +544,7 @@ function EditorPage() {
                 projectId={projectId}
                 projectName={projectInfo?.name || 'Untitled'}
             />
-        </div>
+        </div >
     )
 }
 

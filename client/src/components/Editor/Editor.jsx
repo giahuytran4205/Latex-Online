@@ -322,69 +322,39 @@ function Editor({
     ]), [])
 
     useEffect(() => {
-        if (!projectId || !activeFile) {
-            if (providerRef.current) {
-                providerRef.current.disconnect()
-                providerRef.current = null
-            }
-            if (yDocRef.current) {
-                yDocRef.current.destroy()
-                yDocRef.current = null
-            }
-            return
-        }
-
-        const ydoc = new Y.Doc()
-        const ytext = ydoc.getText('codemirror')
-
-        if (code && ytext.length === 0) {
-            ytext.insert(0, code)
-        }
-
-        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-        const host = window.location.host
-        const wsUrl = `${protocol}//${host}/ws?projectId=${projectId}&activeFile=${encodeURIComponent(activeFile)}&userId=${userId || 'anon'}`
-
-        const provider = new WebsocketProvider(wsUrl, `${projectId}-${activeFile}`, ydoc)
-
-        const color = USER_COLORS[Math.floor(Math.random() * USER_COLORS.length)]
-        provider.awareness.setLocalStateField('user', {
-            name: userName || 'Anonymous',
-            color: color,
-            colorLight: color + '33'
-        })
-
-        yDocRef.current = ydoc
-        providerRef.current = provider
-
-        console.log(`[Collab] Connected to ${projectId}/${activeFile}`)
-
-        return () => {
-            provider.disconnect()
-            ydoc.destroy()
-            yDocRef.current = null
-            providerRef.current = null
-        }
-    }, [projectId, activeFile, userId, userName])
-
-    useEffect(() => {
         if (!editorRef.current) return
 
-        if (viewRef.current) {
-            viewRef.current.destroy()
-            viewRef.current = null
+        let workspace = { ydoc: null, provider: null, view: null }
+
+        // 1. Setup Yjs
+        if (projectId && activeFile) {
+            const ydoc = new Y.Doc()
+            const ytext = ydoc.getText('codemirror')
+            if (code && ytext.length === 0) ytext.insert(0, code)
+
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+            const host = window.location.host
+            const wsUrl = `${protocol}//${host}/ws?projectId=${projectId}&activeFile=${encodeURIComponent(activeFile)}&userId=${userId || 'anon'}`
+
+            const provider = new WebsocketProvider(wsUrl, `${projectId}-${activeFile}`, ydoc)
+            const color = USER_COLORS[Math.floor(Math.random() * USER_COLORS.length)]
+            provider.awareness.setLocalStateField('user', {
+                name: userName || 'Anonymous',
+                color: color,
+                colorLight: color + '33'
+            })
+
+            workspace.ydoc = ydoc
+            workspace.provider = provider
         }
 
+        // 2. Setup CodeMirror
         const extensions = [
             basicSetup,
             keybindings,
             StreamLanguage.define(stex),
             editorTheme,
-            autocompletion({
-                override: [latexCompletions],
-                activateOnTyping: true,
-                maxRenderedOptions: 15,
-            }),
+            autocompletion({ override: [latexCompletions], activateOnTyping: true, maxRenderedOptions: 15 }),
             EditorView.updateListener.of((update) => {
                 if (!projectId && update.docChanged && !isInternalChange.current) {
                     onChangeRef.current?.(update.state.doc.toString())
@@ -394,27 +364,29 @@ function Editor({
             errorGutter,
         ]
 
-        if (projectId && yDocRef.current && providerRef.current) {
-            const ytext = yDocRef.current.getText('codemirror')
-            extensions.push(yCollab(ytext, providerRef.current.awareness))
+        if (workspace.ydoc && workspace.provider) {
+            const ytext = workspace.ydoc.getText('codemirror')
+            extensions.push(yCollab(ytext, workspace.provider.awareness))
         }
 
-        const state = EditorState.create({
-            doc: (projectId && yDocRef.current) ? yDocRef.current.getText('codemirror').toString() : (code || ''),
-            extensions
-        })
-
         const view = new EditorView({
-            state,
+            state: EditorState.create({
+                doc: workspace.ydoc ? workspace.ydoc.getText('codemirror').toString() : (code || ''),
+                extensions
+            }),
             parent: editorRef.current,
         })
+
+        workspace.view = view
         viewRef.current = view
 
         return () => {
-            view.destroy()
+            if (workspace.view) workspace.view.destroy()
+            if (workspace.provider) workspace.provider.disconnect()
+            if (workspace.ydoc) workspace.ydoc.destroy()
             viewRef.current = null
         }
-    }, [editorTheme, keybindings, projectId, activeFile, yDocRef.current, providerRef.current])
+    }, [projectId, activeFile, userId, userName, editorTheme, keybindings])
 
     useEffect(() => {
         if (!viewRef.current || projectId) return
