@@ -65,7 +65,7 @@ export function useCollaboration(projectId, userId, userName, activeFile, sid) {
             }
             providerRef.current = null
         }
-    }, [projectId, userId, userName]) // Don't reconnect when activeFile changes
+    }, [projectId, userId, userName, sid]) // Reconnect if sid changes
 
     // Update active file in awareness when it changes
     useEffect(() => {
@@ -81,6 +81,6 @@ export function useCollaboration(projectId, userId, userName, activeFile, sid) {
         yDoc: ydocRef.current,
         provider: providerRef.current,
         collaborators,
-        awareness: providerRef.current?.awareness
+        awareness: providerRef.current?.awareness || null
     }
 }

@@ -277,6 +277,7 @@ function EditorPage() {
                                     userName={user?.displayName || user?.email}
                                     yDoc={yDoc}
                                     awareness={awareness}
+                                    readOnly={projectInfo?.permission === 'view'}
                                 />
                             ) : (
                                 <FileViewer

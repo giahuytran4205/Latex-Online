@@ -80,7 +80,7 @@ export function useFileEditor(projectId, sid, initialFile = 'main.tex') {
         }
 
         fetchFile()
-    }, [projectId, activeFileName, code, saveToCache])
+    }, [projectId, activeFileName, code, saveToCache, sid])
 
     // Manual save helper
     const triggerSave = useCallback(async (content = code) => {
@@ -93,7 +93,7 @@ export function useFileEditor(projectId, sid, initialFile = 'main.tex') {
             console.error('Save failed:', err)
             throw err
         }
-    }, [projectId, activeFileName, code, saveToCache])
+    }, [projectId, activeFileName, code, saveToCache, sid])
 
     const handleUploadFile = useCallback(async (filename, content, skipReload = false) => {
         try {
@@ -115,7 +115,7 @@ export function useFileEditor(projectId, sid, initialFile = 'main.tex') {
             console.error('Upload failed:', err)
             return false
         }
-    }, [projectId, activeFileName])
+    }, [projectId, activeFileName, sid])
 
     return {
         activeFileName,

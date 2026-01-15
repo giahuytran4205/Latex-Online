@@ -228,7 +228,8 @@ function Editor({
     userId,
     userName,
     yDoc,
-    awareness
+    awareness,
+    readOnly = false
 }) {
     const editorRef = useRef(null)
     const viewRef = useRef(null)
@@ -366,6 +367,8 @@ function Editor({
             }),
             errorField,
             errorGutter,
+            EditorState.readOnly.of(readOnly),
+            EditorView.editable.of(!readOnly),
         ]
 
         if (yDoc && awareness && activeFile) {
@@ -489,12 +492,15 @@ function Editor({
                         </svg>
                         {displayName}
                     </button>
+                    {readOnly && <span className="read-only-badge">Read Only</span>}
                 </div>
-                <div className="editor-panel__shortcuts">
-                    <span className="shortcut-hint" title="Bold">Ctrl+B</span>
-                    <span className="shortcut-hint" title="Italic">Ctrl+I</span>
-                    <span className="shortcut-hint" title="Save & Compile">Ctrl+S</span>
-                </div>
+                {!readOnly && (
+                    <div className="editor-panel__shortcuts">
+                        <span className="shortcut-hint" title="Bold">Ctrl+B</span>
+                        <span className="shortcut-hint" title="Italic">Ctrl+I</span>
+                        <span className="shortcut-hint" title="Save & Compile">Ctrl+S</span>
+                    </div>
+                )}
             </div>
             <div className="editor-panel__content" ref={editorRef}></div>
         </div>
