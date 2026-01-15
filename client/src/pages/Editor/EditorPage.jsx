@@ -46,6 +46,7 @@ function EditorPage() {
         isCodeLoading,
         handleFileSelect,
         triggerSave,
+        handleUploadFile,
         saveToCache
     } = useFileEditor(projectId)
 
@@ -145,6 +146,12 @@ function EditorPage() {
         } catch (err) { console.error(err) }
     }
 
+    const onUploadFile = async (name, content, skipReload) => {
+        const success = await handleUploadFile(name, content, skipReload)
+        if (success && !skipReload) await refreshFiles()
+        return success
+    }
+
     const onCompile = () => {
         setConsoleOpen(true)
         compile(activeFileName, code, engine, triggerSave)
@@ -190,6 +197,7 @@ function EditorPage() {
                 onAddFile={handleAddFile}
                 onDeleteFile={handleDeleteFile}
                 onRenameFile={handleRenameFile}
+                onUploadFile={onUploadFile}
                 onDuplicateFile={handleDuplicateFile}
                 onStorageUpdate={refreshFiles}
             />
