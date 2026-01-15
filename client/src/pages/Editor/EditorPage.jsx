@@ -69,7 +69,7 @@ function EditorPage() {
     } = useCompiler(projectId, sid)
 
     // 5. Collaboration
-    const { yDoc, collaborators: liveCollaborators, awareness } = useCollaboration(projectId, user?.uid, user?.displayName || user?.email, activeFileName, sid)
+    const { yDoc, collaborators: liveCollaborators, awareness, isSynced } = useCollaboration(projectId, user?.uid, user?.displayName || user?.email, activeFileName, sid)
 
     // 6. Auto-save
     useAutoSave(projectId, activeFileName, code, triggerSave, isCodeLoading, isLoading)
@@ -277,6 +277,7 @@ function EditorPage() {
                                     userName={user?.displayName || user?.email}
                                     yDoc={yDoc}
                                     awareness={awareness}
+                                    isSynced={isSynced}
                                     readOnly={projectInfo?.permission === 'view'}
                                 />
                             ) : (

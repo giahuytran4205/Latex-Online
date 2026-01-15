@@ -229,6 +229,7 @@ function Editor({
     userName,
     yDoc,
     awareness,
+    isSynced = false,
     readOnly = false
 }) {
     const editorRef = useRef(null)
@@ -402,9 +403,6 @@ function Editor({
             // Since we have 'useFileEditor' fetching content, we have a race.
             // We will commented this out to stop duplication. 
             // If the Yjs doc is empty, it will remain empty until someone types or we handle init better.
-            if (code && ytext.length === 0) {
-                ytext.insert(0, code)
-            }
             // Better: Only insert if we are sure it's a NEW file creation action, not just a load.
             // But 'Editor' is generic.
 
@@ -429,10 +427,24 @@ function Editor({
         viewRef.current = view
 
         return () => {
-            if (view) view.destroy()
+            if (viewRef.current) {
+                viewRef.current.destroy()
+            }
             viewRef.current = null
         }
-    }, [yDoc, awareness, activeFile, editorTheme, keybindings])
+    }, [yDoc, awareness, activeFile, readOnly]) // Removed code dependency to prevent re-init
+
+    // Handle initial content populate for Yjs - Separate Effect
+    useEffect(() => {
+        if (isSynced && yDoc && activeFile && code) {
+            const ytext = yDoc.getText(activeFile)
+            // Double check: sync is done, if empty map, means fresh file.
+            if (ytext.length === 0) {
+                console.log('[Editor] Synced & Empty -> Inserting initial content')
+                ytext.insert(0, code)
+            }
+        }
+    }, [isSynced, yDoc, activeFile, code])
 
     useEffect(() => {
         if (!viewRef.current || projectId) return

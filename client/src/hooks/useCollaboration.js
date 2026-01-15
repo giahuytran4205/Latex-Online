@@ -13,6 +13,7 @@ export function useCollaboration(projectId, userId, userName, activeFile, sid) {
     const ydocRef = useRef(new Y.Doc())
     const providerRef = useRef(null)
     const [collaborators, setCollaborators] = useState([])
+    const [isSynced, setIsSynced] = useState(false)
 
     useEffect(() => {
         if (!projectId) return
@@ -57,6 +58,10 @@ export function useCollaboration(projectId, userId, userName, activeFile, sid) {
 
             provider.awareness.on('change', handleAwarenessUpdate)
             handleAwarenessUpdate()
+
+            provider.on('sync', (isSynced) => {
+                setIsSynced(isSynced)
+            })
         }
 
         setupProvider()
@@ -84,6 +89,7 @@ export function useCollaboration(projectId, userId, userName, activeFile, sid) {
         yDoc: ydocRef.current,
         provider: providerRef.current,
         collaborators,
-        awareness: providerRef.current?.awareness || null
+        awareness: providerRef.current?.awareness || null,
+        isSynced
     }
 }
