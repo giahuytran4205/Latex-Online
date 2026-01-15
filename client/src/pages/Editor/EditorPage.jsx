@@ -154,7 +154,7 @@ function EditorPage() {
     }
 
     const handleJumpToUser = useCallback((collab) => {
-        if (!collab || collab.isSelf) return
+        if (!collab || !collab.id || collab.isSelf) return
         if (collab.activeFile && collab.activeFile !== activeFileName) {
             handleFileSelect(collab.activeFile)
             // The Editor will handle jumping to their position once it loads
@@ -162,7 +162,7 @@ function EditorPage() {
         // If in same file, we'll signal the Editor to jump
         setJumpToLine({
             file: collab.activeFile,
-            cursor: collab.cursor, // We'll update useCollaboration to track this
+            cursor: collab.cursor,
             userId: collab.id,
             timestamp: Date.now(),
             isUserJump: true

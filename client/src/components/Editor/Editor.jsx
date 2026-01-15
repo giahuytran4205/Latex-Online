@@ -188,15 +188,14 @@ function latexCompletions(context) {
 
 // Syntax Highlighting Style
 const latexHighlightStyle = HighlightStyle.define([
-    { tag: [t.keyword, t.builtin, t.function(t.variableName), t.labelName], color: 'var(--syntax-keyword)' },
-    { tag: t.atom, color: 'var(--syntax-atom)' },       // special values
-    { tag: [t.variableName, t.propertyName, t.typeName], color: 'var(--syntax-variable)' }, // {arg}
-    { tag: t.number, color: 'var(--syntax-number)' },
-    { tag: t.string, color: 'var(--syntax-string)' },
-    { tag: t.comment, color: 'var(--syntax-comment)', fontStyle: 'italic' },
-    { tag: [t.punctuation, t.bracket, t.operator], color: 'var(--syntax-punctuation)' },
-    { tag: t.meta, color: 'var(--syntax-keyword)' },    // preamble stuff
-    { tag: t.definition(t.name), color: 'var(--syntax-keyword)' },
+    { tag: [t.keyword, t.builtin, t.name, t.function(t.name), t.processingInstruction, t.namespace], color: 'var(--syntax-keyword, #047857)' },
+    { tag: [t.variableName, t.propertyName, t.typeName, t.labelName, t.className], color: 'var(--syntax-variable, #b45309)' },
+    { tag: t.atom, color: 'var(--syntax-atom, #1d4ed8)' },
+    { tag: t.number, color: 'var(--syntax-number, #be123c)' },
+    { tag: t.string, color: 'var(--syntax-string, #a21caf)' },
+    { tag: t.comment, color: 'var(--syntax-comment, #94a3b8)', fontStyle: 'italic' },
+    { tag: [t.punctuation, t.bracket, t.operator], color: 'var(--syntax-punctuation, #64748b)' },
+    { tag: t.meta, color: 'var(--syntax-keyword, #047857)' },
 ])
 
 // Wrap selection with LaTeX command
@@ -306,7 +305,7 @@ function Editor({
             overflow: 'hidden',
             textOverflow: 'ellipsis',
             backgroundColor: 'var(--bg-panel)',
-            color: 'var(--text-color)',
+            color: 'var(--text-primary)',
             border: '1px solid var(--border-color)',
             zIndex: 10
         }
@@ -355,10 +354,13 @@ function Editor({
                 // Track cursor position in awareness
                 if (update.selectionSet && awareness) {
                     const pos = update.state.selection.main.head
-                    awareness.setLocalStateField('user', {
-                        ...awareness.getLocalState().user,
-                        cursor: pos
-                    })
+                    const localState = awareness.getLocalState()
+                    if (localState && localState.user) {
+                        awareness.setLocalStateField('user', {
+                            ...localState.user,
+                            cursor: pos
+                        })
+                    }
                 }
 
                 if (!projectId && update.docChanged && !isInternalChange.current) {
