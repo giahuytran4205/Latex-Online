@@ -1,101 +1,91 @@
 import { useRef, useEffect, useState, useCallback } from 'react'
-import { GlobalWorkerOptions, getDocument, AnnotationLayer, TextLayer } from 'pdfjs-dist'
-import { PDFLinkService, EventBus, LinkTarget } from 'pdfjs-dist/web/pdf_viewer.mjs'
-import 'pdfjs-dist/web/pdf_viewer.css'
+import { Document, Page, pdfjs } from 'react-pdf'
+import 'react-pdf/dist/Page/TextLayer.css'
+import 'react-pdf/dist/Page/AnnotationLayer.css'
 import './Preview.css'
 
-// Set worker path
+// Configure worker
+// Using the worker from the installed pdfjs-dist
 import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
-GlobalWorkerOptions.workerSrc = pdfWorker
+pdfjs.GlobalWorkerOptions.workerSrc = pdfWorker
 
 function Preview({ pdfUrl, onSyncTeX }) {
     const containerRef = useRef(null)
     const [numPages, setNumPages] = useState(0)
-    const [pdf, setPdf] = useState(null)
+    const [pdfDocument, setPdfDocument] = useState(null)
     const [scale, setScale] = useState(1.0)
-    const [loading, setLoading] = useState(false)
     const [currentPage, setCurrentPage] = useState(1)
     const [outline, setOutline] = useState(null)
     const [isSidebarOpen, setIsSidebarOpen] = useState(false)
     const [sidebarView, setSidebarView] = useState('thumbnails') // 'thumbnails' | 'outline'
 
-    // State lưu instance của LinkService
-    const [linkService, setLinkService] = useState(null)
+    // Callback when document loads successfully
+    function onDocumentLoadSuccess(pdf) {
+        setNumPages(pdf.numPages)
+        setPdfDocument(pdf)
+        setPageNumber(1)
 
-    // Hàm cuộn trang (định nghĩa trước để dùng trong useEffect)
+        // Get Outline
+        pdf.getOutline().then(pdfOutline => {
+            setOutline(pdfOutline)
+        }).catch(err => {
+            console.error('Error retrieving outline:', err)
+            setOutline(null)
+        })
+    }
+
+    // Callback for loading errors
+    function onDocumentLoadError(error) {
+        console.error('Error loading PDF Document:', error)
+        setNumPages(0)
+        setPdfDocument(null)
+        setOutline(null)
+    }
+
+    // Scroll helper
     const scrollToPage = useCallback((pageNum) => {
         if (!containerRef.current) return
-        const pageElement = containerRef.current.querySelector(`.page[data-page-number="${pageNum}"]`)
+        const pageElement = containerRef.current.querySelector(`.page-wrapper[data-page-number="${pageNum}"]`)
         if (pageElement) {
             pageElement.scrollIntoView({ behavior: 'smooth' })
         }
     }, [])
 
-    useEffect(() => {
-        if (!pdfUrl) {
-            setPdf(null)
-            setNumPages(0)
-            setOutline(null)
-            setLinkService(null)
-            return
-        }
+    // Set Page Number helper (just wraps scrollToPage for clarity in some contexts)
+    const setPageNumber = (num) => {
+        scrollToPage(num)
+    }
 
-        const loadPdf = async () => {
-            setLoading(true)
-            try {
-                const loadingTask = getDocument(pdfUrl)
-                const pdfInstance = await loadingTask.promise
-                setPdf(pdfInstance)
-                setNumPages(pdfInstance.numPages)
-
-                // Get Outline
-                const pdfOutline = await pdfInstance.getOutline()
-                setOutline(pdfOutline)
-
-                // --- KHỞI TẠO LINK SERVICE ---
-                // 1. Tạo EventBus và LinkService từ thư viện có sẵn
-                const eventBus = new EventBus()
-                const service = new PDFLinkService({
-                    eventBus,
-                    externalLinkTarget: LinkTarget.BLANK, // Mở tab mới cho link ngoài
-                    externalLinkRel: "noopener noreferrer nofollow",
-                    externalLinkEnabled: true, // Cho phép link ngoài
-                })
-
-                // 2. Gán Document
-                service.setDocument(pdfInstance)
-
-                // 3. Định nghĩa Viewer "giả" để xử lý scroll cho Internal Link
-                service.setViewer({
-                    scrollPageIntoView: ({ pageNumber }) => {
-                        scrollToPage(pageNumber)
-                    },
-                    pagesCount: pdfInstance.numPages,
-                    getPageIndex: (dest) => pdfInstance.getPageIndex(dest),
-                })
-
-                setLinkService(service)
-
-            } catch (err) {
-                console.error('Error loading PDF:', err)
-            } finally {
-                setLoading(false)
+    // Internal Navigation (Outline/Links)
+    const handleInternalNavigate = useCallback(async (dest) => {
+        if (!pdfDocument) return
+        try {
+            let destArray = dest
+            if (typeof dest === 'string') {
+                destArray = await pdfDocument.getDestination(dest)
             }
+
+            if (destArray) {
+                const pageIndex = await pdfDocument.getPageIndex(destArray[0])
+                scrollToPage(pageIndex + 1)
+            }
+        } catch (err) {
+            console.error('Internal navigation failed:', err)
         }
+    }, [pdfDocument, scrollToPage])
 
-        loadPdf()
-    }, [pdfUrl, scrollToPage])
-
-    // Visible page tracking
+    // Track visible page on scroll
     useEffect(() => {
         const container = containerRef.current
-        if (!container) return
+        if (!container || !pdfDocument) return
 
         const observer = new IntersectionObserver((entries) => {
             entries.forEach(entry => {
                 if (entry.isIntersecting) {
                     const pageNum = parseInt(entry.target.getAttribute('data-page-number'))
-                    setCurrentPage(pageNum)
+                    if (!isNaN(pageNum)) {
+                        setCurrentPage(pageNum)
+                    }
                 }
             })
         }, {
@@ -103,16 +93,26 @@ function Preview({ pdfUrl, onSyncTeX }) {
             threshold: 0.3
         })
 
+        // Slight delay to ensure DOM is ready
         const timer = setTimeout(() => {
-            const pages = container.querySelectorAll('.page')
+            const pages = container.querySelectorAll('.page-wrapper')
             pages.forEach(page => observer.observe(page))
-        }, 800)
+        }, 500)
 
         return () => {
             observer.disconnect()
             clearTimeout(timer)
         }
-    }, [pdf, numPages, scale])
+    }, [pdfDocument, numPages, scale]) // Re-observe when pages change
+
+    // SyncTeX Handler
+    const handleDoubleClick = useCallback((e, pageNum) => {
+        if (!onSyncTeX) return
+        const rect = e.currentTarget.getBoundingClientRect()
+        const clickX = e.clientX - rect.left
+        const clickY = e.clientY - rect.top
+        onSyncTeX(pageNum, clickX / scale, clickY / scale)
+    }, [onSyncTeX, scale])
 
     const handleDownload = () => {
         if (!pdfUrl) return
@@ -126,31 +126,6 @@ function Preview({ pdfUrl, onSyncTeX }) {
         if (!pdfUrl) return
         window.open(pdfUrl, '_blank').print()
     }
-
-    const handleInternalNavigate = useCallback(async (dest) => {
-        if (!pdf) return
-        try {
-            let destArray = dest
-            if (typeof dest === 'string') {
-                destArray = await pdf.getDestination(dest)
-            }
-
-            if (destArray) {
-                const pageNum = await pdf.getPageIndex(destArray[0]) + 1
-                scrollToPage(pageNum)
-            }
-        } catch (err) {
-            console.error('Internal navigation failed:', err)
-        }
-    }, [pdf, scrollToPage])
-
-    const handleSyncTeXClick = useCallback((e, pageNum) => {
-        if (!onSyncTeX || !containerRef.current) return
-        const rect = e.currentTarget.getBoundingClientRect()
-        const clickX = e.clientX - rect.left
-        const clickY = e.clientY - rect.top
-        onSyncTeX(pageNum, clickX / scale, clickY / scale)
-    }, [onSyncTeX, scale])
 
     return (
         <div className={`preview-panel ${isSidebarOpen ? 'sidebar-open' : ''}`}>
@@ -172,8 +147,11 @@ function Preview({ pdfUrl, onSyncTeX }) {
                             <input
                                 type="text"
                                 className="toolbar-input page-num-input"
-                                defaultValue={currentPage}
-                                key={currentPage}
+                                value={currentPage}
+                                onChange={(e) => {
+                                    const val = parseInt(e.target.value);
+                                    if (!isNaN(val)) setCurrentPage(val);
+                                }}
                                 onKeyDown={(e) => {
                                     if (e.key === 'Enter') {
                                         const val = parseInt(e.target.value)
@@ -241,15 +219,19 @@ function Preview({ pdfUrl, onSyncTeX }) {
                         <div className="sidebar-content">
                             {sidebarView === 'thumbnails' ? (
                                 <div className="thumbnails-view">
-                                    {Array.from({ length: numPages }, (_, i) => (
-                                        <Thumbnail
-                                            key={i}
-                                            pdf={pdf}
-                                            pageNum={i + 1}
-                                            active={currentPage === i + 1}
-                                            onClick={() => scrollToPage(i + 1)}
-                                        />
-                                    ))}
+                                    {pdfDocument ? (
+                                        Array.from({ length: numPages }, (_, i) => (
+                                            <Thumbnail
+                                                key={i}
+                                                pdf={pdfDocument}
+                                                pageNum={i + 1}
+                                                active={currentPage === i + 1}
+                                                onClick={() => scrollToPage(i + 1)}
+                                            />
+                                        ))
+                                    ) : (
+                                        <div className="sidebar-empty">No PDF loaded</div>
+                                    )}
                                 </div>
                             ) : (
                                 <div className="outline-view">
@@ -275,24 +257,36 @@ function Preview({ pdfUrl, onSyncTeX }) {
                             <p>Your PDF preview will appear here once you compile your LaTeX project.</p>
                         </div>
                     ) : (
-                        // QUAN TRỌNG: Sử dụng class "pdfViewer" chuẩn của thư viện để ăn khớp CSS
-                        <div className="pdfViewer">
+                        <Document
+                            file={pdfUrl}
+                            onLoadSuccess={onDocumentLoadSuccess}
+                            onLoadError={onDocumentLoadError}
+                            loading={<div className="preview-loading"><div className="loading-spinner"></div></div>}
+                            className="pdf-document"
+                        >
                             {Array.from({ length: numPages }, (_, i) => (
-                                <PdfPage
-                                    key={`${pdfUrl}-${i + 1}-${scale}`}
-                                    pdf={pdf}
-                                    pageNum={i + 1}
-                                    scale={scale}
-                                    linkService={linkService} // Truyền linkService xuống
-                                    onDoubleClick={handleSyncTeXClick}
-                                />
+                                <div
+                                    key={`page-${i + 1}`}
+                                    className="page-wrapper"
+                                    data-page-number={i + 1}
+                                    style={{
+                                        margin: '20px auto',
+                                        width: 'fit-content',
+                                        boxShadow: '0 4px 15px rgba(0,0,0,0.4)',
+                                        backgroundColor: 'white'
+                                    }}
+                                    onDoubleClick={(e) => handleDoubleClick(e, i + 1)}
+                                >
+                                    <Page
+                                        pageNumber={i + 1}
+                                        scale={scale}
+                                        renderTextLayer={true}
+                                        renderAnnotationLayer={true}
+                                        loading={null}
+                                    />
+                                </div>
                             ))}
-                        </div>
-                    )}
-                    {loading && (
-                        <div className="preview-loading">
-                            <div className="loading-spinner"></div>
-                        </div>
+                        </Document>
                     )}
                 </div>
             </div>
@@ -345,130 +339,6 @@ function OutlineTree({ items, onNavigate, depth = 0 }) {
                 </li>
             ))}
         </ul>
-    )
-}
-
-function PdfPage({ pdf, pageNum, scale, onDoubleClick, linkService }) {
-    const canvasRef = useRef(null)
-    const textLayerRef = useRef(null)
-    const annotationLayerRef = useRef(null)
-
-    useEffect(() => {
-        let renderTask = null
-
-        const renderPage = async () => {
-            if (!pdf || !canvasRef.current) return
-
-            try {
-                const page = await pdf.getPage(pageNum)
-
-                // Xử lý scale
-                const renderScale = scale * window.devicePixelRatio * 1.5
-                const viewport = page.getViewport({ scale: renderScale })
-                const displayViewport = page.getViewport({ scale: scale })
-
-                // 1. Render Canvas
-                const canvas = canvasRef.current
-                const context = canvas.getContext('2d', { alpha: false })
-                canvas.height = viewport.height
-                canvas.width = viewport.width
-                canvas.style.height = `${displayViewport.height}px`
-                canvas.style.width = `${displayViewport.width}px`
-
-                if (renderTask) renderTask.cancel()
-                renderTask = page.render({ canvasContext: context, viewport: viewport })
-                await renderTask.promise
-
-                // 2. Render Text Layer
-                if (textLayerRef.current) {
-                    const textContent = await page.getTextContent()
-                    const textLayerDiv = textLayerRef.current
-
-                    textLayerDiv.innerHTML = ''
-                    textLayerDiv.style.height = `${displayViewport.height}px`
-                    textLayerDiv.style.width = `${displayViewport.width}px`
-                    textLayerDiv.style.setProperty('--scale-factor', scale);
-
-                    const textLayer = new TextLayer({
-                        textContentSource: textContent,
-                        container: textLayerDiv,
-                        viewport: displayViewport,
-                    })
-                    await textLayer.render()
-                }
-
-                // 3. Render Annotation Layer (Links, Forms)
-                if (annotationLayerRef.current && linkService) {
-                    const annotations = await page.getAnnotations()
-                    const annotationLayerDiv = annotationLayerRef.current
-
-                    annotationLayerDiv.innerHTML = ''
-                    annotationLayerDiv.style.height = `${displayViewport.height}px`
-                    annotationLayerDiv.style.width = `${displayViewport.width}px`
-
-                    const annotationLayer = new AnnotationLayer({
-                        div: annotationLayerDiv,
-                        accessibilityManager: null,
-                        page: page,
-                        viewport: displayViewport,
-                    })
-
-                    await annotationLayer.render({
-                        annotations: annotations,
-                        viewport: displayViewport,
-                        linkService: linkService,
-                        div: annotationLayerDiv,
-                        intent: "display", // QUAN TRỌNG: Kích hoạt chế độ hiển thị tương tác
-                        renderForms: true, // Kích hoạt form nếu có
-                        imageResourcesPath: 'pdfjs-dist/web/images/', // Đường dẫn icon
-                    })
-                }
-            } catch (error) {
-                console.error("Render Page Error:", error);
-            }
-        }
-
-        renderPage()
-
-        return () => {
-            if (renderTask) renderTask.cancel()
-        }
-    }, [pdf, pageNum, scale, linkService])
-
-    return (
-        <div
-            className="page"
-            onDoubleClick={(e) => onDoubleClick && onDoubleClick(e, pageNum)}
-            data-page-number={pageNum}
-            style={{
-                margin: '20px auto',
-                backgroundColor: 'white',
-                position: 'relative',
-                boxShadow: '0 4px 15px rgba(0, 0, 0, 0.4)',
-                width: canvasRef.current ? canvasRef.current.style.width : 'auto',
-                height: canvasRef.current ? canvasRef.current.style.height : 'auto',
-                // Cần thiết để CSS tính toán kích thước font
-                '--scale-factor': scale,
-            }}
-        >
-            <div className="canvasWrapper" style={{ position: 'relative', zIndex: 1 }}>
-                <canvas ref={canvasRef} />
-            </div>
-
-            {/* Text Layer: Absolute top/left 0 */}
-            <div
-                ref={textLayerRef}
-                className="textLayer"
-                style={{ zIndex: 2, position: 'absolute', top: 0, left: 0 }}
-            />
-
-            {/* Annotation Layer: Absolute top/left 0 */}
-            <div
-                ref={annotationLayerRef}
-                className="annotationLayer"
-                style={{ zIndex: 3, position: 'absolute', top: 0, left: 0 }}
-            />
-        </div>
     )
 }
 
