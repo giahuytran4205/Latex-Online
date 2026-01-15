@@ -451,13 +451,19 @@ function Editor({
 
         const activeErrors = errors.filter(e => e.file === activeFile || e.file === activeFile.split('/').pop())
         const deco = []
+        const decoratedLines = new Set()
 
         for (const err of activeErrors) {
             if (err.line >= 1 && err.line <= viewRef.current.state.doc.lines) {
                 try {
                     const line = viewRef.current.state.doc.line(err.line)
-                    deco.push(errorMark.range(line.from))
-                    deco.push(errorGutterMarker.range(line.from))
+
+                    // Only add one decoration set per line to avoid CodeMirror merge crashes
+                    if (!decoratedLines.has(err.line)) {
+                        deco.push(errorMark.range(line.from))
+                        deco.push(errorGutterMarker.range(line.from))
+                        decoratedLines.add(err.line)
+                    }
                 } catch (e) {
                     console.error('Error applying marker:', e)
                 }
