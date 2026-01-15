@@ -5,9 +5,8 @@ import 'react-pdf/dist/Page/AnnotationLayer.css'
 import './Preview.css'
 
 // Configure worker
-// Using the worker from the installed pdfjs-dist
-import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
-pdfjs.GlobalWorkerOptions.workerSrc = pdfWorker
+// Use CDN worker to avoid version mismatches and bundling issues
+pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 
 function Preview({ pdfUrl, onSyncTeX }) {
     const containerRef = useRef(null)
