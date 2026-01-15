@@ -5,6 +5,7 @@ import { join, dirname, basename, relative } from 'path'
 import { fileURLToPath } from 'url'
 import { v4 as uuidv4 } from 'uuid'
 import crypto from 'crypto'
+import { findProjectInfo } from '../utils/project.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
