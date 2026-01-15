@@ -3,7 +3,7 @@ import { useToast } from '../Toast/Toast'
 import { useConfirm } from '../ConfirmDialog/ConfirmDialog'
 import './FileTree.css'
 
-function FileTree({ files, activeFile, onFileSelect, onAddFile, onDeleteFile, onRenameFile, onUploadFile, onDuplicateFile, onStorageUpdate }) {
+function FileTree({ projectId, files, activeFile, onFileSelect, onAddFile, onDeleteFile, onRenameFile, onUploadFile, onDuplicateFile, onStorageUpdate }) {
     const toast = useToast()
     const { confirm } = useConfirm()
 
@@ -27,6 +27,8 @@ function FileTree({ files, activeFile, onFileSelect, onAddFile, onDeleteFile, on
     // Build tree structure from flat file list
     const fileTree = useMemo(() => {
         const tree = { name: '', type: 'folder', children: [], path: '' }
+
+        if (!files || !Array.isArray(files)) return tree
 
         const sortedFiles = [...files].sort((a, b) => {
             // Folders first, then files
@@ -564,7 +566,7 @@ function FileTree({ files, activeFile, onFileSelect, onAddFile, onDeleteFile, on
     const handleDownload = () => {
         if (!contextMenu) return
         const path = contextMenu.item.path
-        const downloadUrl = `/api/files/default-project/${encodeURIComponent(path)}/download`
+        const downloadUrl = `/api/files/${projectId}/${encodeURIComponent(path)}/download`
         const a = document.createElement('a')
         a.href = downloadUrl
         a.download = contextMenu.item.name

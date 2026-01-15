@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react'
+import { getProjectInfo, shareProject } from '../../services/api'
+import { useToast } from '../Toast/Toast'
 import './ShareModal.css'
 
 function ShareModal({ isOpen, onClose, projectId, projectName }) {
@@ -10,21 +12,36 @@ function ShareModal({ isOpen, onClose, projectId, projectName }) {
     const [isLoading, setIsLoading] = useState(false)
     const [copySuccess, setCopySuccess] = useState(false)
 
-    // Placeholder for fetching sharing settings
+    const toast = useToast()
+
     useEffect(() => {
-        if (isOpen) {
-            // In a real app, fetch from backend
-            // For now, load from localStorage mockup
-            const saved = localStorage.getItem(`share-settings-${projectId}`)
-            if (saved) {
-                setSharingSettings(JSON.parse(saved))
+        if (isOpen && projectId) {
+            const fetchSettings = async () => {
+                try {
+                    const data = await getProjectInfo(projectId)
+                    setSharingSettings({
+                        publicAccess: data.publicAccess || 'private',
+                        collaborators: data.collaborators || []
+                    })
+                } catch (err) {
+                    console.error('Failed to fetch settings:', err)
+                }
             }
+            fetchSettings()
         }
     }, [isOpen, projectId])
 
-    const handleSave = () => {
-        localStorage.setItem(`share-settings-${projectId}`, JSON.stringify(sharingSettings))
-        onClose()
+    const handleSave = async () => {
+        setIsLoading(true)
+        try {
+            await shareProject(projectId, sharingSettings)
+            toast.success('Sharing settings updated')
+            onClose()
+        } catch (err) {
+            toast.error('Failed to update sharing: ' + err.message)
+        } finally {
+            setIsLoading(false)
+        }
     }
 
     const handleCopyLink = () => {
@@ -132,8 +149,10 @@ function ShareModal({ isOpen, onClose, projectId, projectName }) {
                 </div>
 
                 <div className="share-modal__footer">
-                    <button className="secondary-btn" onClick={onClose}>Cancel</button>
-                    <button className="primary-btn" onClick={handleSave}>Done</button>
+                    <button className="secondary-btn" onClick={onClose} disabled={isLoading}>Cancel</button>
+                    <button className="primary-btn" onClick={handleSave} disabled={isLoading}>
+                        {isLoading ? 'Saving...' : 'Done'}
+                    </button>
                 </div>
             </div>
         </div>

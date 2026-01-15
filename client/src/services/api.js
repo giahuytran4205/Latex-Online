@@ -68,14 +68,14 @@ export async function duplicateProject(projectId) {
     return response.json()
 }
 
-export async function shareProject(projectId, email, permission = 'view') {
+export async function shareProject(projectId, settings) {
     const headers = await getAuthHeaders()
     const response = await fetch(`${API_BASE}/projects/${projectId}/share`, {
         method: 'POST',
         headers,
-        body: JSON.stringify({ email, permission }),
+        body: JSON.stringify(settings),
     })
-    if (!response.ok) throw new Error('Failed to share project')
+    if (!response.ok) throw new Error('Failed to update sharing settings')
     return response.json()
 }
 

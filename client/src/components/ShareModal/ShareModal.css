@@ -4,21 +4,21 @@
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(0, 0, 0, 0.6);
+    background: rgba(0, 0, 0, 0.75);
     display: flex;
     align-items: center;
     justify-content: center;
     z-index: 2000;
-    backdrop-filter: blur(4px);
 }
 
 .share-modal {
-    background: var(--bg-panel, #202124);
+    background: var(--bg-primary, #ffffff);
+    color: var(--text-primary, #0f172a);
     width: 100%;
     max-width: 500px;
     border-radius: 12px;
-    box-shadow: 0 12px 48px rgba(0, 0, 0, 0.5);
-    border: 1px solid var(--border-color, #3c4043);
+    box-shadow: var(--shadow-lg, 0 12px 48px rgba(0, 0, 0, 0.5));
+    border: 1px solid var(--border-color, #e2e8f0);
     overflow: hidden;
     animation: modal-slide-up 0.3s ease-out;
 }

@@ -456,6 +456,7 @@ function EditorPage() {
             />
 
             <FileTree
+                projectId={projectId}
                 files={files}
                 activeFile={activeFileName}
                 onFileSelect={setActiveFileName}

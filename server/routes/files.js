@@ -78,6 +78,7 @@ router.use(verifyToken)
 
 // Helper to find project directory and owner across all users
 const findProjectInfo = (projectId) => {
+    // Check user directories
     const userDirs = readdirSync(PROJECTS_DIR)
     for (const userId of userDirs) {
         const projectPath = join(PROJECTS_DIR, userId, projectId)
@@ -85,6 +86,13 @@ const findProjectInfo = (projectId) => {
             return { projectPath, ownerId: userId }
         }
     }
+
+    // Check legacy path
+    const legacyPath = join(PROJECTS_DIR, projectId)
+    if (existsSync(legacyPath) && statSync(legacyPath).isDirectory()) {
+        return { projectPath: legacyPath, ownerId: 'legacy' }
+    }
+
     return null
 }
 
@@ -114,6 +122,7 @@ const getProjectWithAuth = (req, projectId, requiredPermission = 'view') => {
     if (isOwner) granted = 'owner'
     else if (isCollaborator) granted = 'edit'
     else if (publicLevel !== 'private') granted = publicLevel
+    else if (ownerId === 'legacy') granted = 'edit' // Permissive for legacy projects
 
     // Check if granted meets required
     const canRead = granted !== 'none'
