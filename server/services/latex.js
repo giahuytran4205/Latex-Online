@@ -380,7 +380,7 @@ export async function resolveSyncTeX(projectId, page, x, y) {
 
             const lines = output.split('\n')
             for (const line of lines) {
-                if (line.startsWith('File:')) {
+                if (line.startsWith('Input:')) {
                     const filePath = line.substring(line.indexOf(':') + 1).trim()
                     // Resolve path correctly relative to workDir
                     const absolutePath = fs.existsSync(filePath) ? filePath : join(workDir, filePath)
