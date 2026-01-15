@@ -1,4 +1,4 @@
-import { useState, useRef, useMemo } from 'react'
+import { useState, useRef, useMemo, useEffect } from 'react'
 import { useToast } from '../Toast/Toast'
 import { useConfirm } from '../ConfirmDialog/ConfirmDialog'
 import './FileTree.css'
