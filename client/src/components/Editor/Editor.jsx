@@ -251,6 +251,9 @@ function Editor({
         '&.cm-focused': {
             outline: 'none',
         },
+        '.cm-cursor, .cm-dropCursor': {
+            borderLeftColor: 'var(--text-primary)',
+        },
         '.cm-scroller': {
             fontFamily: "'JetBrains Mono', 'Fira Code', 'Consolas', monospace",
             lineHeight: '1.6',
