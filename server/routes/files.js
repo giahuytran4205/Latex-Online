@@ -2,7 +2,9 @@ import express from 'express'
 import { existsSync, readFileSync, writeFileSync, readdirSync, statSync, mkdirSync, unlinkSync, renameSync, rmSync } from 'fs'
 import { join, dirname, extname } from 'path'
 import { fileURLToPath } from 'url'
+import { getProjectWithAuth } from '../utils/project.js'
 import admin from 'firebase-admin'
+import { verifyToken } from '../services/auth.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -22,36 +24,7 @@ if (!existsSync(TEMP_DIR)) {
     mkdirSync(TEMP_DIR, { recursive: true })
 }
 
-// Middleware to verify Firebase token
-const verifyToken = async (req, res, next) => {
-    const authHeader = req.headers.authorization
-    const queryToken = req.query.token
-
-    if (!authHeader && !queryToken) {
-        // For temp files, allow without auth
-        if (req.path.startsWith('/temp/')) {
-            return next()
-        }
-        return res.status(401).json({ error: 'Unauthorized - No token provided' })
-    }
-
-    const token = authHeader ? authHeader.split('Bearer ')[1] : queryToken
-    try {
-        if (!admin.apps.length) {
-            // For development, use mock auth
-            req.user = { uid: 'dev-user', email: 'dev@localhost' }
-            return next()
-        }
-
-        const decodedToken = await admin.auth().verifyIdToken(token)
-        req.user = decodedToken
-        next()
-    } catch (error) {
-        console.error('[Auth] Token verification failed:', error.message)
-        req.user = { uid: 'dev-user', email: 'dev@localhost' }
-        next()
-    }
-}
+// verifyToken is imported from services/auth.js
 
 // Serve temporary files (PDFs) - no auth required
 router.get('/temp/:filename', (req, res) => {
@@ -78,73 +51,13 @@ router.get('/temp/:filename', (req, res) => {
 // Apply auth middleware to remaining routes
 router.use(verifyToken)
 
-// Helper to find project directory and owner across all users
-const findProjectInfo = (projectId) => {
-    // Check user directories
-    const userDirs = readdirSync(PROJECTS_DIR)
-    for (const userId of userDirs) {
-        const projectPath = join(PROJECTS_DIR, userId, projectId)
-        if (existsSync(projectPath) && statSync(projectPath).isDirectory()) {
-            return { projectPath, ownerId: userId }
-        }
-    }
-
-    // Check legacy path
-    const legacyPath = join(PROJECTS_DIR, projectId)
-    if (existsSync(legacyPath) && statSync(legacyPath).isDirectory()) {
-        return { projectPath: legacyPath, ownerId: 'legacy' }
-    }
-
-    return null
-}
-
-// Helper to get project path with permission check
-const getProjectWithAuth = (req, projectId, requiredPermission = 'view') => {
-    const info = findProjectInfo(projectId)
-    if (!info) return { error: 'Project not found', status: 404 }
-
-    const { projectPath, ownerId } = info
-    const userId = req.user.uid
-
-    // Read metadata for sharing settings
-    const metadataPath = join(projectPath, '.project.json')
-    let metadata = { publicAccess: 'private', collaborators: [] }
-    if (existsSync(metadataPath)) {
-        try {
-            metadata = JSON.parse(readFileSync(metadataPath, 'utf-8'))
-        } catch (e) { }
-    }
-
-    const isOwner = ownerId === userId
-    const isCollaborator = metadata.collaborators?.some(c => c.email === req.user.email)
-    const publicLevel = metadata.publicAccess // 'private', 'view', 'edit'
-
-    // Resolve actually granted permission
-    let granted = 'none'
-    if (isOwner) granted = 'owner'
-    else if (isCollaborator) granted = 'edit'
-    else if (publicLevel !== 'private') granted = publicLevel
-    else if (ownerId === 'legacy') granted = 'edit' // Permissive for legacy projects
-
-    // Check if granted meets required
-    const canRead = granted !== 'none'
-    const canWrite = granted === 'owner' || granted === 'edit'
-
-    if (requiredPermission === 'view' && !canRead) {
-        return { error: 'Access denied', status: 403 }
-    }
-    if (requiredPermission === 'edit' && !canWrite) {
-        return { error: 'Write access denied', status: 403 }
-    }
-
-    return { projectPath, ownerId, granted }
-}
+// getProjectWithAuth and findProjectInfo are now imported from ../utils/project.js
 
 // Get project files (recursive)
 router.get('/:projectId', (req, res) => {
     try {
         const { projectId } = req.params
-        const auth = getProjectWithAuth(req, projectId, 'view')
+        const auth = getProjectWithAuth(req.user, projectId, 'view')
         if (auth.error) return res.status(auth.status).json({ error: auth.error })
 
         const { projectPath } = auth
@@ -195,7 +108,7 @@ router.get('/:projectId', (req, res) => {
 router.get('/:projectId/:filename', (req, res) => {
     try {
         const { projectId, filename } = req.params
-        const auth = getProjectWithAuth(req, projectId, 'view')
+        const auth = getProjectWithAuth(req.user, projectId, 'view')
         if (auth.error) return res.status(auth.status).json({ error: auth.error })
 
         const decodedFilename = decodeURIComponent(filename)
@@ -216,7 +129,7 @@ router.get('/:projectId/:filename', (req, res) => {
 router.get('/:projectId/:filename/download', (req, res) => {
     try {
         const { projectId, filename } = req.params
-        const auth = getProjectWithAuth(req, projectId, 'view')
+        const auth = getProjectWithAuth(req.user, projectId, 'view')
         if (auth.error) return res.status(auth.status).json({ error: auth.error })
 
         const decodedFilename = decodeURIComponent(filename)
@@ -254,7 +167,7 @@ router.get('/:projectId/:filename/download', (req, res) => {
 router.put('/:projectId/:filename', (req, res) => {
     try {
         const { projectId, filename } = req.params
-        const auth = getProjectWithAuth(req, projectId, 'edit')
+        const auth = getProjectWithAuth(req.user, projectId, 'edit')
         if (auth.error) return res.status(auth.status).json({ error: auth.error })
 
         const { content } = req.body
@@ -292,7 +205,7 @@ router.put('/:projectId/:filename', (req, res) => {
 router.post('/:projectId', (req, res) => {
     try {
         const { projectId } = req.params
-        const auth = getProjectWithAuth(req, projectId, 'edit')
+        const auth = getProjectWithAuth(req.user, projectId, 'edit')
         if (auth.error) return res.status(auth.status).json({ error: auth.error })
 
         const { filename, content = '', overwrite = false } = req.body
@@ -341,7 +254,7 @@ router.post('/:projectId', (req, res) => {
 router.delete('/:projectId/:filename', (req, res) => {
     try {
         const { projectId, filename } = req.params
-        const auth = getProjectWithAuth(req, projectId, 'edit')
+        const auth = getProjectWithAuth(req.user, projectId, 'edit')
         if (auth.error) return res.status(auth.status).json({ error: auth.error })
 
         // Handle URL encoded paths (for nested files)
@@ -372,7 +285,7 @@ router.delete('/:projectId/:filename', (req, res) => {
 router.post('/:projectId/rename', (req, res) => {
     try {
         const { projectId } = req.params
-        const auth = getProjectWithAuth(req, projectId, 'edit')
+        const auth = getProjectWithAuth(req.user, projectId, 'edit')
         if (auth.error) return res.status(auth.status).json({ error: auth.error })
 
         const { oldName, newName } = req.body
@@ -408,7 +321,7 @@ router.post('/:projectId/rename', (req, res) => {
 router.post('/:projectId/duplicate', (req, res) => {
     try {
         const { projectId } = req.params
-        const auth = getProjectWithAuth(req, projectId, 'edit')
+        const auth = getProjectWithAuth(req.user, projectId, 'edit')
         if (auth.error) return res.status(auth.status).json({ error: auth.error })
 
         const { filename } = req.body
@@ -449,7 +362,7 @@ router.post('/:projectId/duplicate', (req, res) => {
 router.post('/:projectId/move', (req, res) => {
     try {
         const { projectId } = req.params
-        const auth = getProjectWithAuth(req, projectId, 'edit')
+        const auth = getProjectWithAuth(req.user, projectId, 'edit')
         if (auth.error) return res.status(auth.status).json({ error: auth.error })
 
         const { oldPath: oldName, newPath: newName } = req.body

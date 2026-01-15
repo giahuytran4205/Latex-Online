@@ -7,6 +7,8 @@ import { dirname, join } from 'path'
 import compileRouter from './routes/compile.js'
 import filesRouter from './routes/files.js'
 import projectsRouter from './routes/projects.js'
+import { decodeAndVerifyToken } from './services/auth.js'
+import { getProjectWithAuth } from './utils/project.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -36,12 +38,46 @@ const rooms = new Map()
 const wss = new WebSocketServer({ noServer: true })
 
 // Handle upgrade requests
-server.on('upgrade', (request, socket, head) => {
-    if (request.url.startsWith('/ws')) {
-        wss.handleUpgrade(request, socket, head, (ws) => {
-            wss.emit('connection', ws, request)
-        })
-    } else {
+server.on('upgrade', async (request, socket, head) => {
+    try {
+        if (request.url.startsWith('/ws')) {
+            const url = new URL(request.url, `http://${request.headers.host}`)
+            const projectId = url.searchParams.get('projectId')
+            const token = url.searchParams.get('token')
+
+            if (!projectId) {
+                socket.write('HTTP/1.1 400 Bad Request\r\n\r\nMissing projectId')
+                socket.destroy()
+                return
+            }
+
+            // Verify User
+            const user = await decodeAndVerifyToken(token)
+            if (!user) {
+                socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n')
+                socket.destroy()
+                return
+            }
+
+            // Verify Permission (need at least 'view' to collaborate, but usually 'edit')
+            const authStatus = getProjectWithAuth(user, projectId, 'view')
+            if (authStatus.error) {
+                socket.write(`HTTP/1.1 403 Forbidden\r\n\r\n${authStatus.error}`)
+                socket.destroy()
+                return
+            }
+
+            // Attach user info to request for the connection handler
+            request.user = user
+
+            wss.handleUpgrade(request, socket, head, (ws) => {
+                wss.emit('connection', ws, request)
+            })
+        } else {
+            socket.destroy()
+        }
+    } catch (err) {
+        console.error('[WS Upgrade] Error:', err.message)
         socket.destroy()
     }
 })
@@ -49,9 +85,10 @@ server.on('upgrade', (request, socket, head) => {
 wss.on('connection', (ws, req) => {
     const url = new URL(req.url, `http://${req.headers.host}`)
     const projectId = url.searchParams.get('projectId') || 'default'
-    const userId = url.searchParams.get('userId') || 'anonymous'
+    const user = req.user // Attached during upgrade
+    const userId = user?.uid || 'anonymous'
 
-    console.log(`[WS] Client ${userId} connected to project ${projectId}`)
+    console.log(`[WS] User ${userId} (${user?.email}) joined project ${projectId}`)
 
     // Get or create room
     if (!rooms.has(projectId)) {

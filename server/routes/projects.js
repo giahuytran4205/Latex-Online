@@ -4,6 +4,8 @@ import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
 import { v4 as uuidv4 } from 'uuid'
 import admin from 'firebase-admin'
+import { verifyToken } from '../services/auth.js'
+import { findProjectInfo, getProjectWithAuth } from '../utils/project.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -115,35 +117,6 @@ Write your conclusions.
 \\end{document}`
 }
 
-// Middleware to verify Firebase token
-const verifyToken = async (req, res, next) => {
-    const authHeader = req.headers.authorization
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-        return res.status(401).json({ error: 'Unauthorized - No token provided' })
-    }
-
-    const token = authHeader.split('Bearer ')[1]
-    try {
-        // Initialize admin if not already done
-        if (!admin.apps.length) {
-            // For development, we'll skip verification
-            // In production, initialize with service account
-            console.log('[Auth] Firebase Admin not initialized, using mock auth')
-            req.user = { uid: 'dev-user', email: 'dev@localhost' }
-            return next()
-        }
-
-        const decodedToken = await admin.auth().verifyIdToken(token)
-        req.user = decodedToken
-        next()
-    } catch (error) {
-        console.error('[Auth] Token verification failed:', error.message)
-        // For development, allow through with mock user
-        req.user = { uid: 'dev-user', email: 'dev@localhost' }
-        next()
-    }
-}
-
 // Apply auth middleware to all routes
 router.use(verifyToken)
 
@@ -224,12 +197,24 @@ router.get('/storage', (req, res) => {
 })
 
 // Helper to find project directory across all users
-const findProjectDir = (projectId) => {
+const findProjectDir = (projectId, userId) => {
+    // 1. Check current user's directory first (most common case)
+    if (userId) {
+        const personalPath = join(PROJECTS_DIR, userId, projectId)
+        if (existsSync(personalPath) && statSync(personalPath).isDirectory()) {
+            return { projectPath: personalPath, ownerId: userId }
+        }
+    }
+
+    // 2. Search other users (for shared projects)
+    if (!existsSync(PROJECTS_DIR)) return null
+
     const userDirs = readdirSync(PROJECTS_DIR)
-    for (const userId of userDirs) {
-        const projectPath = join(PROJECTS_DIR, userId, projectId)
+    for (const uId of userDirs) {
+        if (uId === userId) continue // Already checked
+        const projectPath = join(PROJECTS_DIR, uId, projectId)
         if (existsSync(projectPath) && statSync(projectPath).isDirectory()) {
-            return { projectPath, ownerId: userId }
+            return { projectPath, ownerId: uId }
         }
     }
     return null
@@ -238,16 +223,14 @@ const findProjectDir = (projectId) => {
 // Get single project info
 router.get('/:projectId', (req, res) => {
     try {
-        const userId = req.user.uid
         const { projectId } = req.params
+        const auth = getProjectWithAuth(req.user, projectId, 'view')
 
-        const projectInfo = findProjectDir(projectId)
-
-        if (!projectInfo) {
-            return res.status(404).json({ error: 'Project not found' })
+        if (auth.error) {
+            return res.status(auth.status).json({ error: auth.error })
         }
 
-        const { projectPath, ownerId } = projectInfo
+        const { projectPath, ownerId, granted } = auth
         const metadataPath = join(projectPath, '.project.json')
         let metadata = { name: projectId, template: 'blank', publicAccess: 'private', collaborators: [] }
 
@@ -255,15 +238,6 @@ router.get('/:projectId', (req, res) => {
             try {
                 metadata = JSON.parse(readFileSync(metadataPath, 'utf-8'))
             } catch (e) { }
-        }
-
-        // Permission check
-        const isOwner = ownerId === userId
-        const isCollaborator = metadata.collaborators?.some(c => c.email === req.user.email)
-        const hasPublicAccess = metadata.publicAccess !== 'private'
-
-        if (!isOwner && !isCollaborator && !hasPublicAccess) {
-            return res.status(403).json({ error: 'Access denied' })
         }
 
         const stat = statSync(projectPath)
@@ -278,7 +252,7 @@ router.get('/:projectId', (req, res) => {
             owner: ownerId,
             publicAccess: metadata.publicAccess,
             collaborators: metadata.collaborators,
-            permission: isOwner ? 'owner' : (isCollaborator ? 'edit' : (hasPublicAccess ? metadata.publicAccess : 'none'))
+            permission: granted
         })
     } catch (error) {
         console.error('[Projects] Error getting project:', error)
@@ -407,18 +381,10 @@ router.patch('/:projectId', (req, res) => {
         const userId = req.user.uid
         const { projectId } = req.params
         const { name } = req.body
+        const auth = getProjectWithAuth(req.user, projectId, 'edit')
+        if (auth.error) return res.status(auth.status).json({ error: auth.error })
 
-        const projectInfo = findProjectDir(projectId)
-        if (!projectInfo) {
-            return res.status(404).json({ error: 'Project not found' })
-        }
-
-        const { projectPath, ownerId } = projectInfo
-
-        // Only owner can rename
-        if (ownerId !== userId) {
-            return res.status(403).json({ error: 'Only project owner can rename the project' })
-        }
+        const { projectPath, ownerId } = auth
 
         const metadataPath = join(projectPath, '.project.json')
         let metadata = {}
@@ -451,18 +417,17 @@ router.post('/:projectId/share', (req, res) => {
         const userId = req.user.uid
         const { projectId } = req.params
         const { publicAccess, collaborators } = req.body
-
-        const projectInfo = findProjectDir(projectId)
-        if (!projectInfo) {
-            return res.status(404).json({ error: 'Project not found' })
+        const auth = getProjectWithAuth(req.user, projectId, 'owner')
+        if (auth.error) {
+            // Check if it's just 'edit' vs 'owner'
+            const viewAuth = getProjectWithAuth(req.user, projectId, 'edit')
+            if (!viewAuth.error && viewAuth.ownerId !== userId) {
+                return res.status(403).json({ error: 'Only project owner can change sharing settings' })
+            }
+            return res.status(auth.status || 403).json({ error: auth.error })
         }
 
-        const { projectPath, ownerId } = projectInfo
-
-        // Only owner can change sharing settings
-        if (ownerId !== userId) {
-            return res.status(403).json({ error: 'Only project owner can change sharing settings' })
-        }
+        const { projectPath, ownerId } = auth
 
         const metadataPath = join(projectPath, '.project.json')
         let metadata = {}

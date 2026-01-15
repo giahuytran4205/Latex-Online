@@ -101,30 +101,15 @@ export function cleanupOldTempFiles() {
     }
 }
 
-/**
- * Find project directory across all users
- */
-function findProjectDir(projectId) {
-    if (!existsSync(PROJECTS_DIR)) return null
-    const userDirs = readdirSync(PROJECTS_DIR)
-    for (const userId of userDirs) {
-        const projectPath = join(PROJECTS_DIR, userId, projectId)
-        if (existsSync(projectPath) && statSync(projectPath).isDirectory()) {
-            return projectPath
-        }
-    }
-    // Fallback to legacy
-    const legacyPath = join(PROJECTS_DIR, projectId)
-    if (existsSync(legacyPath)) return legacyPath
-    return null
-}
+// findProjectInfo is now imported from ../utils/project.js
 
 /**
  * Compile LaTeX code using specified engine with incremental support
  */
-export async function compileLatex(projectId = 'default-project', engine = 'pdflatex', filename = 'main', code = null, userId = 'dev-user') {
-    // Correctly locate the project directory (could be owned by anyone)
-    let projectDir = findProjectDir(projectId)
+export async function compileLatex(projectId = 'default-project', engine = 'pdflatex', filename = 'main', code = null, userId) {
+    // Correctly locate the project directory
+    const info = findProjectInfo(projectId, userId)
+    let projectDir = info ? info.projectPath : null
 
     // If project doesn't exist yet, it's either a new project or an error
     if (!projectDir) {
