@@ -18,11 +18,23 @@ function Preview({ pdfUrl, onSyncTeX }) {
     const [isSidebarOpen, setIsSidebarOpen] = useState(false)
     const [sidebarView, setSidebarView] = useState('thumbnails') // 'thumbnails' | 'outline'
 
+    const [pageHeight, setPageHeight] = useState(841.89) // Default A4 height in points
+
     // Callback when document loads successfully
-    function onDocumentLoadSuccess(pdf) {
+    async function onDocumentLoadSuccess(pdf) {
         setNumPages(pdf.numPages)
         setPdfDocument(pdf)
-        setPageNumber(1)
+        setCurrentPage(1)
+
+        try {
+            // Get dimensions of the first page to use for SyncTeX coordinate inversion
+            const page = await pdf.getPage(1)
+            const viewport = page.getViewport({ scale: 1 })
+            setPageHeight(viewport.height)
+            console.log(`[Preview] PDF Loaded. Page 1 Height: ${viewport.height}pts`)
+        } catch (err) {
+            console.warn('Could not determine page height, using default', err)
+        }
 
         // Get Outline
         pdf.getOutline().then(pdfOutline => {
@@ -125,14 +137,16 @@ function Preview({ pdfUrl, onSyncTeX }) {
         const clickY = e.clientY - rect.top
 
         // PDF.js uses 72 DPI but browsers typically use 96 DPI for CSS pixels
-        // SyncTeX expects points (1/72 inch). 
-        // Conversion: pixels * (72 / 96) = pixels * 0.75
         const xPoints = (clickX / scale) * 0.75
-        const yPoints = (clickY / scale) * 0.75
+        const yPointsFromTop = (clickY / scale) * 0.75
 
-        console.log(`SyncTeX Double Click: Page ${pageNum}, X(pt): ${xPoints.toFixed(2)}, Y(pt): ${yPoints.toFixed(2)}`)
+        // IMPORTANT: SyncTeX usually expects Y from bottom for the -o option in many setups
+        // although some versions handle top-left. Let's try inverting it.
+        const yPoints = pageHeight - yPointsFromTop
+
+        console.log(`SyncTeX Double Click: Page ${pageNum}, X(pt): ${xPoints.toFixed(2)}, Y(pt): ${yPoints.toFixed(2)} (Inverted from ${yPointsFromTop.toFixed(2)})`)
         onSyncTeX(pageNum, xPoints, yPoints)
-    }, [onSyncTeX, scale])
+    }, [onSyncTeX, scale, pageHeight])
 
     const handleDownload = () => {
         if (!pdfUrl) return
