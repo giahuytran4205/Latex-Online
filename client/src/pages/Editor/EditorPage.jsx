@@ -70,8 +70,8 @@ function EditorPage() {
     const [debouncedData, setDebouncedData] = useState({ filename: activeFileName, code: code })
 
     useEffect(() => {
-        // Don't update debounce while a file is loading to prevent race conditions
-        if (isCodeLoading) return
+        // Don't update debounce while a file is loading or code is cleared
+        if (isCodeLoading || code === null) return
 
         const handler = setTimeout(() => {
             setDebouncedData({ filename: activeFileName, code: code })
@@ -100,11 +100,10 @@ function EditorPage() {
     const lastSavedFileRef = useRef(activeFileName)
     const loadingFileRef = useRef(false)
     const prevActiveFileRef = useRef(null)
-    const isSwitchingRef = useRef(false)
 
     // Save current content to cache before switching files
     const saveToCache = useCallback((filename, content) => {
-        if (filename && content !== undefined) {
+        if (filename && content !== null && content !== undefined) {
             fileCacheRef.current.set(filename, content)
         }
     }, [])
@@ -123,59 +122,66 @@ function EditorPage() {
 
     // Unified file switch handler to prevent race conditions
     const handleFileSelect = useCallback((filename) => {
-        if (!filename || filename === activeFileName || isSwitchingRef.current) return
-        if (filename.endsWith('/')) return
-
-        console.log(`[Editor] Switching to: ${filename}`)
-        isSwitchingRef.current = true
+        if (!filename || filename === activeFileName) return
+        if (filename.endsWith('/')) return // Skip folders
 
         // 1. Save current content to cache
         saveToCache(activeFileName, code)
 
-        // 2. Reset states synchronously
-        setLoadedFileName(null)
+        // 2. Clear content immediately so Editor unmounts
         setCode(null)
-        setIsCodeLoading(true)
+        setLoadedFileName(null)
 
-        // 3. Update active filename
+        // 3. Update active filename which triggers the fetch/load effect
         setActiveFileName(filename)
     }, [activeFileName, code, saveToCache])
 
     // Load file content when active file changes
     useEffect(() => {
-        // Only run if code is null (set by handleFileSelect) and we are in switching mode
-        if (!activeFileName || code !== null || !isSwitchingRef.current) return
+        if (!activeFileName || code !== null) return
 
-        const load = async () => {
+        let active = true
+
+        // Check cache first
+        if (fileCacheRef.current.has(activeFileName)) {
+            const cachedContent = fileCacheRef.current.get(activeFileName)
+            setCode(cachedContent)
+            setLoadedFileName(activeFileName)
+            lastSavedFileRef.current = activeFileName
+            return
+        }
+
+        // Fetch from server
+        setIsCodeLoading(true)
+        loadingFileRef.current = true
+
+        const fetchContent = async () => {
             try {
-                // Check cache first
-                if (fileCacheRef.current.has(activeFileName)) {
-                    const cachedContent = fileCacheRef.current.get(activeFileName)
-                    setCode(cachedContent)
-                    setLoadedFileName(activeFileName)
-                    lastSavedFileRef.current = activeFileName
-                    return
-                }
-
-                // Fetch from server
-                loadingFileRef.current = true
                 const data = await getFileContent(projectId, activeFileName)
+                if (!active) return
+
                 setCode(data.content || '')
                 setLoadedFileName(activeFileName)
                 saveToCache(activeFileName, data.content || '')
                 lastSavedFileRef.current = activeFileName
             } catch (err) {
+                if (!active) return
                 console.error('Failed to load file content:', err)
                 setCode('')
                 setLoadedFileName(activeFileName)
                 saveToCache(activeFileName, '')
             } finally {
-                loadingFileRef.current = false
-                setIsCodeLoading(false)
-                isSwitchingRef.current = false
+                if (active) {
+                    loadingFileRef.current = false
+                    setIsCodeLoading(false)
+                }
             }
         }
-        load()
+        fetchContent()
+
+        return () => {
+            active = false
+        }
     }, [activeFileName, projectId, code, saveToCache])
 
     // Update cache when code changes

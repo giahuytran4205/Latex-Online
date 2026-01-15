@@ -391,10 +391,9 @@ body {
 }
 
 .file-tree__item--active {
-  background: var(--bg-tertiary);
+  background: var(--accent-light);
   color: var(--accent);
-  font-weight: 600;
-  box-shadow: inset 2px 0 0 0 var(--accent);
+  font-weight: 500;
 }
 
 .file-tree__icon {

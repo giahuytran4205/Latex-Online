@@ -322,6 +322,7 @@ function Editor({
     ]), [])
 
     useEffect(() => {
+        let active = true
         if (!projectId || !activeFile) {
             if (providerRef.current) {
                 providerRef.current.disconnect()
@@ -335,17 +336,27 @@ function Editor({
         }
 
         const ydoc = new Y.Doc()
-        const ytext = ydoc.getText('codemirror')
-
-        if (code && ytext.length === 0) {
-            ytext.insert(0, code)
-        }
-
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
         const host = window.location.host
         const wsUrl = `${protocol}//${host}/ws?projectId=${projectId}&activeFile=${encodeURIComponent(activeFile)}&userId=${userId || 'anon'}`
 
         const provider = new WebsocketProvider(wsUrl, `${projectId}-${activeFile}`, ydoc)
+
+        // Seed document from disk content IF it's empty after sync
+        provider.on('status', ({ status }) => {
+            if (status === 'connected') {
+                // Wait a tiny bit for the initial sync to finish
+                setTimeout(() => {
+                    if (!active) return
+                    const ytext = ydoc.getText('codemirror')
+                    if (ytext.length === 0 && code) {
+                        isInternalChange.current = true
+                        ytext.insert(0, code)
+                        isInternalChange.current = false
+                    }
+                }, 200)
+            }
+        })
 
         const color = USER_COLORS[Math.floor(Math.random() * USER_COLORS.length)]
         provider.awareness.setLocalStateField('user', {
@@ -360,6 +371,7 @@ function Editor({
         console.log(`[Collab] Connected to ${projectId}/${activeFile}`)
 
         return () => {
+            active = false
             provider.disconnect()
             ydoc.destroy()
             yDocRef.current = null
@@ -386,7 +398,7 @@ function Editor({
                 maxRenderedOptions: 15,
             }),
             EditorView.updateListener.of((update) => {
-                if (!projectId && update.docChanged && !isInternalChange.current) {
+                if (update.docChanged && !isInternalChange.current) {
                     onChangeRef.current?.(update.state.doc.toString())
                 }
             }),
