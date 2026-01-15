@@ -132,19 +132,22 @@ function Preview({ pdfUrl, onSyncTeX }) {
     // SyncTeX Handler
     const handleDoubleClick = useCallback((e, pageNum) => {
         if (!onSyncTeX) return
-        const rect = e.currentTarget.getBoundingClientRect()
+        // Find the actual PDF page element to get accurate coordinates
+        const pageElement = e.currentTarget.querySelector('.react-pdf__Page')
+        if (!pageElement) return
+
+        const rect = pageElement.getBoundingClientRect()
         const clickX = e.clientX - rect.left
         const clickY = e.clientY - rect.top
 
-        // Calculate points relative to the PDF page
         // Convert browser pixels (96 DPI) to PDF points (72 DPI)
         // Ratio: 72 / 96 = 0.75
         const s = scale || 1
         const xPoints = (clickX / s) * 0.75
         const yPoints = (clickY / s) * 0.75
 
-        console.log(`[SyncTeX] Double Click (Page ${pageNum}) - Top-Down:`)
-        console.log(`  - Pixels: X=${clickX.toFixed(0)}, Y=${clickY.toFixed(0)}`)
+        console.log(`[SyncTeX] Double Click (Page ${pageNum}):`)
+        console.log(`  - Page Element Pixels: X=${clickX.toFixed(0)}, Y=${clickY.toFixed(0)}`)
         console.log(`  - Points (0.75 scale): X=${xPoints.toFixed(1)}pt, Y=${yPoints.toFixed(1)}pt`)
 
         onSyncTeX(pageNum, xPoints, yPoints)
