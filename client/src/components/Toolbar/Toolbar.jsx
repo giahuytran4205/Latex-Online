@@ -110,7 +110,7 @@ function Toolbar({
                                         border: `2px solid ${collab.color}`,
                                         cursor: 'pointer'
                                     }}
-                                    title={`${collab.name} ${collab.activeFile ? `(in ${collab.activeFile})` : '(connecting...)'}`}
+                                    title={`${collab.name}`}
                                     onClick={() => onJumpToUser?.(collab)}
                                 >
                                     <span style={{ color: collab.color, fontWeight: 'bold' }}>
