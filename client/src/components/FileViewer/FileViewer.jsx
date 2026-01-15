@@ -35,7 +35,6 @@ const FileViewer = ({ filename, url }) => {
                 </div>
                 <p>This file type cannot be displayed directly.</p>
                 <p className="file-viewer__hint">Right-click the file in the sidebar to download it.</p>
-                <div className="file-viewer__filename-hint">{filename}</div>
             </div>
         </div>
     )
