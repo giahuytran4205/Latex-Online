@@ -40,14 +40,14 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    border-bottom: 1px solid var(--border-color, #3c4043);
+    border-bottom: 1px solid var(--border-color);
 }
 
 .share-modal__header h2 {
     margin: 0;
     font-size: 1.25rem;
     font-weight: 600;
-    color: var(--text-color, #f8f9fa);
+    color: var(--text-primary);
 }
 
 .close-btn {
@@ -79,11 +79,11 @@
 
 .share-link-input {
     flex: 1;
-    background: var(--bg-secondary, #292a2d);
-    border: 1px solid var(--border-color, #3c4043);
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
     border-radius: 6px;
     padding: 10px 12px;
-    color: var(--text-muted, #9aa0a6);
+    color: var(--text-secondary);
     font-size: 0.85rem;
     outline: none;
 }
@@ -110,14 +110,14 @@
 
 .access-control {
     font-size: 0.9rem;
-    color: var(--text-color, #f8f9fa);
+    color: var(--text-primary);
 }
 
 .access-control select {
-    background: var(--bg-secondary, #292a2d);
-    border: 1px solid var(--border-color, #3c4043);
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
     border-radius: 4px;
-    color: var(--text-color, #f8f9fa);
+    color: var(--text-primary);
     padding: 4px 8px;
     margin-left: 8px;
     outline: none;
@@ -125,7 +125,7 @@
 
 .share-divider {
     height: 1px;
-    background: var(--border-color, #3c4043);
+    background: var(--border-color);
     margin: 24px 0;
 }
 
@@ -137,11 +137,11 @@
 
 .add-collab-form input {
     flex: 1;
-    background: var(--bg-secondary, #292a2d);
-    border: 1px solid var(--border-color, #3c4043);
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
     border-radius: 6px;
     padding: 10px 12px;
-    color: var(--text-color, #f8f9fa);
+    color: var(--text-primary);
     outline: none;
 }
 
@@ -209,7 +209,7 @@
 }
 
 .collab-name {
-    color: var(--text-color, #f8f9fa);
+    color: var(--text-primary);
     font-size: 0.9rem;
     font-weight: 500;
 }
@@ -252,8 +252,8 @@
 
 .secondary-btn {
     background: transparent;
-    color: var(--text-color, #f8f9fa);
-    border: 1px solid var(--border-color, #3c4043);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
     border-radius: 6px;
     padding: 8px 20px;
     font-weight: 600;

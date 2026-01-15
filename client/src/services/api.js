@@ -157,7 +157,7 @@ export async function getFileContent(projectId, filename) {
 export async function getFileUrl(projectId, filename) {
     const user = auth.currentUser
     const token = user ? await user.getIdToken() : ''
-    return `${API_BASE}/files/${projectId}/${encodeFilename(filename)}/download?token=${token}`
+    return `${API_BASE}/files/${projectId}/${encodeFilename(filename)}/download?token=${token}&mode=view`
 }
 
 export async function saveFile(projectId, filename, content) {

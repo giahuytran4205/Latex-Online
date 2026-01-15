@@ -228,7 +228,22 @@ router.get('/:projectId/:filename/download', (req, res) => {
 
         // Get just the base filename for download
         const baseName = decodedFilename.split('/').pop()
-        res.setHeader('Content-Disposition', `attachment; filename="${baseName}"`)
+        const isView = req.query.mode === 'view'
+        const ext = extname(baseName).toLowerCase()
+
+        if (isView) {
+            // Set proper content type for viewing
+            if (ext === '.pdf') res.setHeader('Content-Type', 'application/pdf')
+            else if (ext === '.png') res.setHeader('Content-Type', 'image/png')
+            else if (ext === '.jpg' || ext === '.jpeg') res.setHeader('Content-Type', 'image/jpeg')
+            else if (ext === '.svg') res.setHeader('Content-Type', 'image/svg+xml')
+            else if (ext === '.gif') res.setHeader('Content-Type', 'image/gif')
+
+            res.setHeader('Content-Disposition', 'inline')
+        } else {
+            res.setHeader('Content-Disposition', `attachment; filename="${baseName}"`)
+        }
+
         res.sendFile(filePath)
     } catch (err) {
         res.status(500).json({ error: err.message })
