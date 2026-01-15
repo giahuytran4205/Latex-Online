@@ -130,9 +130,10 @@ function Preview({ pdfUrl, onSyncTeX }) {
     }, [pdfDocument, numPages, scale]) // Re-observe when pages change
 
     // SyncTeX Handler
-    const handleDoubleClick = useCallback((e, pageNum) => {
-        if (!onSyncTeX) return
-        // Find the actual PDF page element to get accurate coordinates
+    const handleDoubleClick = useCallback(async (e, pageNum) => {
+        if (!onSyncTeX || !pdfDocument) return
+
+        // Find the actual PDF page element
         const pageElement = e.currentTarget.querySelector('.react-pdf__Page')
         if (!pageElement) return
 
@@ -140,18 +141,29 @@ function Preview({ pdfUrl, onSyncTeX }) {
         const clickX = e.clientX - rect.left
         const clickY = e.clientY - rect.top
 
-        // Convert browser pixels (96 DPI) to PDF points (72 DPI)
-        // Ratio: 72 / 96 = 0.75
-        const s = scale || 1
-        const xPoints = (clickX / s) * 0.75
-        const yPoints = (clickY / s) * 0.75
+        try {
+            // Get the actual PDF page dimensions in points
+            const page = await pdfDocument.getPage(pageNum)
+            const viewport = page.getViewport({ scale: 1 })
 
-        console.log(`[SyncTeX] Double Click (Page ${pageNum}):`)
-        console.log(`  - Page Element Pixels: X=${clickX.toFixed(0)}, Y=${clickY.toFixed(0)}`)
-        console.log(`  - Points (0.75 scale): X=${xPoints.toFixed(1)}pt, Y=${yPoints.toFixed(1)}pt`)
+            // Calculate the exact ratio between browser pixels and PDF points
+            // viewport.width is in points, rect.width is in pixels (including scale)
+            const ratio = viewport.width / rect.width
 
-        onSyncTeX(pageNum, xPoints, yPoints)
-    }, [onSyncTeX, scale])
+            const xPoints = clickX * ratio
+            const yPoints = clickY * ratio
+
+            console.log(`[SyncTeX] Double Click (Page ${pageNum}):`)
+            console.log(`  - Page Element Pixels: ${rect.width.toFixed(0)}x${rect.height.toFixed(0)}`)
+            console.log(`  - Click Location (px): X=${clickX.toFixed(0)}, Y=${clickY.toFixed(0)}`)
+            console.log(`  - Dynamic Ratio: ${ratio.toFixed(4)} (Points/Pixels)`)
+            console.log(`  - Calculated Points: X=${xPoints.toFixed(1)}pt, Y=${yPoints.toFixed(1)}pt`)
+
+            onSyncTeX(pageNum, xPoints, yPoints)
+        } catch (err) {
+            console.error('Error calculating SyncTeX coordinates:', err)
+        }
+    }, [onSyncTeX, pdfDocument])
 
     const handleDownload = () => {
         if (!pdfUrl) return
