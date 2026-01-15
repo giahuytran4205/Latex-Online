@@ -99,10 +99,49 @@ function EditorPage() {
     }, [error, confirm, navigate])
 
     // Ref handlers for child actions
+    const lastFileSystemUpdateRef = useRef(0)
+
+    const handleStorageUpdate = useCallback(() => {
+        refreshFiles()
+        // Broadcast file system change to others
+        if (awareness) {
+            const now = Date.now()
+            awareness.setLocalStateField('fileSystemUpdate', now)
+            lastFileSystemUpdateRef.current = now
+        }
+    }, [refreshFiles, awareness])
+
+    // Listen for file system updates from others
+    useEffect(() => {
+        if (!awareness) return
+
+        const handleAwarenessChange = () => {
+            const states = awareness.getStates()
+            let maxUpdate = 0
+
+            states.forEach(state => {
+                if (state.user && state.user.fileSystemUpdate) {
+                    if (state.user.fileSystemUpdate > maxUpdate) {
+                        maxUpdate = state.user.fileSystemUpdate
+                    }
+                }
+            })
+
+            if (maxUpdate > lastFileSystemUpdateRef.current) {
+                console.log('[FileTree] Remote update detected, refreshing...')
+                refreshFiles()
+                lastFileSystemUpdateRef.current = maxUpdate
+            }
+        }
+
+        awareness.on('change', handleAwarenessChange)
+        return () => awareness.off('change', handleAwarenessChange)
+    }, [awareness, refreshFiles])
+
     const handleAddFile = async (name) => {
         try {
             await createFile(projectId, name, '', false, sid)
-            await refreshFiles()
+            handleStorageUpdate()
             if (!name.endsWith('/')) handleFileSelect(name)
             return true
         } catch (err) {
@@ -115,7 +154,7 @@ function EditorPage() {
         if (name === 'main.tex') return false
         try {
             await deleteFile(projectId, name, sid)
-            await refreshFiles()
+            handleStorageUpdate()
             if (activeFileName === name) handleFileSelect('main.tex')
             return true
         } catch (err) {
@@ -128,7 +167,7 @@ function EditorPage() {
         if (oldName === 'main.tex') return false
         try {
             await renameFile(projectId, oldName, newName, sid)
-            await refreshFiles()
+            handleStorageUpdate()
             if (activeFileName === oldName) handleFileSelect(newName)
             return true
         } catch (err) {
@@ -140,7 +179,7 @@ function EditorPage() {
     const handleDuplicateFile = async (name) => {
         try {
             const res = await duplicateFile(projectId, name, sid)
-            await refreshFiles()
+            handleStorageUpdate()
             if (res.newFilename) handleFileSelect(res.newFilename)
             return true
         } catch (err) {
@@ -187,7 +226,7 @@ function EditorPage() {
 
     const onUploadFile = async (name, content, skipReload) => {
         const success = await handleUploadFile(name, content, skipReload)
-        if (success && !skipReload) await refreshFiles()
+        if (success && !skipReload) handleStorageUpdate()
         return success
     }
 
@@ -254,7 +293,7 @@ function EditorPage() {
                 onRenameFile={handleRenameFile}
                 onUploadFile={onUploadFile}
                 onDuplicateFile={handleDuplicateFile}
-                onStorageUpdate={refreshFiles}
+                onStorageUpdate={handleStorageUpdate}
             />
 
             <div className="resize-handle resize-handle--sidebar" onMouseDown={handleMouseDown('sidebar')} />

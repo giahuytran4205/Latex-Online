@@ -32,14 +32,17 @@ export function useCollaboration(projectId, userId, userName, activeFile, sid) {
 
             const color = USER_COLORS[Math.floor(Math.random() * USER_COLORS.length)]
 
-            // Initial state
-            provider.awareness.setLocalStateField('user', {
+            // Initial state definition - prepare but don't force broadcast yet
+            // Broadcasting happens automatically when we setLocalStateField
+            const initialState = {
                 name: userName || 'Anonymous',
                 color: color,
                 colorLight: color + '33',
                 activeFile: activeFile,
                 id: userId || 'anon'
-            })
+            }
+
+            provider.awareness.setLocalStateField('user', initialState)
 
             const handleAwarenessUpdate = () => {
                 const states = provider.awareness.getStates()
@@ -61,6 +64,11 @@ export function useCollaboration(projectId, userId, userName, activeFile, sid) {
 
             provider.on('sync', (isSynced) => {
                 setIsSynced(isSynced)
+                if (isSynced) {
+                    // Force broadcast presence immediately upon sync
+                    // This ensures other clients see us right away without needing an action
+                    provider.awareness.setLocalStateField('user', initialState)
+                }
             })
         }
 
