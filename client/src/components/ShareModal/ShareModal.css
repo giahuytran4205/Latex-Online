@@ -171,10 +171,18 @@
     padding: 10px 12px;
     color: var(--text-primary);
     outline: none;
+    min-width: 0;
 }
 
-.add-collab-form input:focus {
-    border-color: var(--accent, #0c8ce9);
+.role-select--invite {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 0 8px;
+    color: var(--text-primary);
+    font-size: 0.85rem;
+    outline: none;
+    cursor: pointer;
 }
 
 .add-collab-form button {
@@ -190,6 +198,24 @@
 
 .add-collab-form button:hover {
     background: rgba(12, 140, 233, 0.1);
+}
+
+.collab-role-select {
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    padding: 2px 4px;
+    outline: none;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.collab-role-select:hover {
+    border-color: var(--border-color);
+    background: var(--bg-secondary);
+    color: var(--text-primary);
 }
 
 .collaborator-list {

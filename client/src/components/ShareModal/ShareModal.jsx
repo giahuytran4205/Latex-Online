@@ -11,6 +11,7 @@ function ShareModal({ isOpen, onClose, projectId, projectName, sid }) {
     })
     const [linkLevel, setLinkLevel] = useState('view') // 'view' or 'edit'
     const [email, setEmail] = useState('')
+    const [inviteRole, setInviteRole] = useState('view')
     const [isLoading, setIsLoading] = useState(false)
     const [copySuccess, setCopySuccess] = useState(false)
 
@@ -86,9 +87,23 @@ function ShareModal({ isOpen, onClose, projectId, projectName, sid }) {
         e.preventDefault()
         if (!email) return
 
-        const newCollaborators = [...sharingSettings.collaborators, { email, role: 'edit' }]
+        if (sharingSettings.collaborators.some(c => c.email === email)) {
+            toast.error('Collaborator already added')
+            return
+        }
+
+        const newCollaborators = [...sharingSettings.collaborators, { email, role: inviteRole }]
         setSharingSettings({ ...sharingSettings, collaborators: newCollaborators })
         setEmail('')
+    }
+
+    const updateCollaboratorRole = (email, newRole) => {
+        setSharingSettings({
+            ...sharingSettings,
+            collaborators: sharingSettings.collaborators.map(c =>
+                c.email === email ? { ...c, role: newRole } : c
+            )
+        })
     }
 
     const removeCollaborator = (emailToRemove) => {
@@ -141,17 +156,6 @@ function ShareModal({ isOpen, onClose, projectId, projectName, sid }) {
                             </button>
                         </div>
 
-                        <div className="access-control">
-                            <span>Anyone with the link can: </span>
-                            <select
-                                value={sharingSettings.publicAccess}
-                                onChange={e => setSharingSettings({ ...sharingSettings, publicAccess: e.target.value })}
-                            >
-                                <option value="private">No access</option>
-                                <option value="view">View</option>
-                                <option value="edit">Edit</option>
-                            </select>
-                        </div>
                     </div>
 
                     <div className="share-divider" />
@@ -165,6 +169,14 @@ function ShareModal({ isOpen, onClose, projectId, projectName, sid }) {
                                 value={email}
                                 onChange={e => setEmail(e.target.value)}
                             />
+                            <select
+                                value={inviteRole}
+                                onChange={e => setInviteRole(e.target.value)}
+                                className="role-select--invite"
+                            >
+                                <option value="view">Viewer</option>
+                                <option value="edit">Editor</option>
+                            </select>
                             <button type="submit">Invite</button>
                         </form>
 
@@ -178,7 +190,14 @@ function ShareModal({ isOpen, onClose, projectId, projectName, sid }) {
                                             <div className="collab-avatar">{c.email[0].toUpperCase()}</div>
                                             <div className="collab-details">
                                                 <span className="collab-name">{c.email}</span>
-                                                <span className="collab-role">{c.role}</span>
+                                                <select
+                                                    className="collab-role-select"
+                                                    value={c.role}
+                                                    onChange={(e) => updateCollaboratorRole(c.email, e.target.value)}
+                                                >
+                                                    <option value="view">Viewer</option>
+                                                    <option value="edit">Editor</option>
+                                                </select>
                                             </div>
                                         </div>
                                         <button

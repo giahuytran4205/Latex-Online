@@ -123,25 +123,17 @@ export const getProjectWithAuth = (user, projectId, requiredPermission = 'view',
     }
 
     const isOwner = ownerId === userId
-    const isCollaborator = metadata.collaborators?.some(c => c.email === user.email)
-    const publicLevel = metadata.publicAccess // 'private', 'view', 'edit'
-
-    // Determine level from share connection
+    const collaborator = metadata.collaborators?.find(c => c.email === user.email)
     const shareLevel = (info && info.isSharedLink) ? info.level : null
 
     // Resolve actually granted permission
     let granted = 'none'
     if (isOwner) {
         granted = 'owner'
-    } else if (isCollaborator) {
-        granted = 'edit'
-    } else if (publicLevel !== 'private' && shareLevel) {
-        // Link level must be allowed by public setting
-        if (shareLevel === 'edit' && publicLevel === 'edit') {
-            granted = 'edit'
-        } else if (shareLevel === 'view' && (publicLevel === 'view' || publicLevel === 'edit')) {
-            granted = 'view'
-        }
+    } else if (collaborator) {
+        granted = collaborator.role || 'view'
+    } else if (shareLevel) {
+        granted = shareLevel
     }
 
     // Check if granted meets required
