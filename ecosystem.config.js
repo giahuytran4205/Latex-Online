@@ -74,5 +74,13 @@ module.exports = {
         out_file: "./logs/api-out.log",
         error_file: "./logs/api-err.log",
         merge_logs: true
+    }, {
+        name: "latex-watcher",
+        script: "bash",
+        args: "./scripts/git-watcher.sh",
+        autorestart: true,
+        cwd: "./",
+        out_file: "./logs/watcher-out.log",
+        error_file: "./logs/watcher-err.log"
     }]
 }
