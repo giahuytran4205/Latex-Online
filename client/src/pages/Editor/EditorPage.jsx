@@ -53,7 +53,8 @@ function EditorPage() {
     // File state
     const [files, setFiles] = useState([])
     const [activeFileName, setActiveFileName] = useState('main.tex')
-    const [code, setCode] = useState('')
+    const [loadedFileName, setLoadedFileName] = useState(null)
+    const [code, setCode] = useState(null)
     const [isLoading, setIsLoading] = useState(true)
     const [isCodeLoading, setIsCodeLoading] = useState(false)
 
@@ -119,25 +120,31 @@ function EditorPage() {
         }
     }
 
+    // Unified file switch handler to prevent race conditions
+    const handleFileSelect = useCallback((filename) => {
+        if (!filename || filename === activeFileName) return
+        if (filename.endsWith('/')) return // Skip folders
+
+        // 1. Save current content to cache
+        saveToCache(activeFileName, code)
+
+        // 2. Clear content immediately so Editor unmounts
+        setCode(null)
+        setLoadedFileName(null)
+
+        // 3. Update active filename which triggers the fetch/load effect
+        setActiveFileName(filename)
+    }, [activeFileName, code, saveToCache])
+
     // Load file content when active file changes
     useEffect(() => {
-        if (!activeFileName) return
-        // Don't try to load folder content
-        if (activeFileName.endsWith('/')) return
-
-        // Save current file to cache before switching
-        if (prevActiveFileRef.current && prevActiveFileRef.current !== activeFileName) {
-            saveToCache(prevActiveFileRef.current, code)
-        }
-        prevActiveFileRef.current = activeFileName
-
-        // Clear content immediately while loading to prevent "bleeding" from previous file
-        setCode(null)
+        if (!activeFileName || code !== null) return
 
         // Check cache first
         if (fileCacheRef.current.has(activeFileName)) {
             const cachedContent = fileCacheRef.current.get(activeFileName)
             setCode(cachedContent)
+            setLoadedFileName(activeFileName)
             lastSavedFileRef.current = activeFileName
             return
         }
@@ -148,22 +155,22 @@ function EditorPage() {
         const fetchContent = async () => {
             try {
                 const data = await getFileContent(projectId, activeFileName)
-                setCode(data.content)
-                saveToCache(activeFileName, data.content)
+                setCode(data.content || '')
+                setLoadedFileName(activeFileName)
+                saveToCache(activeFileName, data.content || '')
                 lastSavedFileRef.current = activeFileName
             } catch (err) {
                 console.error('Failed to load file content:', err)
-                // If file doesn't exist yet (new file), set empty content
                 setCode('')
+                setLoadedFileName(activeFileName)
                 saveToCache(activeFileName, '')
-                lastSavedFileRef.current = activeFileName
             } finally {
                 loadingFileRef.current = false
                 setIsCodeLoading(false)
             }
         }
         fetchContent()
-    }, [activeFileName, saveToCache, projectId])
+    }, [activeFileName, projectId, code, saveToCache])
 
     // Update cache when code changes
     useEffect(() => {
@@ -208,7 +215,7 @@ function EditorPage() {
 
             // If main.tex exists and no active file, select it
             if (!activeFileName && data.files.find(f => f.name === 'main.tex')) {
-                setActiveFileName('main.tex')
+                handleFileSelect('main.tex')
             }
         } catch (err) {
             console.error('Failed to load files:', err)
@@ -225,7 +232,7 @@ function EditorPage() {
             await loadFiles()
             // Only select if it's a file, not a folder
             if (!filename.endsWith('/')) {
-                setActiveFileName(filename)
+                handleFileSelect(filename)
             }
             return true
         } catch (err) {
@@ -240,7 +247,7 @@ function EditorPage() {
         try {
             await deleteFile(projectId, filename)
             await loadFiles()
-            if (activeFileName === filename) setActiveFileName('main.tex')
+            if (activeFileName === filename) handleFileSelect('main.tex')
             return true
         } catch (err) {
             toast.error('Failed to delete file: ' + err.message)
@@ -253,7 +260,7 @@ function EditorPage() {
         try {
             await renameFile(projectId, oldName, newName)
             await loadFiles()
-            if (activeFileName === oldName) setActiveFileName(newName)
+            if (activeFileName === oldName) handleFileSelect(newName)
             return true
         } catch (err) {
             toast.error('Failed to rename file: ' + err.message)
@@ -297,7 +304,7 @@ function EditorPage() {
             await loadFiles()
             // Select the new duplicated file
             if (result.newFilename) {
-                setActiveFileName(result.newFilename)
+                handleFileSelect(result.newFilename)
             }
             return true
         } catch (err) {
@@ -326,7 +333,7 @@ function EditorPage() {
 
                     if (isNewFile) {
                         console.log(`SyncTeX: Switching to ${actualName}`)
-                        setActiveFileName(actualName)
+                        handleFileSelect(actualName)
                     }
 
                     // Small delay ensures Editor reacts to file switch BEFORE line jump
@@ -462,7 +469,7 @@ function EditorPage() {
                 projectId={projectId}
                 files={files}
                 activeFile={activeFileName}
-                onFileSelect={setActiveFileName}
+                onFileSelect={handleFileSelect}
                 onAddFile={handleAddFile}
                 onDeleteFile={handleDeleteFile}
                 onRenameFile={handleRenameFile}
@@ -476,7 +483,7 @@ function EditorPage() {
             <div className="content-area" ref={contentAreaRef}>
                 <div className="main-content" ref={mainContentRef}>
                     <div className={`editor-container ${isCodeLoading ? 'editor-container--loading' : ''}`}>
-                        {code !== null && (
+                        {loadedFileName === activeFileName && code !== null && (
                             <Editor
                                 code={code}
                                 onChange={setCode}
