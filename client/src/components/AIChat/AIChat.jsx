@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { sendAIMessage, getAIModels } from '../../services/api'
+import { sendAIMessage, fetchAIModels } from '../../services/api'
 import { useToast } from '../Toast/Toast'
 import './AIChat.css'
 
@@ -8,7 +8,6 @@ const DEFAULT_MODELS = {
     'gemini-1.5-flash-latest': { name: 'Gemini 1.5 Flash', description: 'Nhanh, miễn phí (15 RPM)' },
     'gemini-1.5-pro-latest': { name: 'Gemini 1.5 Pro', description: 'Mạnh, miễn phí (2 RPM)' },
     'gemini-2.0-flash-exp': { name: 'Gemini 2.0 Flash', description: 'Mới nhất (thử nghiệm)' },
-    'gemini-1.0-pro': { name: 'Gemini 1.0 Pro', description: 'Ổn định, miễn phí' },
 }
 
 /**
@@ -34,14 +33,24 @@ function AIChat({
     const inputRef = useRef(null)
     const toast = useToast()
 
-    // Load available models
+    // Load available models whenever API key is available
     useEffect(() => {
-        getAIModels().then(data => {
-            if (data.models && Object.keys(data.models).length > 0) {
-                setAvailableModels(data.models)
-            }
-        }).catch(() => { })
-    }, [])
+        if (apiKey) {
+            fetchAIModels(apiKey).then(data => {
+                if (data.models && Object.keys(data.models).length > 0) {
+                    setAvailableModels(data.models)
+
+                    // If current selected model is not in new list, select first available
+                    if (!data.models[selectedModel]) {
+                        const firstModel = Object.keys(data.models)[0]
+                        if (firstModel) setSelectedModel(firstModel)
+                    }
+                }
+            }).catch(() => {
+                // Keep default models on error
+            })
+        }
+    }, [apiKey])
 
     // Scroll to bottom when messages change
     useEffect(() => {
@@ -61,6 +70,14 @@ function AIChat({
             localStorage.setItem('gemini_model', selectedModel)
             setShowSettings(false)
             toast.success('Cài đặt đã được lưu')
+
+            // Trigger fetch models immediately
+            fetchAIModels(apiKey.trim()).then(data => {
+                if (data.models && Object.keys(data.models).length > 0) {
+                    setAvailableModels(data.models)
+                    toast.success('Đã cập nhật danh sách model')
+                }
+            })
         }
     }
 

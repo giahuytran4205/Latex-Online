@@ -249,9 +249,15 @@ export async function moveFile(projectId, oldPath, newPath, sid) {
 
 // ============ AI AGENT ============
 
-export async function getAIModels() {
+export async function fetchAIModels(apiKey) {
     const headers = await getAuthHeaders()
-    const response = await fetch(`${API_BASE}/ai/models`, { headers })
+    const response = await fetch(`${API_BASE}/ai/fetch-models`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ apiKey })
+    })
+
+    // If request fails (e.g. invalid key), return empty object but don't throw
     if (!response.ok) return { models: {} }
     return response.json()
 }

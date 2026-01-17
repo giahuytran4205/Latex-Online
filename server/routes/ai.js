@@ -82,9 +82,43 @@ const TOOLS = [
 // Apply auth middleware
 router.use(verifyToken)
 
-// Get available models
-router.get('/models', (req, res) => {
-    res.json({ models: AVAILABLE_MODELS })
+/**
+ * Fetch available models using User's API Key
+ */
+router.post('/fetch-models', async (req, res) => {
+    try {
+        const { apiKey } = req.body
+        if (!apiKey) return res.status(400).json({ error: 'API Key is required' })
+
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`)
+        if (!response.ok) {
+            const err = await response.json()
+            return res.status(response.status).json({ error: err.error?.message || 'Failed to fetch models' })
+        }
+
+        const data = await response.json()
+
+        // Filter for chat-capable models and format them
+        const models = {}
+        if (data.models) {
+            data.models.forEach(m => {
+                // Only include gemini models that support generateContent
+                if (m.name.includes('gemini') && m.supportedGenerationMethods.includes('generateContent')) {
+                    const id = m.name.replace('models/', '')
+                    models[id] = {
+                        name: m.displayName,
+                        description: m.description,
+                        maxTokens: m.outputTokenLimit || 8192
+                    }
+                }
+            })
+        }
+
+        res.json({ models })
+    } catch (err) {
+        console.error('[AI] Fetch models error:', err)
+        res.status(500).json({ error: err.message })
+    }
 })
 
 /**
@@ -92,17 +126,15 @@ router.get('/models', (req, res) => {
  */
 router.post('/chat', async (req, res) => {
     try {
-        let { projectId, message, apiKey, context, model = 'gemini-1.5-flash-latest', conversationHistory = [] } = req.body
+        let { projectId, message, apiKey, context, model = 'gemini-1.5-flash', conversationHistory = [] } = req.body
 
         if (!projectId) return res.status(400).json({ error: 'Project ID is required' })
         if (!apiKey) return res.status(400).json({ error: 'Gemini API key is required' })
         if (!message) return res.status(400).json({ error: 'Message is required' })
 
-        // Auto-fallback to default model if invalid
-        if (!AVAILABLE_MODELS[model]) {
-            console.log(`[AI] Invalid model "${model}", falling back to gemini-1.5-flash-latest`)
-            model = 'gemini-1.5-flash-latest'
-        }
+        // We no longer strictly validate against a hardcoded list since we fetch dynamically.
+        // But we ensure a default if missing.
+        if (!model) model = 'gemini-1.5-flash'
 
         // Verify project access
         const auth = getProjectWithAuth(req.user, projectId, 'edit')
