@@ -117,6 +117,18 @@ export function useFileEditor(projectId, sid, initialFile = 'main.tex') {
         }
     }, [projectId, activeFileName, sid])
 
+    const refreshFileContent = useCallback((filename) => {
+        // Clear cache to force fetch from server next time
+        fileCache.current.delete(filename)
+
+        // If it's the currently open file, force reload
+        if (filename === activeFileName) {
+            setCode(null)
+            setLoadedFileName(null)
+            // Effect will run because code becomes null
+        }
+    }, [activeFileName])
+
     return {
         activeFileName,
         loadedFileName,
@@ -126,6 +138,7 @@ export function useFileEditor(projectId, sid, initialFile = 'main.tex') {
         handleFileSelect,
         triggerSave,
         handleUploadFile,
-        saveToCache
+        saveToCache,
+        refreshFileContent
     }
 }

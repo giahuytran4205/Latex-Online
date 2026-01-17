@@ -54,8 +54,11 @@ function EditorPage() {
         handleFileSelect,
         triggerSave,
         handleUploadFile,
-        saveToCache
+        saveToCache,
+        refreshFileContent
     } = useFileEditor(projectId, sid)
+
+
 
     // 4. Compiler & PDF
     const {
@@ -260,6 +263,17 @@ function EditorPage() {
     const mainContentRef = useRef(null)
     const contentAreaRef = useRef(null)
 
+    const handleAIFileUpdate = (operations) => {
+        handleStorageUpdate()
+        if (operations && Array.isArray(operations)) {
+            operations.forEach(op => {
+                if (op.file) {
+                    refreshFileContent(op.file)
+                }
+            })
+        }
+    }
+
     return (
         <div
             className={`app ${isResizing ? 'resizing' : ''}`}
@@ -367,7 +381,7 @@ function EditorPage() {
                 projectId={projectId}
                 activeFile={activeFileName}
                 compileErrors={compilationErrors}
-                onRefreshFiles={handleStorageUpdate}
+                onRefreshFiles={handleAIFileUpdate}
                 isOpen={isAIChatOpen}
                 onClose={() => setIsAIChatOpen(false)}
             />

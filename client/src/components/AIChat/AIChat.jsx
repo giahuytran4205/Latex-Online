@@ -139,7 +139,7 @@ function AIChat({
 
             // Refresh file tree if there were file operations
             if (response.operations?.length > 0) {
-                onRefreshFiles?.()
+                onRefreshFiles?.(response.operations)
                 toast.success(`Đã thực hiện ${response.operations.length} thao tác file`)
             }
 
