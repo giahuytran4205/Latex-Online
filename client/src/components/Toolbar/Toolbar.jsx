@@ -87,7 +87,7 @@ function Toolbar({
                             title="Click to rename project"
                         >
                             <span className="toolbar__project-name">{projectName || 'LaTeX Online'}</span>
-                            <svg className="toolbar__edit-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ width: '12px', height: '12px' }}>
+                            <svg className="toolbar__edit-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ width: '16px', height: '16px' }}>
                                 <path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
                             </svg>
                         </div>
