@@ -326,7 +326,9 @@ function AIChat({
                                         components={{
                                             code({ node, inline, className, children, ...props }) {
                                                 const match = /language-(\w+)/.exec(className || '')
-                                                return !inline ? (
+                                                const isMultiLine = String(children).includes('\n')
+
+                                                return (!inline && (match || isMultiLine)) ? (
                                                     <pre className="ai-code-block" data-lang={match ? match[1] : ''}>
                                                         <code>{children}</code>
                                                     </pre>

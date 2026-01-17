@@ -451,11 +451,17 @@
 }
 
 .ai-inline-code {
-    background: rgba(0, 0, 0, 0.1);
-    padding: 2px 4px;
+    display: inline;
+    background: rgba(100, 100, 100, 0.15);
+    padding: 2px 5px;
     border-radius: 4px;
     font-family: 'JetBrains Mono', monospace;
-    font-size: 12px;
+    font-size: 0.9em;
+    color: var(--accent);
+    /* Use accent color or a specific code color */
+    white-space: pre-wrap;
+    /* Allow wrapping if too long, or nowrap for short terms */
+    vertical-align: baseline;
 }
 
 /* Dark mode adjustment for inline code */
