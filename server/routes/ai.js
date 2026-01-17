@@ -307,7 +307,7 @@ async function callGeminiWithTools(apiKey, model, contents, projectPath) {
         iterationCount++
 
         try {
-            const response = await fetch(
+            let response = await fetch(
                 `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
                 {
                     method: 'POST',
@@ -322,6 +322,32 @@ async function callGeminiWithTools(apiKey, model, contents, projectPath) {
                     })
                 }
             )
+
+            // Fallback: If request fails (likely due to tools not supported by Gemma or other models), try without tools
+            if (!response.ok) {
+                const errorClone = await response.clone().json().catch(() => ({}))
+
+                // If it's a Bad Request (400) or arguably any error where tools might be the culprit
+                // Specifically Gemma models often don't support tools yet.
+                if (response.status === 400 || model.includes('gemma')) {
+                    console.warn(`[AI] Request failed with tools for ${model}. Retrying without tools...`)
+                    response = await fetch(
+                        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+                        {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                contents,
+                                // Omit tools
+                                generationConfig: {
+                                    temperature: 0.7,
+                                    maxOutputTokens: 8192,
+                                }
+                            })
+                        }
+                    )
+                }
+            }
 
             if (!response.ok) {
                 const error = await response.json()
