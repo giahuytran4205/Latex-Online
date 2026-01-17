@@ -1,7 +1,14 @@
 import { useState, useRef, useEffect } from 'react'
-import { sendAIMessage } from '../../services/api'
+import { sendAIMessage, getAIModels } from '../../services/api'
 import { useToast } from '../Toast/Toast'
 import './AIChat.css'
+
+// Default models if API fails
+const DEFAULT_MODELS = {
+    'gemini-1.5-flash': { name: 'Gemini 1.5 Flash', description: 'Fast, free tier (15 RPM)' },
+    'gemini-1.5-pro': { name: 'Gemini 1.5 Pro', description: 'Powerful, free tier (2 RPM)' },
+    'gemini-2.0-flash-exp': { name: 'Gemini 2.0 Flash', description: 'Latest experimental' },
+}
 
 /**
  * AI Chat Component - Sidebar chat interface for AI assistance
@@ -15,13 +22,25 @@ function AIChat({
     onClose
 }) {
     const [messages, setMessages] = useState([])
+    const [conversationHistory, setConversationHistory] = useState([])
     const [input, setInput] = useState('')
     const [isLoading, setIsLoading] = useState(false)
     const [apiKey, setApiKey] = useState(() => localStorage.getItem('gemini_api_key') || '')
-    const [showApiKeyInput, setShowApiKeyInput] = useState(false)
+    const [selectedModel, setSelectedModel] = useState(() => localStorage.getItem('gemini_model') || 'gemini-1.5-flash')
+    const [availableModels, setAvailableModels] = useState(DEFAULT_MODELS)
+    const [showSettings, setShowSettings] = useState(false)
     const messagesEndRef = useRef(null)
     const inputRef = useRef(null)
     const toast = useToast()
+
+    // Load available models
+    useEffect(() => {
+        getAIModels().then(data => {
+            if (data.models && Object.keys(data.models).length > 0) {
+                setAvailableModels(data.models)
+            }
+        }).catch(() => { })
+    }, [])
 
     // Scroll to bottom when messages change
     useEffect(() => {
@@ -35,25 +54,34 @@ function AIChat({
         }
     }, [isOpen])
 
-    const handleSaveApiKey = () => {
+    const handleSaveSettings = () => {
         if (apiKey.trim()) {
             localStorage.setItem('gemini_api_key', apiKey.trim())
-            setShowApiKeyInput(false)
-            toast.success('API key đã được lưu')
+            localStorage.setItem('gemini_model', selectedModel)
+            setShowSettings(false)
+            toast.success('Cài đặt đã được lưu')
         }
+    }
+
+    const handleClearConversation = () => {
+        setMessages([])
+        setConversationHistory([])
+        toast.success('Đã xóa lịch sử chat')
     }
 
     const handleSend = async () => {
         if (!input.trim() || isLoading) return
 
         if (!apiKey) {
-            setShowApiKeyInput(true)
+            setShowSettings(true)
             toast.error('Vui lòng nhập Gemini API key')
             return
         }
 
         const userMessage = input.trim()
         setInput('')
+
+        // Add user message to display
         setMessages(prev => [...prev, { role: 'user', content: userMessage }])
         setIsLoading(true)
 
@@ -65,12 +93,28 @@ function AIChat({
                     : null
             }
 
-            const response = await sendAIMessage(projectId, userMessage, apiKey, context)
+            const response = await sendAIMessage(
+                projectId,
+                userMessage,
+                apiKey,
+                context,
+                selectedModel,
+                conversationHistory
+            )
 
+            // Update conversation history for next request
+            setConversationHistory(prev => [
+                ...prev,
+                { role: 'user', content: userMessage },
+                { role: 'assistant', content: response.response }
+            ])
+
+            // Add AI response to display
             setMessages(prev => [...prev, {
                 role: 'assistant',
                 content: response.response,
-                operations: response.operations
+                operations: response.operations,
+                model: response.model
             }])
 
             // Refresh file tree if there were file operations
@@ -86,8 +130,8 @@ function AIChat({
                 content: err.message
             }])
 
-            if (err.message.includes('API key')) {
-                setShowApiKeyInput(true)
+            if (err.message.includes('API key') || err.message.includes('quota')) {
+                setShowSettings(true)
             }
         } finally {
             setIsLoading(false)
@@ -102,11 +146,10 @@ function AIChat({
     }
 
     const formatMessage = (content) => {
-        // Remove JSON operation blocks for display
-        const cleanContent = content.replace(/```json\s*\{[\s\S]*?"operations"[\s\S]*?\}\s*```/g, '')
+        if (!content) return null
 
-        // Convert markdown code blocks
-        return cleanContent.split('```').map((part, i) => {
+        // Split by code blocks
+        return content.split('```').map((part, i) => {
             if (i % 2 === 1) {
                 // Code block
                 const [lang, ...code] = part.split('\n')
@@ -116,10 +159,12 @@ function AIChat({
                     </pre>
                 )
             }
-            // Regular text - convert newlines to <br>
-            return <span key={i}>{part.split('\n').map((line, j) => (
-                <span key={j}>{line}<br /></span>
-            ))}</span>
+            // Regular text - convert newlines and bold
+            return <span key={i}>{part.split('\n').map((line, j) => {
+                // Simple markdown bold
+                const formatted = line.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                return <span key={j} dangerouslySetInnerHTML={{ __html: formatted + '<br/>' }} />
+            })}</span>
         })
     }
 
@@ -138,8 +183,18 @@ function AIChat({
                 <div className="ai-chat__actions">
                     <button
                         className="ai-chat__btn"
-                        onClick={() => setShowApiKeyInput(!showApiKeyInput)}
-                        title="Cài đặt API Key"
+                        onClick={handleClearConversation}
+                        title="Xóa lịch sử chat"
+                    >
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <polyline points="3 6 5 6 21 6" />
+                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                        </svg>
+                    </button>
+                    <button
+                        className="ai-chat__btn"
+                        onClick={() => setShowSettings(!showSettings)}
+                        title="Cài đặt"
                     >
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                             <circle cx="12" cy="12" r="3" />
@@ -155,32 +210,57 @@ function AIChat({
                 </div>
             </div>
 
-            {showApiKeyInput && (
-                <div className="ai-chat__api-key">
-                    <div className="ai-chat__api-key-label">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4" />
-                        </svg>
-                        Gemini API Key
+            {showSettings && (
+                <div className="ai-chat__settings">
+                    <div className="ai-chat__setting-group">
+                        <label>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4" />
+                            </svg>
+                            API Key
+                        </label>
+                        <input
+                            type="password"
+                            value={apiKey}
+                            onChange={(e) => setApiKey(e.target.value)}
+                            placeholder="Nhập API key từ Google AI Studio..."
+                        />
                     </div>
-                    <input
-                        type="password"
-                        value={apiKey}
-                        onChange={(e) => setApiKey(e.target.value)}
-                        placeholder="Nhập API key từ Google AI Studio..."
-                        className="ai-chat__api-key-input"
-                    />
-                    <button className="ai-chat__api-key-save" onClick={handleSaveApiKey}>
-                        Lưu
-                    </button>
-                    <a
-                        href="https://aistudio.google.com/apikey"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="ai-chat__api-key-link"
-                    >
-                        Lấy API key miễn phí →
-                    </a>
+
+                    <div className="ai-chat__setting-group">
+                        <label>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                                <line x1="9" y1="9" x2="15" y2="9" />
+                                <line x1="9" y1="15" x2="15" y2="15" />
+                            </svg>
+                            Model
+                        </label>
+                        <select
+                            value={selectedModel}
+                            onChange={(e) => setSelectedModel(e.target.value)}
+                        >
+                            {Object.entries(availableModels).map(([id, model]) => (
+                                <option key={id} value={id}>
+                                    {model.name} - {model.description}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+
+                    <div className="ai-chat__setting-actions">
+                        <button className="ai-chat__btn-primary" onClick={handleSaveSettings}>
+                            Lưu cài đặt
+                        </button>
+                        <a
+                            href="https://aistudio.google.com/apikey"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="ai-chat__link"
+                        >
+                            Lấy API key miễn phí →
+                        </a>
+                    </div>
                 </div>
             )}
 
@@ -194,13 +274,16 @@ function AIChat({
                             <line x1="15" y1="9" x2="15.01" y2="9" />
                         </svg>
                         <h3>Xin chào! Tôi có thể giúp gì?</h3>
-                        <p>Tôi có thể giúp bạn:</p>
+                        <p>Tôi có thể:</p>
                         <ul>
-                            <li>Viết và sửa code LaTeX</li>
-                            <li>Tạo, sửa, xóa file</li>
+                            <li>Đọc và hiểu code LaTeX</li>
+                            <li>Tạo, sửa, xóa file tự động</li>
                             <li>Fix lỗi compile</li>
-                            <li>Giải thích code</li>
+                            <li>Viết code mới theo yêu cầu</li>
                         </ul>
+                        <div className="ai-chat__model-info">
+                            Model: {availableModels[selectedModel]?.name || selectedModel}
+                        </div>
                     </div>
                 )}
 

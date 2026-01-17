@@ -249,12 +249,19 @@ export async function moveFile(projectId, oldPath, newPath, sid) {
 
 // ============ AI AGENT ============
 
-export async function sendAIMessage(projectId, message, apiKey, context = {}) {
+export async function getAIModels() {
+    const headers = await getAuthHeaders()
+    const response = await fetch(`${API_BASE}/ai/models`, { headers })
+    if (!response.ok) return { models: {} }
+    return response.json()
+}
+
+export async function sendAIMessage(projectId, message, apiKey, context = {}, model = 'gemini-1.5-flash', conversationHistory = []) {
     const headers = await getAuthHeaders()
     const response = await fetch(`${API_BASE}/ai/chat`, {
         method: 'POST',
         headers,
-        body: JSON.stringify({ projectId, message, apiKey, context }),
+        body: JSON.stringify({ projectId, message, apiKey, context, model, conversationHistory }),
     })
 
     const data = await response.json()

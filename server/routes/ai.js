@@ -11,57 +11,121 @@ const __dirname = dirname(__filename)
 const router = express.Router()
 const PROJECTS_DIR = join(__dirname, '../../projects')
 
+// Available models with their characteristics
+const AVAILABLE_MODELS = {
+    'gemini-1.5-flash': { name: 'Gemini 1.5 Flash', description: 'Fast, free tier (15 RPM)', maxTokens: 8192 },
+    'gemini-1.5-pro': { name: 'Gemini 1.5 Pro', description: 'Powerful, free tier (2 RPM)', maxTokens: 8192 },
+    'gemini-2.0-flash-exp': { name: 'Gemini 2.0 Flash (Exp)', description: 'Latest experimental', maxTokens: 8192 },
+}
+
+// Tool definitions for function calling
+const TOOLS = [
+    {
+        name: 'read_file',
+        description: 'Read content of a specific file in the project',
+        parameters: {
+            type: 'object',
+            properties: {
+                file_path: { type: 'string', description: 'Path to the file relative to project root' }
+            },
+            required: ['file_path']
+        }
+    },
+    {
+        name: 'create_file',
+        description: 'Create a new file with content',
+        parameters: {
+            type: 'object',
+            properties: {
+                file_path: { type: 'string', description: 'Path for the new file' },
+                content: { type: 'string', description: 'Content of the file' },
+                description: { type: 'string', description: 'Brief description of what this file does' }
+            },
+            required: ['file_path', 'content']
+        }
+    },
+    {
+        name: 'edit_file',
+        description: 'Replace entire content of an existing file',
+        parameters: {
+            type: 'object',
+            properties: {
+                file_path: { type: 'string', description: 'Path to the file' },
+                content: { type: 'string', description: 'New complete content for the file' },
+                description: { type: 'string', description: 'Brief description of changes made' }
+            },
+            required: ['file_path', 'content']
+        }
+    },
+    {
+        name: 'delete_file',
+        description: 'Delete a file from the project (cannot delete main.tex)',
+        parameters: {
+            type: 'object',
+            properties: {
+                file_path: { type: 'string', description: 'Path to the file to delete' }
+            },
+            required: ['file_path']
+        }
+    },
+    {
+        name: 'list_files',
+        description: 'Get list of all files in the project',
+        parameters: {
+            type: 'object',
+            properties: {}
+        }
+    }
+]
+
 // Apply auth middleware
 router.use(verifyToken)
 
+// Get available models
+router.get('/models', (req, res) => {
+    res.json({ models: AVAILABLE_MODELS })
+})
+
 /**
- * AI Agent endpoint - processes user requests and performs file operations
+ * AI Agent chat endpoint with tool calling support
  */
 router.post('/chat', async (req, res) => {
     try {
-        const { projectId, message, apiKey, context } = req.body
+        const { projectId, message, apiKey, context, model = 'gemini-1.5-flash', conversationHistory = [] } = req.body
 
-        if (!projectId) {
-            return res.status(400).json({ error: 'Project ID is required' })
-        }
-
-        if (!apiKey) {
-            return res.status(400).json({ error: 'Gemini API key is required' })
-        }
-
-        if (!message) {
-            return res.status(400).json({ error: 'Message is required' })
-        }
+        if (!projectId) return res.status(400).json({ error: 'Project ID is required' })
+        if (!apiKey) return res.status(400).json({ error: 'Gemini API key is required' })
+        if (!message) return res.status(400).json({ error: 'Message is required' })
+        if (!AVAILABLE_MODELS[model]) return res.status(400).json({ error: 'Invalid model' })
 
         // Verify project access
         const auth = getProjectWithAuth(req.user, projectId, 'edit')
-        if (auth.error) {
-            return res.status(auth.status).json({ error: auth.error })
-        }
+        if (auth.error) return res.status(auth.status).json({ error: auth.error })
 
         const { projectPath } = auth
 
-        // Get project file structure
-        const files = getProjectFiles(projectPath)
+        // Build initial context (minimal - just file list)
+        const fileList = getFileList(projectPath)
+        const activeFileContent = context?.activeFile ? readFileSafe(projectPath, context.activeFile) : null
 
-        // Build system prompt with project context
-        const systemPrompt = buildSystemPrompt(files, context)
+        // Build system instruction
+        const systemInstruction = buildSystemInstruction(fileList, context, activeFileContent)
 
-        // Call Gemini API
-        const response = await callGeminiAPI(apiKey, systemPrompt, message)
+        // Build conversation with history
+        const contents = buildConversation(systemInstruction, conversationHistory, message)
+
+        // Call Gemini API with function calling
+        const response = await callGeminiWithTools(apiKey, model, contents, projectPath)
 
         if (response.error) {
             return res.status(400).json({ error: response.error })
         }
 
-        // Parse and execute file operations from AI response
-        const result = await executeOperations(projectPath, response.operations || [])
-
         res.json({
             success: true,
             response: response.message,
-            operations: result.operations,
-            errors: result.errors
+            operations: response.operations,
+            model: model
         })
 
     } catch (err) {
@@ -71,227 +135,271 @@ router.post('/chat', async (req, res) => {
 })
 
 /**
- * Get all files in project for context
+ * Get flat file list (no content, just paths)
  */
-function getProjectFiles(projectPath, basePath = '') {
+function getFileList(projectPath, basePath = '') {
     const items = readdirSync(projectPath)
     let files = []
 
     for (const item of items) {
         if (item.startsWith('.')) continue
-
         const fullPath = join(projectPath, item)
         const relativePath = basePath ? `${basePath}/${item}` : item
         const stats = statSync(fullPath)
 
         if (stats.isDirectory()) {
-            files.push({ name: relativePath + '/', type: 'folder' })
-            files = files.concat(getProjectFiles(fullPath, relativePath))
+            files = files.concat(getFileList(fullPath, relativePath))
         } else {
-            const ext = extname(item).toLowerCase()
-            const isText = ['.tex', '.txt', '.bib', '.cls', '.sty', '.md', '.json', '.js', '.css', '.html'].includes(ext)
-
-            files.push({
-                name: relativePath,
-                type: ext.substring(1) || 'txt',
-                size: stats.size,
-                content: isText && stats.size < 50000 ? readFileSync(fullPath, 'utf-8') : null
-            })
+            files.push(relativePath)
         }
     }
-
     return files
 }
 
 /**
- * Build system prompt for AI
+ * Safely read file content
  */
-function buildSystemPrompt(files, context) {
-    const fileList = files.map(f => {
-        if (f.type === 'folder') return `📁 ${f.name}`
-        return `📄 ${f.name} (${f.size} bytes)`
-    }).join('\n')
-
-    const fileContents = files
-        .filter(f => f.content)
-        .map(f => `\n--- ${f.name} ---\n${f.content}`)
-        .join('\n')
-
-    return `Bạn là một AI assistant chuyên về LaTeX và hỗ trợ người dùng viết tài liệu khoa học.
-
-## Cấu trúc project hiện tại:
-${fileList}
-
-## Nội dung các file:
-${fileContents}
-
-${context?.activeFile ? `\n## File đang mở: ${context.activeFile}` : ''}
-${context?.selectedCode ? `\n## Code được chọn:\n${context.selectedCode}` : ''}
-${context?.compileErrors ? `\n## Lỗi compile gần nhất:\n${context.compileErrors}` : ''}
-
-## Bạn có thể thực hiện các thao tác sau:
-
-Để thực hiện thao tác file, hãy bao gồm JSON block trong response với format:
-\`\`\`json
-{
-  "operations": [
-    {
-      "type": "create" | "edit" | "delete",
-      "file": "path/to/file.tex",
-      "content": "nội dung file (cho create/edit)",
-      "description": "mô tả ngắn về thay đổi"
-    }
-  ]
-}
-\`\`\`
-
-### Lưu ý:
-- Với "edit": content là nội dung MỚI HOÀN CHỈNH của file
-- Với "create": tạo file mới với content
-- Với "delete": chỉ cần file path, không cần content
-- Luôn giải thích những gì bạn đang làm
-- Không xoá file main.tex
-- Đảm bảo code LaTeX hợp lệ
-
-Hãy trả lời bằng tiếng Việt khi người dùng hỏi bằng tiếng Việt.`
-}
-
-/**
- * Call Gemini API
- */
-async function callGeminiAPI(apiKey, systemPrompt, userMessage) {
+function readFileSafe(projectPath, filePath) {
     try {
-        const response = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
-            {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    contents: [
-                        {
-                            role: 'user',
-                            parts: [
-                                { text: systemPrompt + '\n\n---\n\nNgười dùng: ' + userMessage }
-                            ]
-                        }
-                    ],
-                    generationConfig: {
-                        temperature: 0.7,
-                        maxOutputTokens: 8192,
-                    },
-                    safetySettings: [
-                        { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
-                        { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
-                        { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
-                        { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
-                    ]
-                })
-            }
-        )
-
-        if (!response.ok) {
-            const error = await response.json()
-            console.error('[AI] Gemini API error:', error)
-            return { error: error.error?.message || 'Gemini API error' }
-        }
-
-        const data = await response.json()
-        const text = data.candidates?.[0]?.content?.parts?.[0]?.text || ''
-
-        // Extract operations from JSON block
-        const operations = extractOperations(text)
-
-        return {
-            message: text,
-            operations
-        }
-
+        const fullPath = join(projectPath, filePath)
+        if (!existsSync(fullPath)) return null
+        const stats = statSync(fullPath)
+        if (stats.size > 50000) return '[File too large]'
+        return readFileSync(fullPath, 'utf-8')
     } catch (err) {
-        console.error('[AI] API call error:', err)
-        return { error: err.message }
+        return null
     }
 }
 
 /**
- * Extract operations from AI response
+ * Build system instruction (concise)
  */
-function extractOperations(text) {
-    const jsonMatch = text.match(/```json\s*([\s\S]*?)\s*```/)
-    if (!jsonMatch) return []
+function buildSystemInstruction(fileList, context, activeFileContent) {
+    let instruction = `Bạn là AI assistant cho LaTeX editor. Bạn có thể đọc, tạo, sửa, xóa file.
 
-    try {
-        const parsed = JSON.parse(jsonMatch[1])
-        return parsed.operations || []
-    } catch (err) {
-        console.error('[AI] Failed to parse operations:', err)
-        return []
+Project files: ${fileList.join(', ')}
+${context?.activeFile ? `\nActive file: ${context.activeFile}` : ''}
+${context?.compileErrors ? `\nCompile errors:\n${context.compileErrors}` : ''}`
+
+    if (activeFileContent) {
+        instruction += `\n\n--- ${context.activeFile} ---\n${activeFileContent}`
     }
+
+    instruction += `\n\nSử dụng các tools để thao tác file. Luôn trả lời bằng tiếng Việt.`
+
+    return instruction
 }
 
 /**
- * Execute file operations
+ * Build conversation array for API
  */
-async function executeOperations(projectPath, operations) {
-    const results = { operations: [], errors: [] }
+function buildConversation(systemInstruction, history, currentMessage) {
+    const contents = []
 
-    for (const op of operations) {
+    // Add system as first user message (Gemini doesn't have system role in contents)
+    contents.push({
+        role: 'user',
+        parts: [{ text: `[System Instructions]\n${systemInstruction}\n\n[User Message]\n${history.length === 0 ? currentMessage : 'Bắt đầu conversation.'}` }]
+    })
+
+    if (history.length === 0) {
+        return contents
+    }
+
+    // Add a model acknowledgment
+    contents.push({
+        role: 'model',
+        parts: [{ text: 'Tôi hiểu. Tôi sẽ hỗ trợ bạn với dự án LaTeX.' }]
+    })
+
+    // Add conversation history
+    for (const msg of history) {
+        contents.push({
+            role: msg.role === 'user' ? 'user' : 'model',
+            parts: [{ text: msg.content }]
+        })
+    }
+
+    // Add current message
+    contents.push({
+        role: 'user',
+        parts: [{ text: currentMessage }]
+    })
+
+    return contents
+}
+
+/**
+ * Call Gemini API with function calling
+ */
+async function callGeminiWithTools(apiKey, model, contents, projectPath) {
+    const operations = []
+    let finalMessage = ''
+    let iterationCount = 0
+    const maxIterations = 5 // Prevent infinite loops
+
+    // Convert tools to Gemini format
+    const geminiTools = [{
+        functionDeclarations: TOOLS.map(t => ({
+            name: t.name,
+            description: t.description,
+            parameters: t.parameters
+        }))
+    }]
+
+    while (iterationCount < maxIterations) {
+        iterationCount++
+
         try {
-            const filePath = join(projectPath, op.file)
+            const response = await fetch(
+                `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+                {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents,
+                        tools: geminiTools,
+                        generationConfig: {
+                            temperature: 0.7,
+                            maxOutputTokens: AVAILABLE_MODELS[model]?.maxTokens || 8192,
+                        }
+                    })
+                }
+            )
 
-            switch (op.type) {
-                case 'create':
-                case 'edit':
-                    // Ensure parent directory exists
-                    const parentDir = dirname(filePath)
-                    if (!existsSync(parentDir)) {
-                        mkdirSync(parentDir, { recursive: true })
-                    }
-                    writeFileSync(filePath, op.content || '')
-                    results.operations.push({
-                        type: op.type,
-                        file: op.file,
-                        description: op.description,
+            if (!response.ok) {
+                const error = await response.json()
+                console.error('[AI] Gemini API error:', error)
+                return { error: error.error?.message || 'Gemini API error' }
+            }
+
+            const data = await response.json()
+            const candidate = data.candidates?.[0]
+
+            if (!candidate?.content?.parts) {
+                return { error: 'No response from AI' }
+            }
+
+            // Process each part
+            for (const part of candidate.content.parts) {
+                if (part.text) {
+                    finalMessage += part.text
+                }
+
+                if (part.functionCall) {
+                    const { name, args } = part.functionCall
+
+                    // Execute the function
+                    const result = executeFunction(name, args, projectPath, operations)
+
+                    // Add function call and result to conversation for next iteration
+                    contents.push({
+                        role: 'model',
+                        parts: [{ functionCall: { name, args } }]
+                    })
+
+                    contents.push({
+                        role: 'user',
+                        parts: [{
+                            functionResponse: {
+                                name,
+                                response: { result }
+                            }
+                        }]
+                    })
+                }
+            }
+
+            // Check if we need to continue (function was called)
+            const hasFunctionCall = candidate.content.parts.some(p => p.functionCall)
+            if (!hasFunctionCall) {
+                break // No more function calls, we're done
+            }
+
+        } catch (err) {
+            console.error('[AI] API call error:', err)
+            return { error: err.message }
+        }
+    }
+
+    return {
+        message: finalMessage,
+        operations
+    }
+}
+
+/**
+ * Execute a tool function
+ */
+function executeFunction(name, args, projectPath, operations) {
+    try {
+        switch (name) {
+            case 'read_file': {
+                const content = readFileSafe(projectPath, args.file_path)
+                if (content === null) return { success: false, error: 'File not found' }
+                return { success: true, content }
+            }
+
+            case 'list_files': {
+                const files = getFileList(projectPath)
+                return { success: true, files }
+            }
+
+            case 'create_file': {
+                const filePath = join(projectPath, args.file_path)
+                const parentDir = dirname(filePath)
+                if (!existsSync(parentDir)) {
+                    mkdirSync(parentDir, { recursive: true })
+                }
+                writeFileSync(filePath, args.content || '')
+                operations.push({
+                    type: 'create',
+                    file: args.file_path,
+                    description: args.description || 'Created new file',
+                    success: true
+                })
+                return { success: true, message: `Created ${args.file_path}` }
+            }
+
+            case 'edit_file': {
+                const filePath = join(projectPath, args.file_path)
+                if (!existsSync(filePath)) {
+                    return { success: false, error: 'File not found' }
+                }
+                writeFileSync(filePath, args.content || '')
+                operations.push({
+                    type: 'edit',
+                    file: args.file_path,
+                    description: args.description || 'Modified file',
+                    success: true
+                })
+                return { success: true, message: `Updated ${args.file_path}` }
+            }
+
+            case 'delete_file': {
+                if (args.file_path === 'main.tex') {
+                    return { success: false, error: 'Cannot delete main.tex' }
+                }
+                const filePath = join(projectPath, args.file_path)
+                if (existsSync(filePath)) {
+                    unlinkSync(filePath)
+                    operations.push({
+                        type: 'delete',
+                        file: args.file_path,
+                        description: 'Deleted file',
                         success: true
                     })
-                    break
-
-                case 'delete':
-                    // Prevent deleting main.tex
-                    if (op.file === 'main.tex') {
-                        results.errors.push({
-                            file: op.file,
-                            error: 'Cannot delete main.tex'
-                        })
-                        continue
-                    }
-                    if (existsSync(filePath)) {
-                        unlinkSync(filePath)
-                        results.operations.push({
-                            type: 'delete',
-                            file: op.file,
-                            description: op.description,
-                            success: true
-                        })
-                    }
-                    break
-
-                default:
-                    results.errors.push({
-                        file: op.file,
-                        error: `Unknown operation type: ${op.type}`
-                    })
+                    return { success: true, message: `Deleted ${args.file_path}` }
+                }
+                return { success: false, error: 'File not found' }
             }
-        } catch (err) {
-            results.errors.push({
-                file: op.file,
-                error: err.message
-            })
-        }
-    }
 
-    return results
+            default:
+                return { success: false, error: `Unknown function: ${name}` }
+        }
+    } catch (err) {
+        return { success: false, error: err.message }
+    }
 }
 
 export default router

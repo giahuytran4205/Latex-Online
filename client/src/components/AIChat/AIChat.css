@@ -65,16 +65,24 @@
     background: rgba(255, 255, 255, 0.25);
 }
 
-.ai-chat__api-key {
-    padding: 12px 16px;
+/* Settings Panel */
+.ai-chat__settings {
+    padding: 16px;
     background: var(--bg-secondary);
     border-bottom: 1px solid var(--border-color);
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 12px;
+    animation: fadeIn 0.2s ease-out;
 }
 
-.ai-chat__api-key-label {
+.ai-chat__setting-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.ai-chat__setting-group label {
     display: flex;
     align-items: center;
     gap: 6px;
@@ -83,7 +91,8 @@
     color: var(--text-secondary);
 }
 
-.ai-chat__api-key-input {
+.ai-chat__setting-group input,
+.ai-chat__setting-group select {
     width: 100%;
     padding: 8px 12px;
     border: 1px solid var(--border-color);
@@ -93,13 +102,25 @@
     font-size: 13px;
 }
 
-.ai-chat__api-key-input:focus {
+.ai-chat__setting-group input:focus,
+.ai-chat__setting-group select:focus {
     outline: none;
     border-color: var(--accent);
 }
 
-.ai-chat__api-key-save {
-    padding: 8px 16px;
+.ai-chat__setting-group select {
+    cursor: pointer;
+}
+
+.ai-chat__setting-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 4px;
+}
+
+.ai-chat__btn-primary {
+    padding: 10px 16px;
     background: var(--accent);
     color: white;
     border: none;
@@ -107,19 +128,21 @@
     font-size: 13px;
     cursor: pointer;
     font-weight: 500;
+    transition: opacity 0.15s;
 }
 
-.ai-chat__api-key-save:hover {
+.ai-chat__btn-primary:hover {
     opacity: 0.9;
 }
 
-.ai-chat__api-key-link {
+.ai-chat__link {
     font-size: 12px;
     color: var(--accent);
     text-decoration: none;
+    text-align: center;
 }
 
-.ai-chat__api-key-link:hover {
+.ai-chat__link:hover {
     text-decoration: underline;
 }
 
@@ -152,7 +175,7 @@
 .ai-chat__welcome ul {
     list-style: none;
     padding: 0;
-    margin: 0;
+    margin: 0 0 16px 0;
     font-size: 13px;
 }
 
@@ -162,6 +185,15 @@
 
 .ai-chat__welcome li::before {
     content: '✨ ';
+}
+
+.ai-chat__model-info {
+    margin-top: 12px;
+    padding: 8px 12px;
+    background: var(--bg-secondary);
+    border-radius: 6px;
+    font-size: 12px;
+    color: var(--text-muted);
 }
 
 .ai-chat__message {
