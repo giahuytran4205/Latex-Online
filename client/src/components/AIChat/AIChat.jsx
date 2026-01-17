@@ -145,9 +145,21 @@ function AIChat({
 
         } catch (err) {
             console.error('AI Error:', err)
+
+            let friendlyMessage = 'Đã có lỗi xảy ra khi xử lý yêu cầu của bạn.'
+
+            if (err.message.includes('API key')) {
+                friendlyMessage = 'API Key không hợp lệ hoặc bị thiếu. Vui lòng kiểm tra cài đặt.'
+            } else if (err.message.includes('quota')) {
+                friendlyMessage = 'Bạn đã hết quota miễn phí của model này. Vui lòng thử model khác (ưu tiên Flash).'
+            } else if (err.message.includes('thought_signature')) {
+                friendlyMessage = 'Model này đang gặp sự cố tương thích. Vui lòng chọn model khác.'
+            }
+
             setMessages(prev => [...prev, {
                 role: 'error',
-                content: err.message
+                content: friendlyMessage,
+                debug: err.message // Keep raw error for debugging if needed (not shown by default)
             }])
 
             if (err.message.includes('API key') || err.message.includes('quota')) {

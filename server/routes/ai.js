@@ -105,20 +105,22 @@ router.post('/fetch-models', async (req, res) => {
             data.models.forEach(m => {
                 const id = m.name.replace('models/', '')
 
-                // Only include gemini/gemma models that support generateContent
-                // Filter out non-chat models like embeddings or specific robotics models if not desired
-                const isChatModel = (m.name.includes('gemini') || m.name.includes('gemma')) &&
-                    m.supportedGenerationMethods.includes('generateContent') &&
-                    !m.name.includes('embedding') &&
-                    !m.name.includes('robotics')
+                // Strict filter based on user's request: Gemini 3, 2.5, Gemma 3 only
+                // Exclude TTS, Audio, Robotics, Embeddings
+                const isTargetModel = (
+                    (id.includes('gemini-3') || id.includes('gemini-2.5') || id.includes('gemma-3')) &&
+                    !id.includes('tts') &&
+                    !id.includes('audio') &&
+                    !id.includes('embedding') &&
+                    !id.includes('robotics')
+                )
 
-                if (isChatModel) {
+                if (isTargetModel && m.supportedGenerationMethods.includes('generateContent')) {
                     let description = m.description || ''
 
-                    // Highlight new generation models
-                    if (id.includes('gemini-3')) description = `🌟 Gemini 3.0 (Newest) - ${description}`
-                    else if (id.includes('gemini-2.5')) description = `🚀 Gemini 2.5 (Next Gen) - ${description}`
-                    else if (id.includes('flash')) description = `⚡ Fast & Free Tier - ${description}`
+                    // Add helpful tags
+                    if (id.includes('lite')) description = `⚡ Lite - ${description}`
+                    else if (id.includes('flash')) description = `🚀 Flash - ${description}`
 
                     models[id] = {
                         name: m.displayName || id,

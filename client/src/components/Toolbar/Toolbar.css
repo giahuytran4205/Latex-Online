@@ -45,7 +45,7 @@
     white-space: nowrap;
 }
 
-.toolbar__edit-icon {
+svg.toolbar__edit-icon {
     width: 12px;
     height: 12px;
     opacity: 0;
