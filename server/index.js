@@ -110,6 +110,13 @@ wss.on('connection', (ws, req) => {
 
     // Relay messages to all other clients in room
     ws.on('message', (message, isBinary) => {
+        // Handle Keep-Alive (Ping/Pong)
+        // Some clients (like y-websocket) might send a text 'ping'
+        if (!isBinary && message.toString() === 'ping') {
+            ws.send('pong')
+            return
+        }
+
         // Only relay binary messages (Yjs updates)
         if (isBinary || Buffer.isBuffer(message)) {
             room.forEach(client => {

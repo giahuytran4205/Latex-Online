@@ -39,6 +39,8 @@
 }
 
 .read-only-badge {
+    display: inline-flex;
+    align-items: center;
     background: var(--bg-tertiary);
     color: var(--text-muted);
     font-size: 0.7rem;
