@@ -115,7 +115,8 @@ router.post('/fetch-models', async (req, res) => {
                     !id.includes('robotics')
                 )
 
-                if (isTargetModel && m.supportedGenerationMethods.includes('generateContent')) {
+                // Skip method check for these specific models to ensure Gemma shows up
+                if (isTargetModel) {
                     let description = m.description || ''
 
                     // Add helpful tags

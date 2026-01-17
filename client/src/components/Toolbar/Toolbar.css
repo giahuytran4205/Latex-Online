@@ -45,9 +45,7 @@
     white-space: nowrap;
 }
 
-svg.toolbar__edit-icon {
-    width: 12px;
-    height: 12px;
+.toolbar__edit-icon {
     opacity: 0;
     color: var(--text-muted);
     transition: opacity var(--transition);
