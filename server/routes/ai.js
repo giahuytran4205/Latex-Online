@@ -11,11 +11,12 @@ const __dirname = dirname(__filename)
 const router = express.Router()
 const PROJECTS_DIR = join(__dirname, '../../projects')
 
-// Available models with their characteristics
+// Available models with their characteristics (use exact API model names)
 const AVAILABLE_MODELS = {
-    'gemini-1.5-flash': { name: 'Gemini 1.5 Flash', description: 'Fast, free tier (15 RPM)', maxTokens: 8192 },
-    'gemini-1.5-pro': { name: 'Gemini 1.5 Pro', description: 'Powerful, free tier (2 RPM)', maxTokens: 8192 },
-    'gemini-2.0-flash-exp': { name: 'Gemini 2.0 Flash (Exp)', description: 'Latest experimental', maxTokens: 8192 },
+    'gemini-1.5-flash-latest': { name: 'Gemini 1.5 Flash', description: 'Nhanh, miễn phí (15 RPM)', maxTokens: 8192 },
+    'gemini-1.5-pro-latest': { name: 'Gemini 1.5 Pro', description: 'Mạnh, miễn phí (2 RPM)', maxTokens: 8192 },
+    'gemini-2.0-flash-exp': { name: 'Gemini 2.0 Flash', description: 'Mới nhất (thử nghiệm)', maxTokens: 8192 },
+    'gemini-1.0-pro': { name: 'Gemini 1.0 Pro', description: 'Ổn định, miễn phí', maxTokens: 8192 },
 }
 
 // Tool definitions for function calling

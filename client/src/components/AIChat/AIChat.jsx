@@ -3,11 +3,12 @@ import { sendAIMessage, getAIModels } from '../../services/api'
 import { useToast } from '../Toast/Toast'
 import './AIChat.css'
 
-// Default models if API fails
+// Default models if API fails (use exact API model names)
 const DEFAULT_MODELS = {
-    'gemini-1.5-flash': { name: 'Gemini 1.5 Flash', description: 'Fast, free tier (15 RPM)' },
-    'gemini-1.5-pro': { name: 'Gemini 1.5 Pro', description: 'Powerful, free tier (2 RPM)' },
-    'gemini-2.0-flash-exp': { name: 'Gemini 2.0 Flash', description: 'Latest experimental' },
+    'gemini-1.5-flash-latest': { name: 'Gemini 1.5 Flash', description: 'Nhanh, miễn phí (15 RPM)' },
+    'gemini-1.5-pro-latest': { name: 'Gemini 1.5 Pro', description: 'Mạnh, miễn phí (2 RPM)' },
+    'gemini-2.0-flash-exp': { name: 'Gemini 2.0 Flash', description: 'Mới nhất (thử nghiệm)' },
+    'gemini-1.0-pro': { name: 'Gemini 1.0 Pro', description: 'Ổn định, miễn phí' },
 }
 
 /**
@@ -26,7 +27,7 @@ function AIChat({
     const [input, setInput] = useState('')
     const [isLoading, setIsLoading] = useState(false)
     const [apiKey, setApiKey] = useState(() => localStorage.getItem('gemini_api_key') || '')
-    const [selectedModel, setSelectedModel] = useState(() => localStorage.getItem('gemini_model') || 'gemini-1.5-flash')
+    const [selectedModel, setSelectedModel] = useState(() => localStorage.getItem('gemini_model') || 'gemini-1.5-flash-latest')
     const [availableModels, setAvailableModels] = useState(DEFAULT_MODELS)
     const [showSettings, setShowSettings] = useState(false)
     const messagesEndRef = useRef(null)

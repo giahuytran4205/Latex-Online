@@ -256,7 +256,7 @@ export async function getAIModels() {
     return response.json()
 }
 
-export async function sendAIMessage(projectId, message, apiKey, context = {}, model = 'gemini-1.5-flash', conversationHistory = []) {
+export async function sendAIMessage(projectId, message, apiKey, context = {}, model = 'gemini-1.5-flash-latest', conversationHistory = []) {
     const headers = await getAuthHeaders()
     const response = await fetch(`${API_BASE}/ai/chat`, {
         method: 'POST',
