@@ -246,3 +246,20 @@ export async function moveFile(projectId, oldPath, newPath, sid) {
     if (!response.ok) throw new Error('Failed to move file')
     return response.json()
 }
+
+// ============ AI AGENT ============
+
+export async function sendAIMessage(projectId, message, apiKey, context = {}) {
+    const headers = await getAuthHeaders()
+    const response = await fetch(`${API_BASE}/ai/chat`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ projectId, message, apiKey, context }),
+    })
+
+    const data = await response.json()
+    if (!response.ok) {
+        throw new Error(data.error || 'AI request failed')
+    }
+    return data
+}

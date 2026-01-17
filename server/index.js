@@ -7,6 +7,7 @@ import { dirname, join } from 'path'
 import compileRouter from './routes/compile.js'
 import filesRouter from './routes/files.js'
 import projectsRouter from './routes/projects.js'
+import aiRouter from './routes/ai.js'
 import { decodeAndVerifyToken } from './services/auth.js'
 import { getProjectWithAuth } from './utils/project.js'
 
@@ -26,6 +27,7 @@ app.use(express.static(join(__dirname, '../client/dist')))
 app.use('/api/compile', compileRouter)
 app.use('/api/files', filesRouter)
 app.use('/api/projects', projectsRouter)
+app.use('/api/ai', aiRouter)
 
 // Health check
 app.get('/api/health', (req, res) => {
