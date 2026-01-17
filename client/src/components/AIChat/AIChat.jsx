@@ -1,4 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import { sendAIMessage, fetchAIModels } from '../../services/api'
 import { useToast } from '../Toast/Toast'
 import './AIChat.css'
@@ -163,28 +165,7 @@ function AIChat({
         }
     }
 
-    const formatMessage = (content) => {
-        if (!content) return null
 
-        // Split by code blocks
-        return content.split('```').map((part, i) => {
-            if (i % 2 === 1) {
-                // Code block
-                const [lang, ...code] = part.split('\n')
-                return (
-                    <pre key={i} className="ai-code-block" data-lang={lang}>
-                        <code>{code.join('\n')}</code>
-                    </pre>
-                )
-            }
-            // Regular text - convert newlines and bold
-            return <span key={i}>{part.split('\n').map((line, j) => {
-                // Simple markdown bold
-                const formatted = line.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-                return <span key={j} dangerouslySetInnerHTML={{ __html: formatted + '<br/>' }} />
-            })}</span>
-        })
-    }
 
     if (!isOpen) return null
 
@@ -327,7 +308,27 @@ function AIChat({
                             {msg.role === 'error' ? (
                                 <div className="ai-chat__error">{msg.content}</div>
                             ) : (
-                                formatMessage(msg.content)
+                                <div className="ai-markdown-content">
+                                    <ReactMarkdown
+                                        remarkPlugins={[remarkGfm]}
+                                        components={{
+                                            code({ node, inline, className, children, ...props }) {
+                                                const match = /language-(\w+)/.exec(className || '')
+                                                return !inline ? (
+                                                    <pre className="ai-code-block" data-lang={match ? match[1] : ''}>
+                                                        <code>{children}</code>
+                                                    </pre>
+                                                ) : (
+                                                    <code className="ai-inline-code" {...props}>
+                                                        {children}
+                                                    </code>
+                                                )
+                                            }
+                                        }}
+                                    >
+                                        {msg.content}
+                                    </ReactMarkdown>
+                                </div>
                             )}
 
                             {msg.operations?.length > 0 && (

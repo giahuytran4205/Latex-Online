@@ -106,13 +106,23 @@ router.post('/fetch-models', async (req, res) => {
                 const id = m.name.replace('models/', '')
 
                 // Only include gemini/gemma models that support generateContent
-                if ((m.name.includes('gemini') || m.name.includes('gemma')) &&
-                    m.supportedGenerationMethods.includes('generateContent')) {
+                // Filter out non-chat models like embeddings or specific robotics models if not desired
+                const isChatModel = (m.name.includes('gemini') || m.name.includes('gemma')) &&
+                    m.supportedGenerationMethods.includes('generateContent') &&
+                    !m.name.includes('embedding') &&
+                    !m.name.includes('robotics')
 
-                    // Keep original name and description as requested
+                if (isChatModel) {
+                    let description = m.description || ''
+
+                    // Highlight new generation models
+                    if (id.includes('gemini-3')) description = `🌟 Gemini 3.0 (Newest) - ${description}`
+                    else if (id.includes('gemini-2.5')) description = `🚀 Gemini 2.5 (Next Gen) - ${description}`
+                    else if (id.includes('flash')) description = `⚡ Fast & Free Tier - ${description}`
+
                     models[id] = {
                         name: m.displayName || id,
-                        description: m.description || '',
+                        description: description,
                         maxTokens: m.outputTokenLimit || 8192
                     }
                 }
