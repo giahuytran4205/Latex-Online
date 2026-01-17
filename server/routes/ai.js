@@ -105,22 +105,14 @@ router.post('/fetch-models', async (req, res) => {
             data.models.forEach(m => {
                 const id = m.name.replace('models/', '')
 
-                // Only include gemini models that support generateContent
-                // We keep 'gemini' check to avoid PaLM or other legacy models if mixed
-                if (m.name.includes('gemini') && m.supportedGenerationMethods.includes('generateContent')) {
-                    let description = m.description || ''
+                // Only include gemini/gemma models that support generateContent
+                if ((m.name.includes('gemini') || m.name.includes('gemma')) &&
+                    m.supportedGenerationMethods.includes('generateContent')) {
 
-                    // Add helpful hints based on model name for UI sorting/selection
-                    // Flash models are usually the best for free tier
-                    if (id.includes('flash')) {
-                        description = `⚡ Fast & High Quota (Recommended) - ${description}`
-                    } else if (id.includes('pro')) {
-                        description = `🧠 Powerful (Standard Quota) - ${description}`
-                    }
-
+                    // Keep original name and description as requested
                     models[id] = {
-                        name: m.displayName,
-                        description: description,
+                        name: m.displayName || id,
+                        description: m.description || '',
                         maxTokens: m.outputTokenLimit || 8192
                     }
                 }
@@ -312,7 +304,7 @@ async function callGeminiWithTools(apiKey, model, contents, projectPath) {
                         tools: geminiTools,
                         generationConfig: {
                             temperature: 0.7,
-                            maxOutputTokens: AVAILABLE_MODELS[model]?.maxTokens || 8192,
+                            maxOutputTokens: 8192,
                         }
                     })
                 }
@@ -331,26 +323,36 @@ async function callGeminiWithTools(apiKey, model, contents, projectPath) {
                 return { error: 'No response from AI' }
             }
 
-            // Process each part
-            for (const part of candidate.content.parts) {
+            const modelParts = candidate.content.parts
+
+            // Accumulate text response for the user interface
+            for (const part of modelParts) {
                 if (part.text) {
                     finalMessage += part.text
                 }
+            }
 
-                if (part.functionCall) {
-                    const { name, args } = part.functionCall
+            // Check for function calls
+            const functionCalls = modelParts.filter(part => part.functionCall)
+
+            if (functionCalls.length > 0) {
+                // IMPORTANT: Push the ENTIRE model response (including thoughts) to history
+                // This satisfies the thought_signature requirement for thinking models
+                contents.push({
+                    role: 'model',
+                    parts: modelParts
+                })
+
+                // Execute all function calls found in the response
+                for (const callPart of functionCalls) {
+                    const { name, args } = callPart.functionCall
 
                     // Execute the function
                     const result = executeFunction(name, args, projectPath, operations)
 
-                    // Add function call and result to conversation for next iteration
+                    // Add result to conversation for next iteration
                     contents.push({
-                        role: 'model',
-                        parts: [{ functionCall: { name, args } }]
-                    })
-
-                    contents.push({
-                        role: 'user',
+                        role: 'user', // Gemini API expects functionResponse from 'user' or 'function' role
                         parts: [{
                             functionResponse: {
                                 name,
@@ -359,12 +361,10 @@ async function callGeminiWithTools(apiKey, model, contents, projectPath) {
                         }]
                     })
                 }
-            }
-
-            // Check if we need to continue (function was called)
-            const hasFunctionCall = candidate.content.parts.some(p => p.functionCall)
-            if (!hasFunctionCall) {
-                break // No more function calls, we're done
+                // Loop continues to let model generate more content/calls
+            } else {
+                // No function calls, we are done
+                break
             }
 
         } catch (err) {
