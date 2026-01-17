@@ -253,7 +253,7 @@ function AIChat({
                         >
                             {Object.entries(availableModels).map(([id, model]) => (
                                 <option key={id} value={id}>
-                                    {model.name} - {model.description}
+                                    {model.name}
                                 </option>
                             ))}
                         </select>
