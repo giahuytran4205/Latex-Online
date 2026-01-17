@@ -92,12 +92,17 @@ router.get('/models', (req, res) => {
  */
 router.post('/chat', async (req, res) => {
     try {
-        const { projectId, message, apiKey, context, model = 'gemini-1.5-flash', conversationHistory = [] } = req.body
+        let { projectId, message, apiKey, context, model = 'gemini-1.5-flash-latest', conversationHistory = [] } = req.body
 
         if (!projectId) return res.status(400).json({ error: 'Project ID is required' })
         if (!apiKey) return res.status(400).json({ error: 'Gemini API key is required' })
         if (!message) return res.status(400).json({ error: 'Message is required' })
-        if (!AVAILABLE_MODELS[model]) return res.status(400).json({ error: 'Invalid model' })
+
+        // Auto-fallback to default model if invalid
+        if (!AVAILABLE_MODELS[model]) {
+            console.log(`[AI] Invalid model "${model}", falling back to gemini-1.5-flash-latest`)
+            model = 'gemini-1.5-flash-latest'
+        }
 
         // Verify project access
         const auth = getProjectWithAuth(req.user, projectId, 'edit')
