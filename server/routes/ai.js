@@ -100,14 +100,27 @@ router.post('/fetch-models', async (req, res) => {
 
         // Filter for chat-capable models and format them
         const models = {}
+
         if (data.models) {
             data.models.forEach(m => {
+                const id = m.name.replace('models/', '')
+
                 // Only include gemini models that support generateContent
+                // We keep 'gemini' check to avoid PaLM or other legacy models if mixed
                 if (m.name.includes('gemini') && m.supportedGenerationMethods.includes('generateContent')) {
-                    const id = m.name.replace('models/', '')
+                    let description = m.description || ''
+
+                    // Add helpful hints based on model name for UI sorting/selection
+                    // Flash models are usually the best for free tier
+                    if (id.includes('flash')) {
+                        description = `⚡ Fast & High Quota (Recommended) - ${description}`
+                    } else if (id.includes('pro')) {
+                        description = `🧠 Powerful (Standard Quota) - ${description}`
+                    }
+
                     models[id] = {
                         name: m.displayName,
-                        description: m.description,
+                        description: description,
                         maxTokens: m.outputTokenLimit || 8192
                     }
                 }
