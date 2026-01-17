@@ -21,6 +21,7 @@
 .toolbar__project-name-container {
     display: flex;
     align-items: center;
+    justify-content: center;
     gap: 8px;
     cursor: pointer;
     padding: 4px 8px;

@@ -118,24 +118,43 @@ export function useCodeMirror({
         }
     }, [yDoc, awareness, activeFile, readOnly, code, editorTheme, keybindings])
 
-    // Handle external code updates (non-collaborative mode)
+    // Handle external code updates
     useEffect(() => {
-        if (!viewRef.current || yDoc) return
+        if (!viewRef.current) return
 
         const currentContent = viewRef.current.state.doc.toString()
 
-        if (code !== currentContent) {
-            isInternalChange.current = true
-            viewRef.current.dispatch({
-                changes: {
-                    from: 0,
-                    to: currentContent.length,
-                    insert: code || ''
+        // Only update if code is provided and significantly different
+        // This handles cases where AI updates the file and we reload it from server
+        if (code !== null && code !== undefined && code !== currentContent) {
+
+            if (yDoc && activeFile) {
+                // Cooperative mode: Update Y.Text directly
+                // This will trigger yCollab to update the view automatically
+                const ytext = yDoc.getText(activeFile)
+                const yContent = ytext.toString()
+
+                if (yContent !== code) {
+                    console.log('[Editor] Syncing Yjs with new server content')
+                    yDoc.transact(() => {
+                        ytext.delete(0, ytext.length)
+                        ytext.insert(0, code)
+                    })
                 }
-            })
-            isInternalChange.current = false
+            } else {
+                // Standalone mode: Update view directly
+                isInternalChange.current = true
+                viewRef.current.dispatch({
+                    changes: {
+                        from: 0,
+                        to: currentContent.length,
+                        insert: code || ''
+                    }
+                })
+                isInternalChange.current = false
+            }
         }
-    }, [code, yDoc])
+    }, [code, yDoc, activeFile])
 
     // Handle error decorations
     useEffect(() => {
