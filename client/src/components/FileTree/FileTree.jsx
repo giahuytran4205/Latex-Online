@@ -334,6 +334,24 @@ function FileTree({ projectId, files, activeFile, onFileSelect, onAddFile, onDel
         const uploadedFiles = e.target.files
         if (!uploadedFiles || uploadedFiles.length === 0) return
 
+        // Check if this is a folder upload (first file has relative path)
+        const isFolderUpload = uploadedFiles[0]?.webkitRelativePath && uploadedFiles[0].webkitRelativePath.includes('/')
+
+        if (isFolderUpload) {
+            const confirmed = await confirm({
+                title: 'Confirm Folder Upload',
+                message: `Selected folder contains ${uploadedFiles.length} files. Do you want to upload them?`,
+                confirmText: 'Upload',
+                cancelText: 'Cancel',
+                type: 'default'
+            })
+
+            if (!confirmed) {
+                e.target.value = ''
+                return
+            }
+        }
+
         const totalFiles = uploadedFiles.length
         let uploaded = 0
         let skipped = 0
