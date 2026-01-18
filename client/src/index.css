@@ -222,6 +222,7 @@ body {
   cursor: row-resize;
   transform: translateY(-50%);
   background: transparent;
+  z-index: 2000;
 }
 
 .resize-handle--console::before {
@@ -635,6 +636,7 @@ body {
   height: 0;
   overflow: hidden;
   position: relative;
+  z-index: 50;
 }
 
 .console-wrapper--open {
