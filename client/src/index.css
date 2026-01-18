@@ -194,7 +194,6 @@ body {
   cursor: col-resize;
   transform: translateX(-50%);
   background: transparent;
-  z-index: 100;
 }
 
 .resize-handle--editor {
@@ -206,7 +205,6 @@ body {
   cursor: col-resize;
   transform: translateX(-50%);
   background: transparent;
-  z-index: 100;
 }
 
 .resize-handle--editor:hover,
@@ -224,7 +222,6 @@ body {
   cursor: row-resize;
   transform: translateY(-50%);
   background: transparent;
-  z-index: 100;
 }
 
 .resize-handle--console::before {

@@ -25,7 +25,14 @@ export function useResizable() {
                 if (mainContent) {
                     const rect = mainContent.getBoundingClientRect()
                     const x = e.clientX - rect.left
-                    const percent = Math.max(20, Math.min(80, (x / rect.width) * 100))
+
+                    // Constraints in pixels (matching CSS min-widths)
+                    const minWidthPx = 200
+                    const maxWidthPx = rect.width - 200
+
+                    const safeX = Math.max(minWidthPx, Math.min(maxWidthPx, x))
+                    const percent = (safeX / rect.width) * 100
+
                     setEditorWidth(percent)
                 }
             } else if (isResizing === 'console') {
