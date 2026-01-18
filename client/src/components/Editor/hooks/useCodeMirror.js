@@ -116,7 +116,7 @@ export function useCodeMirror({
             }
             viewRef.current = null
         }
-    }, [yDoc, awareness, activeFile, readOnly, code, editorTheme, keybindings])
+    }, [yDoc, awareness, activeFile, readOnly, editorTheme, keybindings])
 
     // Handle external code updates
     useEffect(() => {
