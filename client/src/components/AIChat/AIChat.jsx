@@ -31,6 +31,7 @@ function AIChat({
     const [selectedModel, setSelectedModel] = useState(() => localStorage.getItem('gemini_model') || 'gemini-1.5-flash-latest')
     const [availableModels, setAvailableModels] = useState(DEFAULT_MODELS)
     const [showSettings, setShowSettings] = useState(false)
+    const [showModelMenu, setShowModelMenu] = useState(false)
     const messagesEndRef = useRef(null)
     const inputRef = useRef(null)
     const toast = useToast()
@@ -262,23 +263,14 @@ function AIChat({
             <div className="ai-chat__messages">
                 {messages.length === 0 && (
                     <div className="ai-chat__welcome">
-                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" opacity="0.5">
-                            <circle cx="12" cy="12" r="10" />
-                            <path d="M8 14s1.5 2 4 2 4-2 4-2" />
-                            <line x1="9" y1="9" x2="9.01" y2="9" />
-                            <line x1="15" y1="9" x2="15.01" y2="9" />
-                        </svg>
-                        <h3>Xin chào! Tôi có thể giúp gì?</h3>
-                        <p>Tôi có thể:</p>
-                        <ul>
-                            <li>Đọc và hiểu code LaTeX</li>
-                            <li>Tạo, sửa, xóa file tự động</li>
-                            <li>Fix lỗi compile</li>
-                            <li>Viết code mới theo yêu cầu</li>
-                        </ul>
-                        <div className="ai-chat__model-info">
-                            Model: {availableModels[selectedModel]?.name || selectedModel}
+                        <div className="ai-chat__welcome-icon">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm0 18a8 8 0 1 1 8-8 8 8 0 0 1-8 8z" />
+                                <path d="M12 6v6l4 2" />
+                            </svg>
                         </div>
+                        <h3>Xin chào!</h3>
+                        <p>Tôi là trợ lý AI chuyên về LaTeX. Hãy hỏi tôi bất cứ điều gì về code, lỗi debug hoặc tạo nội dung mới.</p>
                     </div>
                 )}
 
@@ -367,18 +359,10 @@ function AIChat({
 
                 <div className="ai-chat__input-footer">
                     <div className="ai-chat__model-select-wrapper">
-                        <select
-                            value={selectedModel}
-                            onChange={(e) => setSelectedModel(e.target.value)}
-                            className="ai-chat__model-select"
+                        <div
+                            className={`ai-chat__model-badge ${showModelMenu ? 'active' : ''}`}
+                            onClick={() => setShowModelMenu(!showModelMenu)}
                         >
-                            {Object.entries(availableModels).map(([id, model]) => (
-                                <option key={id} value={id}>
-                                    {model.name}
-                                </option>
-                            ))}
-                        </select>
-                        <div className="ai-chat__model-badge">
                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                 <circle cx="12" cy="12" r="3" />
                                 <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
@@ -388,6 +372,24 @@ function AIChat({
                                 <polyline points="6 9 12 15 18 9" />
                             </svg>
                         </div>
+
+                        {showModelMenu && (
+                            <>
+                                <div className="ai-chat__menu-backdrop" onClick={() => setShowModelMenu(false)} />
+                                <div className="ai-chat__model-menu">
+                                    {Object.entries(availableModels).map(([id, model]) => (
+                                        <div
+                                            key={id}
+                                            className={`ai-chat__model-option ${selectedModel === id ? 'selected' : ''}`}
+                                            onClick={() => { setSelectedModel(id); setShowModelMenu(false); }}
+                                        >
+                                            <span className="ai-chat__model-name">{model.name}</span>
+                                            {model.description && <span className="ai-chat__model-desc">{model.description}</span>}
+                                        </div>
+                                    ))}
+                                </div>
+                            </>
+                        )}
                     </div>
 
                     <button
