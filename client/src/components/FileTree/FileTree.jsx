@@ -47,6 +47,7 @@ function FileTree({ projectId, files, activeFile, onFileSelect, onAddFile, onDel
 
     const fileInputRef = useRef(null)
     const folderInputRef = useRef(null)
+    const scrollContainerRef = useRef(null)
 
     // Build tree structure from flat file list
     const fileTree = useMemo(() => {
@@ -523,6 +524,18 @@ function FileTree({ projectId, files, activeFile, onFileSelect, onAddFile, onDel
         e.preventDefault()
         e.stopPropagation()
         setIsDragging(true)
+
+        if (scrollContainerRef.current) {
+            const { top, bottom } = scrollContainerRef.current.getBoundingClientRect()
+            const cursorY = e.clientY
+            const threshold = 50
+
+            if (cursorY < top + threshold) {
+                scrollContainerRef.current.scrollTop -= 10
+            } else if (cursorY > bottom - threshold) {
+                scrollContainerRef.current.scrollTop += 10
+            }
+        }
     }
 
     const collectFilesFromEntry = async (item, path = '') => {
@@ -962,7 +975,7 @@ function FileTree({ projectId, files, activeFile, onFileSelect, onAddFile, onDel
                 />
             </div>
 
-            <div className="sidebar__content">
+            <div className="sidebar__content" ref={scrollContainerRef}>
                 {isAdding && (
                     <div className="file-tree__add">
                         <span className="file-tree__add-icon">
