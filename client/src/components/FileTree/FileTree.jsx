@@ -566,6 +566,37 @@ function FileTree({ projectId, files, activeFile, onFileSelect, onAddFile, onDel
         e.stopPropagation()
         setIsDragging(false)
 
+        // Handle internal drag to root
+        if (draggedItem) {
+            const fileName = draggedItem.name
+            const newPath = draggedItem.type === 'folder'
+                ? (fileName.endsWith('/') ? fileName : fileName + '/')
+                : fileName
+
+            if (draggedItem.path === newPath) {
+                setDraggedItem(null)
+                return
+            }
+
+            const confirmed = await confirm({
+                title: 'Move to Root',
+                message: `Move "${draggedItem.name}" to the top level folder?`,
+                confirmText: 'Move',
+                cancelText: 'Cancel'
+            })
+
+            if (confirmed && onRenameFile) {
+                try {
+                    await onRenameFile(draggedItem.path, newPath)
+                    toast.success('Moved to root')
+                } catch (err) {
+                    toast.error('Failed to move')
+                }
+            }
+            setDraggedItem(null)
+            return
+        }
+
         const items = e.dataTransfer?.items
         if (!items) return
 
@@ -642,6 +673,11 @@ function FileTree({ projectId, files, activeFile, onFileSelect, onAddFile, onDel
         e.dataTransfer.setData('text/plain', item.path)
     }
 
+    const handleDragEndItem = (e) => {
+        setDraggedItem(null)
+        setIsDragging(false)
+    }
+
     const handleDragOverItem = (e, item) => {
         e.preventDefault()
         e.stopPropagation()
@@ -668,6 +704,7 @@ function FileTree({ projectId, files, activeFile, onFileSelect, onAddFile, onDel
         e.preventDefault()
         e.stopPropagation()
         e.currentTarget.classList.remove('file-tree__item--drop-target')
+        setIsDragging(false)
 
         if (!draggedItem || !targetItem || targetItem.type !== 'folder') return
         if (draggedItem.path === targetItem.path) return
@@ -767,6 +804,7 @@ function FileTree({ projectId, files, activeFile, onFileSelect, onAddFile, onDel
                     style={{ paddingLeft: `${12 + depth * 16}px` }}
                     draggable
                     onDragStart={(e) => handleDragStartItem(e, item)}
+                    onDragEnd={handleDragEndItem}
                     onDragOver={(e) => isFolder ? handleDragOverItem(e, item) : null}
                     onDragLeave={(e) => isFolder ? handleDragLeaveItem(e) : null}
                     onDrop={(e) => isFolder ? handleDropItem(e, item) : null}
