@@ -196,7 +196,7 @@ body {
   width: 6px;
   cursor: col-resize;
   flex-shrink: 0;
-  background: var(--border-color);
+  background: transparent;
 }
 
 .resize-handle--editor:hover,
@@ -210,7 +210,7 @@ body {
   height: 6px;
   width: 100%;
   cursor: row-resize;
-  background: var(--border-color);
+  background: transparent;
   flex-shrink: 0;
 }
 
