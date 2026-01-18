@@ -156,7 +156,7 @@ body {
 /* Resize Handles */
 .resize-handle {
   position: absolute;
-  z-index: 100;
+  z-index: 1000;
   background: transparent;
   transition: background 0.15s;
 }
