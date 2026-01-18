@@ -78,6 +78,7 @@ export function useCodeMirror({
             errorGutter,
             EditorState.readOnly.of(readOnly),
             EditorView.editable.of(!readOnly),
+            EditorView.lineWrapping,
         ]
 
         // Add Yjs collaboration if available
