@@ -362,7 +362,7 @@ router.delete('/:projectId', verifyTokenOptional, (req, res) => {
         }
 
         rmSync(projectPath, { recursive: true, force: true })
-        console.log(`[Projects] Deleted project ${projectId} for user ${userId}`)
+        console.log(`[Projects] Deleted project ${projectId} for user ${ownerId}`)
 
         res.json({ success: true })
     } catch (error) {
