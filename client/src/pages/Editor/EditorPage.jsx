@@ -299,73 +299,75 @@ function EditorPage() {
                 onShare={() => setIsShareModalOpen(true)}
             />
 
-            <FileTree
-                projectId={projectId}
-                files={files}
-                activeFile={activeFileName}
-                onFileSelect={handleFileSelect}
-                onAddFile={handleAddFile}
-                onDeleteFile={handleDeleteFile}
-                onRenameFile={handleRenameFile}
-                onUploadFile={onUploadFile}
-                onDuplicateFile={handleDuplicateFile}
-                onStorageUpdate={handleStorageUpdate}
-            />
+            <div className="workspace">
+                <FileTree
+                    projectId={projectId}
+                    files={files}
+                    activeFile={activeFileName}
+                    onFileSelect={handleFileSelect}
+                    onAddFile={handleAddFile}
+                    onDeleteFile={handleDeleteFile}
+                    onRenameFile={handleRenameFile}
+                    onUploadFile={onUploadFile}
+                    onDuplicateFile={handleDuplicateFile}
+                    onStorageUpdate={handleStorageUpdate}
+                />
 
-            <div className="resize-handle resize-handle--sidebar" onMouseDown={handleMouseDown('sidebar')} />
+                <div className="resize-handle resize-handle--sidebar" onMouseDown={handleMouseDown('sidebar')} />
 
-            <div className="content-area" ref={contentAreaRef}>
-                <div className="main-content" ref={mainContentRef}>
-                    <div className={`editor-container ${isCodeLoading ? 'editor-container--loading' : ''}`}>
-                        {loadedFileName === activeFileName && code !== null && (
-                            typeof code === 'string' ? (
-                                <Editor
-                                    key={activeFileName}
-                                    code={code}
-                                    onChange={setCode}
-                                    onCompile={onCompile}
-                                    activeFile={activeFileName}
-                                    errors={compilationErrors}
-                                    jumpToLine={jumpToLine}
-                                    projectId={projectId}
-                                    userId={user?.uid}
-                                    userName={user?.displayName || user?.email}
-                                    yDoc={yDoc}
-                                    awareness={awareness}
-                                    isSynced={isSynced}
-                                    readOnly={projectInfo?.permission === 'view'}
-                                />
-                            ) : (
-                                <FileViewer
-                                    filename={activeFileName}
-                                    url={code.url}
-                                />
-                            )
-                        )}
-                        {isCodeLoading && (
-                            <div className="editor-loading-overlay">
-                                <div className="loading-spinner"></div>
-                                <span>Loading content...</span>
-                            </div>
-                        )}
+                <div className="content-area" ref={contentAreaRef}>
+                    <div className="main-content" ref={mainContentRef}>
+                        <div className={`editor-container ${isCodeLoading ? 'editor-container--loading' : ''}`}>
+                            {loadedFileName === activeFileName && code !== null && (
+                                typeof code === 'string' ? (
+                                    <Editor
+                                        key={activeFileName}
+                                        code={code}
+                                        onChange={setCode}
+                                        onCompile={onCompile}
+                                        activeFile={activeFileName}
+                                        errors={compilationErrors}
+                                        jumpToLine={jumpToLine}
+                                        projectId={projectId}
+                                        userId={user?.uid}
+                                        userName={user?.displayName || user?.email}
+                                        yDoc={yDoc}
+                                        awareness={awareness}
+                                        isSynced={isSynced}
+                                        readOnly={projectInfo?.permission === 'view'}
+                                    />
+                                ) : (
+                                    <FileViewer
+                                        filename={activeFileName}
+                                        url={code.url}
+                                    />
+                                )
+                            )}
+                            {isCodeLoading && (
+                                <div className="editor-loading-overlay">
+                                    <div className="loading-spinner"></div>
+                                    <span>Loading content...</span>
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="resize-handle resize-handle--editor" onMouseDown={handleMouseDown('editor')} />
+
+                        <Preview pdfUrl={pdfUrl} onSyncTeX={handleSyncTeX} />
                     </div>
 
-                    <div className="resize-handle resize-handle--editor" onMouseDown={handleMouseDown('editor')} />
+                    {!consoleOpen && logs && (
+                        <div className="console-toggle" onClick={() => setConsoleOpen(true)}>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="4,17 10,11 4,5" /><line x1="12" y1="19" x2="20" y2="19" /></svg>
+                            <span>Logs</span>
+                            {logs.includes('Error') && <span style={{ color: 'var(--error)' }}>• Errors</span>}
+                        </div>
+                    )}
 
-                    <Preview pdfUrl={pdfUrl} onSyncTeX={handleSyncTeX} />
-                </div>
-
-                {!consoleOpen && logs && (
-                    <div className="console-toggle" onClick={() => setConsoleOpen(true)}>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="4,17 10,11 4,5" /><line x1="12" y1="19" x2="20" y2="19" /></svg>
-                        <span>Logs</span>
-                        {logs.includes('Error') && <span style={{ color: 'var(--error)' }}>• Errors</span>}
+                    <div className={`console-wrapper ${consoleOpen ? 'console-wrapper--open' : ''}`}>
+                        <div className="resize-handle resize-handle--console" onMouseDown={handleMouseDown('console')} />
+                        <Console logs={logs} isOpen={consoleOpen} onToggle={() => setConsoleOpen(!consoleOpen)} />
                     </div>
-                )}
-
-                <div className={`console-wrapper ${consoleOpen ? 'console-wrapper--open' : ''}`}>
-                    <div className="resize-handle resize-handle--console" onMouseDown={handleMouseDown('console')} />
-                    <Console logs={logs} isOpen={consoleOpen} onToggle={() => setConsoleOpen(!consoleOpen)} />
                 </div>
             </div>
 

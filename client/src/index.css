@@ -98,13 +98,16 @@ body {
   --editor-width: 50;
   --console-height: 0px;
 
-  display: grid;
-  grid-template-rows: auto 1fr;
-  grid-template-columns: var(--sidebar-width) 1fr;
-  grid-template-areas:
-    "toolbar toolbar"
-    "sidebar content-area";
+  display: flex;
+  flex-direction: column;
   height: 100vh;
+  overflow: hidden;
+  position: relative;
+}
+
+.workspace {
+  flex: 1;
+  display: flex;
   overflow: hidden;
   position: relative;
 }
@@ -120,10 +123,12 @@ body {
 
 /* Content Area - contains main-content and console stacked vertically */
 .content-area {
-  grid-area: content-area;
+  flex: 1;
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  position: relative;
+  min-width: 0;
 }
 
 /* Main content wrapper for editor and preview */
@@ -181,22 +186,27 @@ body {
 }
 
 .resize-handle--sidebar {
+  position: absolute;
   left: var(--sidebar-width);
-  top: 50px;
-  bottom: 0;
-  width: 6px;
-  cursor: col-resize;
-  transform: translateX(-50%);
-}
-
-.resize-handle--editor {
-  position: relative;
   top: 0;
   bottom: 0;
   width: 6px;
   cursor: col-resize;
-  flex-shrink: 0;
+  transform: translateX(-50%);
   background: transparent;
+  z-index: 100;
+}
+
+.resize-handle--editor {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(var(--editor-width) * 1%);
+  width: 6px;
+  cursor: col-resize;
+  transform: translateX(-50%);
+  background: transparent;
+  z-index: 100;
 }
 
 .resize-handle--editor:hover,
@@ -206,12 +216,15 @@ body {
 
 /* Console resize handle */
 .resize-handle--console {
-  position: relative;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
   height: 6px;
-  width: 100%;
   cursor: row-resize;
+  transform: translateY(-50%);
   background: transparent;
-  flex-shrink: 0;
+  z-index: 100;
 }
 
 .resize-handle--console::before {
@@ -369,7 +382,7 @@ body {
    =============================================== */
 
 .sidebar {
-  grid-area: sidebar;
+  width: var(--sidebar-width);
   background: var(--bg-secondary);
   border-right: 1px solid var(--border-color);
   display: flex;
@@ -624,6 +637,7 @@ body {
   flex-direction: column;
   height: 0;
   overflow: hidden;
+  position: relative;
 }
 
 .console-wrapper--open {
