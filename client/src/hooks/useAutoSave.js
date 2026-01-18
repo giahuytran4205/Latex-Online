@@ -4,6 +4,7 @@ export function useAutoSave(projectId, activeFileName, code, triggerSave, isCode
     useEffect(() => {
         if (!activeFileName || activeFileName.endsWith('/') || code === null) return
         if (isLoading || isCodeLoading) return
+        if (typeof code !== 'string') return
 
         const handler = setTimeout(async () => {
             try {

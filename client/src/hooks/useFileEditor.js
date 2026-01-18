@@ -85,6 +85,8 @@ export function useFileEditor(projectId, sid, initialFile = 'main.tex') {
     // Manual save helper
     const triggerSave = useCallback(async (content = code) => {
         if (!projectId || !activeFileName || content === null) return
+        // Don't save binary files (objects) to server text endpoint
+        if (typeof content !== 'string') return
         try {
             await saveFile(projectId, activeFileName, content, sid)
             saveToCache(activeFileName, content)
