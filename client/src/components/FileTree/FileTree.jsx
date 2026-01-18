@@ -695,8 +695,7 @@ function FileTree({ projectId, files, activeFile, onFileSelect, onAddFile, onDel
         e.preventDefault()
         e.stopPropagation()
 
-        // Only allow dropping on folders, and not on itself or its parent
-        if (item.type === 'folder' && draggedItem && item.path !== draggedItem.path) {
+        if (draggedItem && item.path !== draggedItem.path) {
             // Check if item is a child of draggedItem (if draggedItem is folder)
             if (draggedItem.type === 'folder' && item.path.startsWith(draggedItem.path)) {
                 e.dataTransfer.dropEffect = 'none'
@@ -719,19 +718,29 @@ function FileTree({ projectId, files, activeFile, onFileSelect, onAddFile, onDel
         e.currentTarget.classList.remove('file-tree__item--drop-target')
         setIsDragging(false)
 
-        if (!draggedItem || !targetItem || targetItem.type !== 'folder') return
+        if (!draggedItem || !targetItem) return
         if (draggedItem.path === targetItem.path) return
 
         // Calculate new path
-        const fileName = draggedItem.path.split('/').filter(Boolean).pop()
-        const targetPath = targetItem.path.endsWith('/') ? targetItem.path : targetItem.path + '/'
+        let targetPath = ''
+        if (targetItem.type === 'folder') {
+            targetPath = targetItem.path.endsWith('/') ? targetItem.path : targetItem.path + '/'
+        } else {
+            // Sibling drop: parent
+            const parts = targetItem.path.split('/')
+            parts.pop()
+            targetPath = parts.join('/')
+            if (targetPath && !targetPath.endsWith('/')) targetPath += '/'
+        }
+
+        const fileName = draggedItem.name
         const newPath = targetPath + fileName + (draggedItem.type === 'folder' ? '/' : '')
 
         if (newPath === draggedItem.path) return
 
         const confirmed = await confirm({
             title: 'Move Item',
-            message: `Move "${draggedItem.name}" to "${targetItem.path || 'root'}"?`,
+            message: `Move "${draggedItem.name}" to "${targetPath || 'root'}"?`,
             confirmText: 'Move',
             cancelText: 'Cancel'
         })
@@ -818,9 +827,9 @@ function FileTree({ projectId, files, activeFile, onFileSelect, onAddFile, onDel
                     draggable
                     onDragStart={(e) => handleDragStartItem(e, item)}
                     onDragEnd={handleDragEndItem}
-                    onDragOver={(e) => isFolder ? handleDragOverItem(e, item) : null}
-                    onDragLeave={(e) => isFolder ? handleDragLeaveItem(e) : null}
-                    onDrop={(e) => isFolder ? handleDropItem(e, item) : null}
+                    onDragOver={(e) => handleDragOverItem(e, item)}
+                    onDragLeave={handleDragLeaveItem}
+                    onDrop={(e) => handleDropItem(e, item)}
                     onClick={(e) => handleItemClick(e, item)}
                     onContextMenu={(e) => handleContextMenu(e, item)}
                 >
