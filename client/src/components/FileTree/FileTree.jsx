@@ -1,6 +1,7 @@
 import { useState, useRef, useMemo, useEffect } from 'react'
 import { useToast } from '../Toast/Toast'
 import { useConfirm } from '../ConfirmDialog/ConfirmDialog'
+import JSZip from 'jszip'
 import './FileTree.css'
 
 function FileTree({ projectId, files, activeFile, onFileSelect, onAddFile, onDeleteFile, onRenameFile, onUploadFile, onDuplicateFile, onStorageUpdate }) {
@@ -325,7 +326,57 @@ function FileTree({ projectId, files, activeFile, onFileSelect, onAddFile, onDel
     const processUpload = async (fileItems) => {
         if (!fileItems || fileItems.length === 0) return
 
-        const duplicates = fileItems.filter(item => existingFilePaths.has(item.path))
+        let itemsToProcess = [...fileItems]
+
+        // 0. Handle Zip extraction
+        const zipFiles = itemsToProcess.filter(item => item.file.name.toLowerCase().endsWith('.zip'))
+
+        if (zipFiles.length > 0) {
+            const wantUnzip = await confirm({
+                title: 'Extract Zip Files?',
+                message: `Found ${zipFiles.length} zip file(s). Do you want to extract them?`,
+                confirmText: 'Extract',
+                cancelText: 'Keep as Zip',
+                type: 'info'
+            })
+
+            if (wantUnzip) {
+                // Remove zips
+                itemsToProcess = itemsToProcess.filter(item => !item.file.name.toLowerCase().endsWith('.zip'))
+
+                for (const zipItem of zipFiles) {
+                    try {
+                        const zip = await JSZip.loadAsync(zipItem.file)
+                        const extracted = []
+
+                        const promises = []
+                        zip.forEach((relativePath, zipEntry) => {
+                            if (!zipEntry.dir) {
+                                promises.push(
+                                    zipEntry.async('blob').then(blob => {
+                                        const fileName = relativePath.split('/').pop()
+                                        const file = new File([blob], fileName, { type: blob.type })
+                                        extracted.push({ file, path: relativePath })
+                                    })
+                                )
+                            }
+                        })
+                        await Promise.all(promises)
+
+                        if (extracted.length > 0) {
+                            itemsToProcess.push(...extracted)
+                            toast.success(`Extracted ${extracted.length} files from ${zipItem.file.name}`)
+                        }
+                    } catch (err) {
+                        console.error('Unzip failed', err)
+                        toast.error(`Failed to extract ${zipItem.file.name}`)
+                        itemsToProcess.push(zipItem) // Put back if failed
+                    }
+                }
+            }
+        }
+
+        const duplicates = itemsToProcess.filter(item => existingFilePaths.has(item.path))
         let overwriteAll = false
         let skipAll = false
 
@@ -343,7 +394,7 @@ function FileTree({ projectId, files, activeFile, onFileSelect, onAddFile, onDel
             else skipAll = true
         }
 
-        const total = fileItems.length
+        const total = itemsToProcess.length
         let uploaded = 0
         let skipped = 0
         let failed = 0
@@ -351,7 +402,7 @@ function FileTree({ projectId, files, activeFile, onFileSelect, onAddFile, onDel
         setUploadProgress({ current: 0, total, filename: '' })
 
         for (let i = 0; i < total; i++) {
-            const { file, path } = fileItems[i]
+            const { file, path } = itemsToProcess[i]
             setUploadProgress({ current: i + 1, total, filename: file.name })
 
             try {
