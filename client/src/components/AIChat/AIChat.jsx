@@ -384,7 +384,6 @@ function AIChat({
                                             onClick={() => { setSelectedModel(id); setShowModelMenu(false); }}
                                         >
                                             <span className="ai-chat__model-name">{model.name}</span>
-                                            {model.description && <span className="ai-chat__model-desc">{model.description}</span>}
                                         </div>
                                     ))}
                                 </div>
