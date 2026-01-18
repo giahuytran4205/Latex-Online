@@ -786,11 +786,11 @@ function FileTree({ projectId, files, activeFile, onFileSelect, onAddFile, onDel
             }
             setSelectedFiles(newSelected)
         } else {
-            setSelectedFiles(new Set([item.path]))
-            setLastSelectedPath(item.path)
             if (item.type === 'folder') {
                 toggleFolder(item.path)
             } else {
+                setSelectedFiles(new Set([item.path]))
+                setLastSelectedPath(item.path)
                 onFileSelect(item.path)
             }
         }

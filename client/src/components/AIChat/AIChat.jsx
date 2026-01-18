@@ -351,6 +351,12 @@ function AIChat({
                     ref={inputRef}
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
+                    onInput={() => {
+                        if (inputRef.current) {
+                            inputRef.current.style.height = 'auto'
+                            inputRef.current.style.height = `${Math.min(inputRef.current.scrollHeight, 200)}px`
+                        }
+                    }}
                     onKeyDown={handleKeyDown}
                     placeholder="Hỏi AI bất cứ điều gì..."
                     disabled={isLoading}
