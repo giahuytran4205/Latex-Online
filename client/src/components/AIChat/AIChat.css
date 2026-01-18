@@ -374,7 +374,8 @@
 
 .ai-chat__input-area {
     display: flex;
-    gap: 10px;
+    flex-direction: column;
+    gap: 12px;
     padding: 16px 20px;
     border-top: 1px solid var(--border-color);
     background: var(--bg-panel);
@@ -384,31 +385,76 @@
 }
 
 .ai-chat__input-area textarea {
-    flex: 1;
-    padding: 10px 14px;
+    width: 100%;
+    padding: 12px;
     border: 1px solid var(--border-color);
-    border-radius: 24px;
+    border-radius: 12px;
     background: var(--bg-primary);
     color: var(--text-primary);
-    font-size: 13px;
+    font-size: 13.5px;
     resize: none;
-    max-height: 120px;
-    line-height: 1.4;
+    min-height: 50px;
+    max-height: 200px;
+    line-height: 1.5;
+    font-family: inherit;
 }
 
 .ai-chat__input-area textarea:focus {
     outline: none;
     border-color: var(--accent);
+    box-shadow: 0 0 0 2px var(--accent-light);
 }
 
 .ai-chat__input-area textarea::placeholder {
     color: var(--text-muted);
 }
 
+.ai-chat__input-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.ai-chat__model-select-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.ai-chat__model-select {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    cursor: pointer;
+    z-index: 5;
+}
+
+.ai-chat__model-badge {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border-radius: 99px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    background: var(--bg-secondary);
+    border: 1px solid transparent;
+    transition: all 0.2s;
+}
+
+.ai-chat__model-select:hover+.ai-chat__model-badge {
+    background: var(--bg-active);
+    color: var(--accent);
+    border-color: var(--accent-light);
+}
+
 .ai-chat__send {
-    width: 40px;
-    height: 40px;
-    border-radius: 50%;
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
     background: var(--accent);
     border: none;
     color: white;
@@ -416,18 +462,18 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: all 0.15s;
-    flex-shrink: 0;
+    transition: all 0.2s;
 }
 
 .ai-chat__send:hover:not(:disabled) {
-    transform: scale(1.05);
-    box-shadow: 0 2px 8px rgba(99, 102, 241, 0.4);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
 }
 
 .ai-chat__send:disabled {
     opacity: 0.5;
     cursor: not-allowed;
+    background: var(--text-muted);
 }
 
 /* Markdown Styles */
