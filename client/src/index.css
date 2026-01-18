@@ -114,7 +114,15 @@ body {
 
 .app.resizing {
   user-select: none;
+}
+
+.app.resizing--sidebar,
+.app.resizing--editor {
   cursor: col-resize;
+}
+
+.app.resizing--console {
+  cursor: row-resize;
 }
 
 .app.resizing * {
@@ -634,7 +642,7 @@ body {
   display: flex;
   flex-direction: column;
   height: 0;
-  overflow: hidden;
+  overflow: visible;
   position: relative;
   z-index: 50;
 }

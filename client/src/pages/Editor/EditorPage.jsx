@@ -276,7 +276,7 @@ function EditorPage() {
 
     return (
         <div
-            className={`app ${isResizing ? 'resizing' : ''}`}
+            className={`app ${isResizing ? `resizing resizing--${isResizing}` : ''}`}
             style={{
                 '--sidebar-width': `${sidebarWidth}px`,
                 '--editor-width': editorWidth,
