@@ -322,53 +322,10 @@ function FileTree({ projectId, files, activeFile, onFileSelect, onAddFile, onDel
         setRenameValue('')
     }
 
-    const handleUploadFiles = () => {
-        fileInputRef.current?.click()
-    }
+    const processUpload = async (fileItems) => {
+        if (!fileItems || fileItems.length === 0) return
 
-    const handleUploadFolder = () => {
-        folderInputRef.current?.click()
-    }
-
-    const handleFileUpload = async (e) => {
-        const uploadedFiles = e.target.files
-        if (!uploadedFiles || uploadedFiles.length === 0) return
-
-        // Check if this is a folder upload (first file has relative path)
-        const isFolderUpload = uploadedFiles[0]?.webkitRelativePath && uploadedFiles[0].webkitRelativePath.includes('/')
-
-        if (isFolderUpload) {
-            const confirmed = await confirm({
-                title: 'Confirm Folder Upload',
-                message: `Selected folder contains ${uploadedFiles.length} files. Do you want to upload them?`,
-                confirmText: 'Upload',
-                cancelText: 'Cancel',
-                type: 'default'
-            })
-
-            if (!confirmed) {
-                e.target.value = ''
-                return
-            }
-        }
-
-        const totalFiles = uploadedFiles.length
-        let uploaded = 0
-        let skipped = 0
-        let failed = 0
-
-        // Check for duplicates and ask for overwrite
-        const filesToUpload = []
-        const duplicates = []
-
-        for (const file of uploadedFiles) {
-            const uploadPath = file.webkitRelativePath || file.name
-            if (existingFilePaths.has(uploadPath)) {
-                duplicates.push(uploadPath)
-            }
-            filesToUpload.push({ file, path: uploadPath })
-        }
-
+        const duplicates = fileItems.filter(item => existingFilePaths.has(item.path))
         let overwriteAll = false
         let skipAll = false
 
@@ -376,29 +333,28 @@ function FileTree({ projectId, files, activeFile, onFileSelect, onAddFile, onDel
             const confirmed = await confirm({
                 title: 'Files Already Exist',
                 message: duplicates.length === 1
-                    ? `"${duplicates[0]}" already exists. Do you want to overwrite it?`
+                    ? `"${duplicates[0].path}" already exists. Do you want to overwrite it?`
                     : `${duplicates.length} files already exist. Do you want to overwrite them?`,
                 confirmText: 'Overwrite',
                 cancelText: 'Skip',
                 type: 'warning'
             })
-
-            if (confirmed) {
-                overwriteAll = true
-            } else {
-                skipAll = true
-            }
+            if (confirmed) overwriteAll = true
+            else skipAll = true
         }
 
-        setUploadProgress({ current: 0, total: totalFiles, filename: '' })
+        const total = fileItems.length
+        let uploaded = 0
+        let skipped = 0
+        let failed = 0
 
-        for (let i = 0; i < filesToUpload.length; i++) {
-            const { file, path } = filesToUpload[i]
+        setUploadProgress({ current: 0, total, filename: '' })
 
-            setUploadProgress({ current: i + 1, total: totalFiles, filename: file.name })
+        for (let i = 0; i < total; i++) {
+            const { file, path } = fileItems[i]
+            setUploadProgress({ current: i + 1, total, filename: file.name })
 
             try {
-                // Check if should skip
                 if (existingFilePaths.has(path) && skipAll) {
                     skipped++
                     continue
@@ -406,20 +362,18 @@ function FileTree({ projectId, files, activeFile, onFileSelect, onAddFile, onDel
 
                 const content = await readFileContent(file)
                 if (onUploadFile) {
-                    // Skip reload for all but the last file to improve performance
-                    const isLast = i === filesToUpload.length - 1
+                    const isLast = i === total - 1
                     await onUploadFile(path, content, !isLast)
                 }
                 uploaded++
             } catch (err) {
-                console.error('Failed to upload file:', err)
+                console.error('Upload failed', err)
                 failed++
             }
         }
 
         setUploadProgress(null)
 
-        // Show result toast
         if (failed > 0) {
             toast.warning(`Uploaded ${uploaded} files, ${skipped} skipped, ${failed} failed`)
         } else if (skipped > 0) {
@@ -429,6 +383,72 @@ function FileTree({ projectId, files, activeFile, onFileSelect, onAddFile, onDel
         }
 
         if (onStorageUpdate) onStorageUpdate()
+    }
+
+    const handleUploadFiles = () => {
+        fileInputRef.current?.click()
+    }
+
+    const handleUploadFolder = async () => {
+        // Use File System Access API if available to avoid browser confirmation dialog
+        if ('showDirectoryPicker' in window) {
+            try {
+                const dirHandle = await window.showDirectoryPicker()
+                const fileItems = []
+
+                const scan = async (handle, prefix = '') => {
+                    for await (const entry of handle.values()) {
+                        const path = prefix ? `${prefix}/${entry.name}` : entry.name
+                        if (entry.kind === 'file') {
+                            const file = await entry.getFile()
+                            fileItems.push({ file, path })
+                        } else if (entry.kind === 'directory') {
+                            await scan(entry, path)
+                        }
+                    }
+                }
+
+                // Start scan with folder name as root
+                await scan(dirHandle, dirHandle.name)
+
+                if (fileItems.length === 0) {
+                    toast.info('Folder is empty')
+                    return
+                }
+
+                // Show App Confirmation Dialog instead of Browser Alert
+                const confirmed = await confirm({
+                    title: 'Confirm Folder Upload',
+                    message: `Upload ${fileItems.length} files from folder "${dirHandle.name}"?`,
+                    confirmText: 'Upload',
+                    cancelText: 'Cancel'
+                })
+
+                if (confirmed) {
+                    await processUpload(fileItems)
+                }
+            } catch (err) {
+                if (err.name !== 'AbortError') {
+                    console.error(err)
+                    toast.error('Failed to access folder: ' + err.message)
+                }
+            }
+        } else {
+            // Fallback
+            folderInputRef.current?.click()
+        }
+    }
+
+    const handleFileUpload = async (e) => {
+        const uploadedFiles = e.target.files
+        if (!uploadedFiles || uploadedFiles.length === 0) return
+
+        const fileItems = Array.from(uploadedFiles).map(file => ({
+            file,
+            path: file.webkitRelativePath || file.name
+        }))
+
+        await processUpload(fileItems)
         e.target.value = ''
     }
 
@@ -495,10 +515,9 @@ function FileTree({ projectId, files, activeFile, onFileSelect, onAddFile, onDel
         e.stopPropagation()
         setIsDragging(false)
 
-        const items = e.dataTransfer.items
+        const items = e.dataTransfer?.items
         if (!items) return
 
-        // Collect all files first
         const allFiles = []
         for (let i = 0; i < items.length; i++) {
             const item = items[i].webkitGetAsEntry ? items[i].webkitGetAsEntry() : null
@@ -508,71 +527,7 @@ function FileTree({ projectId, files, activeFile, onFileSelect, onAddFile, onDel
             }
         }
 
-        if (allFiles.length === 0) return
-
-        // Check for duplicates
-        const duplicates = allFiles.filter(f => existingFilePaths.has(f.path))
-
-        let overwriteAll = false
-        let skipAll = false
-
-        if (duplicates.length > 0) {
-            const confirmed = await confirm({
-                title: 'Files Already Exist',
-                message: duplicates.length === 1
-                    ? `"${duplicates[0].path}" already exists. Do you want to overwrite it?`
-                    : `${duplicates.length} files already exist. Do you want to overwrite them?`,
-                confirmText: 'Overwrite',
-                cancelText: 'Skip',
-                type: 'warning'
-            })
-
-            overwriteAll = confirmed
-            skipAll = !confirmed
-        }
-
-        // Upload files
-        let uploaded = 0
-        let skipped = 0
-        let failed = 0
-
-        setUploadProgress({ current: 0, total: allFiles.length, filename: '' })
-
-        for (let i = 0; i < allFiles.length; i++) {
-            const { file, path } = allFiles[i]
-
-            setUploadProgress({ current: i + 1, total: allFiles.length, filename: file.name })
-
-            try {
-                if (existingFilePaths.has(path) && skipAll) {
-                    skipped++
-                    continue
-                }
-
-                const content = await readFileContent(file)
-                if (onUploadFile) {
-                    // Skip reload for all but the last file
-                    const isLast = i === allFiles.length - 1
-                    await onUploadFile(path, content, !isLast)
-                }
-                uploaded++
-            } catch (err) {
-                console.error('Failed to upload:', err)
-                failed++
-            }
-        }
-
-        setUploadProgress(null)
-
-        if (failed > 0) {
-            toast.warning(`Uploaded ${uploaded} files, ${skipped} skipped, ${failed} failed`)
-        } else if (skipped > 0) {
-            toast.info(`Uploaded ${uploaded} files, ${skipped} skipped`)
-        } else {
-            toast.success(`Successfully uploaded ${uploaded} file(s)`)
-        }
-
-        if (onStorageUpdate) onStorageUpdate()
+        await processUpload(allFiles)
     }
 
     const readFileContent = (file) => {
