@@ -71,14 +71,17 @@ function AIChat({
             localStorage.setItem('gemini_api_key', apiKey.trim())
             localStorage.setItem('gemini_model', selectedModel)
             setShowSettings(false)
-            toast.success('Cài đặt đã được lưu')
 
             // Trigger fetch models immediately
             fetchAIModels(apiKey.trim()).then(data => {
                 if (data.models && Object.keys(data.models).length > 0) {
                     setAvailableModels(data.models)
-                    toast.success('Đã cập nhật danh sách model')
+                    toast.success('Đã lưu cài đặt và cập nhật danh sách model')
+                } else {
+                    toast.success('Cài đặt đã được lưu')
                 }
+            }).catch(() => {
+                toast.success('Cài đặt đã được lưu')
             })
         }
     }

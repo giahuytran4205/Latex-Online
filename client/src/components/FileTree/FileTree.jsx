@@ -834,7 +834,13 @@ function FileTree({ projectId, files, activeFile, onFileSelect, onAddFile, onDel
                     onContextMenu={(e) => handleContextMenu(e, item)}
                 >
                     {isFolder && (
-                        <span className={`file-tree__chevron ${isExpanded ? 'file-tree__chevron--expanded' : ''}`}>
+                        <span
+                            className={`file-tree__chevron ${isExpanded ? 'file-tree__chevron--expanded' : ''}`}
+                            onClick={(e) => {
+                                e.stopPropagation()
+                                toggleFolder(item.path)
+                            }}
+                        >
                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                 <polyline points="9,18 15,12 9,6" />
                             </svg>
