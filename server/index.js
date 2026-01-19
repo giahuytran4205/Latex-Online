@@ -5,6 +5,8 @@ import { WebSocketServer } from 'ws'
 import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
 import compileRouter from './routes/compile.js'
+import helmet from 'helmet'
+import rateLimit from 'express-rate-limit'
 import filesRouter from './routes/files.js'
 import projectsRouter from './routes/projects.js'
 import aiRouter from './routes/ai.js'
@@ -22,6 +24,20 @@ app.use(cors())
 app.use(express.json({ limit: '50mb' }))
 app.use(express.urlencoded({ extended: true, limit: '50mb' }))
 app.use(express.static(join(__dirname, '../client/dist')))
+
+// Security Middleware
+app.use(helmet({
+    contentSecurityPolicy: false,
+    crossOriginEmbedderPolicy: false
+}))
+
+const limiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 1000, // Limit each IP to 1000 requests per windowMs
+    standardHeaders: true,
+    legacyHeaders: false,
+})
+app.use('/api', limiter)
 
 // API Routes
 app.use('/api/compile', compileRouter)
@@ -55,7 +71,7 @@ server.on('upgrade', async (request, socket, head) => {
             const token = url.searchParams.get('token')
             const sid = url.searchParams.get('sid')
 
-            console.log(`[WS Upgrade] Project: ${projectId}, SID: ${sid ? sid.substring(0, 8) + '...' : 'None'}`)
+            // console.log(`[WS Upgrade] Project: ${projectId}, SID: ${sid ? sid.substring(0, 8) + '...' : 'None'}`)
 
             if (!projectId) {
                 socket.write('HTTP/1.1 400 Bad Request\r\n\r\nMissing projectId')

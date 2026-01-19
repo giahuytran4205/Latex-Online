@@ -19,8 +19,11 @@ if (!existsSync(SHARES_DIR)) {
 export const findProjectInfo = (projectId, currentUserId) => {
     // 1. Check current user directory first
     if (currentUserId) {
-        const projectPath = join(PROJECTS_DIR, currentUserId, projectId)
-        if (existsSync(projectPath) && statSync(projectPath).isDirectory()) {
+        const userProjectDir = join(PROJECTS_DIR, currentUserId)
+        const projectPath = join(userProjectDir, projectId)
+
+        // Security check
+        if (projectPath.startsWith(userProjectDir) && existsSync(projectPath) && statSync(projectPath).isDirectory()) {
             return { projectPath, ownerId: currentUserId }
         }
     }
@@ -31,8 +34,11 @@ export const findProjectInfo = (projectId, currentUserId) => {
             const userDirs = readdirSync(PROJECTS_DIR)
             for (const userId of userDirs) {
                 if (userId === currentUserId || userId === '.shares') continue
-                const projectPath = join(PROJECTS_DIR, userId, projectId)
-                if (existsSync(projectPath) && statSync(projectPath).isDirectory()) {
+                const userProjectDir = join(PROJECTS_DIR, userId)
+                const projectPath = join(userProjectDir, projectId)
+
+                // Security check
+                if (projectPath.startsWith(userProjectDir) && existsSync(projectPath) && statSync(projectPath).isDirectory()) {
                     return { projectPath, ownerId: userId }
                 }
             }
@@ -50,6 +56,10 @@ export const findProjectInfo = (projectId, currentUserId) => {
 export const findProjectByShareId = (shareId) => {
     if (!shareId) return null
     const sharePath = join(SHARES_DIR, `${shareId}.json`)
+
+    // Security check
+    if (!sharePath.startsWith(SHARES_DIR)) return null
+
     if (existsSync(sharePath)) {
         try {
             const data = JSON.parse(readFileSync(sharePath, 'utf-8'))

@@ -1,3 +1,5 @@
+import { snippet } from '@codemirror/autocomplete'
+
 /**
  * LaTeX autocomplete commands and environments data
  */
@@ -5,33 +7,33 @@
 // LaTeX commands for autocomplete
 export const latexCommands = [
     // Document structure
-    { label: '\\documentclass', type: 'keyword', info: 'Define document class', apply: '\\documentclass{article}' },
-    { label: '\\usepackage', type: 'keyword', info: 'Import package', apply: '\\usepackage{}' },
-    { label: '\\begin', type: 'keyword', info: 'Begin environment', apply: '\\begin{}' },
-    { label: '\\end', type: 'keyword', info: 'End environment', apply: '\\end{}' },
-    { label: '\\title', type: 'keyword', info: 'Document title', apply: '\\title{}' },
-    { label: '\\author', type: 'keyword', info: 'Document author', apply: '\\author{}' },
-    { label: '\\date', type: 'keyword', info: 'Document date', apply: '\\date{}' },
+    { label: '\\documentclass', type: 'keyword', info: 'Define document class', apply: '\\documentclass{${article}}' },
+    { label: '\\usepackage', type: 'keyword', info: 'Import package', apply: '\\usepackage{${1}}' },
+    { label: '\\begin', type: 'keyword', info: 'Begin environment', apply: '\\begin{${1}}' },
+    { label: '\\end', type: 'keyword', info: 'End environment', apply: '\\end{${1}}' },
+    { label: '\\title', type: 'keyword', info: 'Document title', apply: '\\title{${1}}' },
+    { label: '\\author', type: 'keyword', info: 'Document author', apply: '\\author{${1}}' },
+    { label: '\\date', type: 'keyword', info: 'Document date', apply: '\\date{${1}}' },
     { label: '\\maketitle', type: 'keyword', info: 'Render title' },
 
     // Sections
-    { label: '\\section', type: 'function', info: 'Section heading', apply: '\\section{}' },
-    { label: '\\subsection', type: 'function', info: 'Subsection heading', apply: '\\subsection{}' },
-    { label: '\\subsubsection', type: 'function', info: 'Subsubsection', apply: '\\subsubsection{}' },
-    { label: '\\paragraph', type: 'function', info: 'Paragraph heading', apply: '\\paragraph{}' },
-    { label: '\\chapter', type: 'function', info: 'Chapter heading', apply: '\\chapter{}' },
+    { label: '\\section', type: 'function', info: 'Section heading', apply: '\\section{${1}}' },
+    { label: '\\subsection', type: 'function', info: 'Subsection heading', apply: '\\subsection{${1}}' },
+    { label: '\\subsubsection', type: 'function', info: 'Subsubsection', apply: '\\subsubsection{${1}}' },
+    { label: '\\paragraph', type: 'function', info: 'Paragraph heading', apply: '\\paragraph{${1}}' },
+    { label: '\\chapter', type: 'function', info: 'Chapter heading', apply: '\\chapter{${1}}' },
 
     // Text formatting
-    { label: '\\textbf', type: 'function', info: 'Bold text', apply: '\\textbf{}' },
-    { label: '\\textit', type: 'function', info: 'Italic text', apply: '\\textit{}' },
-    { label: '\\underline', type: 'function', info: 'Underlined text', apply: '\\underline{}' },
-    { label: '\\emph', type: 'function', info: 'Emphasized text', apply: '\\emph{}' },
-    { label: '\\texttt', type: 'function', info: 'Typewriter text', apply: '\\texttt{}' },
-    { label: '\\textsc', type: 'function', info: 'Small caps', apply: '\\textsc{}' },
+    { label: '\\textbf', type: 'function', info: 'Bold text', apply: '\\textbf{${1}}' },
+    { label: '\\textit', type: 'function', info: 'Italic text', apply: '\\textit{${1}}' },
+    { label: '\\underline', type: 'function', info: 'Underlined text', apply: '\\underline{${1}}' },
+    { label: '\\emph', type: 'function', info: 'Emphasized text', apply: '\\emph{${1}}' },
+    { label: '\\texttt', type: 'function', info: 'Typewriter text', apply: '\\texttt{${1}}' },
+    { label: '\\textsc', type: 'function', info: 'Small caps', apply: '\\textsc{${1}}' },
 
     // Math
-    { label: '\\frac', type: 'function', info: 'Fraction', apply: '\\frac{}{}' },
-    { label: '\\sqrt', type: 'function', info: 'Square root', apply: '\\sqrt{}' },
+    { label: '\\frac', type: 'function', info: 'Fraction', apply: '\\frac{${1}}{${2}}' },
+    { label: '\\sqrt', type: 'function', info: 'Square root', apply: '\\sqrt{${1}}' },
     { label: '\\sum', type: 'function', info: 'Summation' },
     { label: '\\int', type: 'function', info: 'Integral' },
     { label: '\\prod', type: 'function', info: 'Product' },
@@ -55,13 +57,13 @@ export const latexCommands = [
     { label: '\\Rightarrow', type: 'constant', info: 'Double right arrow' },
 
     // References
-    { label: '\\label', type: 'function', info: 'Create label', apply: '\\label{}' },
-    { label: '\\ref', type: 'function', info: 'Reference label', apply: '\\ref{}' },
-    { label: '\\cite', type: 'function', info: 'Citation', apply: '\\cite{}' },
+    { label: '\\label', type: 'function', info: 'Create label', apply: '\\label{${1}}' },
+    { label: '\\ref', type: 'function', info: 'Reference label', apply: '\\ref{${1}}' },
+    { label: '\\cite', type: 'function', info: 'Citation', apply: '\\cite{${1}}' },
 
     // Figures and tables
-    { label: '\\includegraphics', type: 'function', info: 'Include image', apply: '\\includegraphics[width=\\textwidth]{}' },
-    { label: '\\caption', type: 'function', info: 'Figure/table caption', apply: '\\caption{}' },
+    { label: '\\includegraphics', type: 'function', info: 'Include image', apply: '\\includegraphics[width=\\textwidth]{${1}}' },
+    { label: '\\caption', type: 'function', info: 'Figure/table caption', apply: '\\caption{${1}}' },
     { label: '\\centering', type: 'keyword', info: 'Center content' },
 
     // Lists
@@ -73,7 +75,7 @@ export const latexCommands = [
     { label: '\\noindent', type: 'keyword', info: 'No indentation' },
 
     // Footnotes
-    { label: '\\footnote', type: 'function', info: 'Footnote', apply: '\\footnote{}' },
+    { label: '\\footnote', type: 'function', info: 'Footnote', apply: '\\footnote{${1}}' },
 ]
 
 // LaTeX environments for autocomplete
@@ -89,11 +91,18 @@ export const latexEnvironments = [
     { label: 'center', info: 'Centered content' },
 ]
 
+// Special math snippets
+const mathSnippets = [
+    { label: '$$', info: 'Display Math', apply: '$$ ${1} $$' },
+    { label: '$', info: 'Inline Math', apply: '$${1}$' },
+    { label: '\\[', info: 'Display Math (LaTeX)', apply: '\\[\n\t${1}\n\\]' },
+]
+
 /**
  * LaTeX autocomplete function for CodeMirror
  */
 export function latexCompletions(context) {
-    const word = context.matchBefore(/\\[\w]*/)
+    const word = context.matchBefore(/(\\[\w]*|\$\$?|\\\[)/)
     const envMatch = context.matchBefore(/\\begin\{[\w]*/)
     const endEnvMatch = context.matchBefore(/\\end\{[\w]*/)
 
@@ -107,7 +116,8 @@ export function latexCompletions(context) {
                     label: e.label,
                     type: 'type',
                     info: e.info,
-                    apply: e.label + '}\n\n\\end{' + e.label + '}'
+                    // Use apply for snippet-based insertion (with cursor inside)
+                    apply: snippet(e.label + '}\n\t${1}\n\\end{' + e.label + '}')
                 }))
         }
     }
@@ -122,17 +132,29 @@ export function latexCompletions(context) {
                     label: e.label,
                     type: 'type',
                     info: e.info,
-                    apply: e.label + '}'
+                    apply: e.label + '}' // No snippet needed here usually, just closing
                 }))
         }
     }
 
     if (!word) return null
 
+    // Combine standard commands with math snippets
+    const allOptions = [
+        ...latexCommands,
+        ...mathSnippets
+    ]
+
     return {
         from: word.from,
-        options: latexCommands.filter(cmd =>
-            cmd.label.toLowerCase().startsWith(word.text.toLowerCase())
-        )
+        options: allOptions
+            .filter(cmd => cmd.label.toLowerCase().startsWith(word.text.toLowerCase()))
+            .map(cmd => ({
+                label: cmd.label,
+                type: cmd.type || 'keyword',
+                info: cmd.info,
+                // Wrap in snippet() if apply text is provided, otherwise standard completion
+                apply: cmd.apply ? snippet(cmd.apply) : undefined
+            }))
     }
 }

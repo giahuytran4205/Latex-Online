@@ -1,5 +1,5 @@
 import { keymap } from '@codemirror/view'
-import { indentWithTab } from '@codemirror/commands'
+import { indentWithTab, insertTab } from '@codemirror/commands'
 import { completionStatus, acceptCompletion, startCompletion } from '@codemirror/autocomplete'
 import { wrapSelection } from '../utils/wrapSelection'
 
@@ -16,7 +16,9 @@ export function createKeybindings(onCompileRef) {
                 if (completionStatus(view.state)) {
                     return acceptCompletion(view)
                 }
-                return indentWithTab.run ? indentWithTab.run(view) : false
+                // Use insertTab to simply insert a tab/spaces at cursor
+                // instead of indenting the whole line logic
+                return insertTab(view)
             }
         },
         { key: 'Ctrl-Space', run: startCompletion },

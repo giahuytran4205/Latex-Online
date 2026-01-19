@@ -134,6 +134,12 @@ export async function compileLatex(projectId = 'default-project', engine = 'pdfl
     const pdfFile = `${jobId}.pdf`
     const pdfPath = join(TEMP_DIR, pdfFile)
 
+    // Security check for filename
+    const targetTexPath = join(workDir, `${filename}.tex`)
+    if (!targetTexPath.startsWith(workDir)) {
+        throw new Error('Security Error: Invalid filename')
+    }
+
     try {
         // Create/update work directory
         mkdirSync(workDir, { recursive: true })
@@ -375,7 +381,7 @@ export async function resolveSyncTeX(projectId, page, x, y) {
         let output = ''
         proc.stdout.on('data', (d) => {
             output += d.toString()
-            console.log('[SyncTeX] Raw Output:', d.toString())
+            // console.log('[SyncTeX] Raw Output:', d.toString())
         })
         proc.stderr.on('data', (d) => console.error('[SyncTeX] Error:', d.toString()))
 

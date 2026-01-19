@@ -218,6 +218,7 @@ function getFileList(projectPath, basePath = '') {
 function readFileSafe(projectPath, filePath) {
     try {
         const fullPath = join(projectPath, filePath)
+        if (!fullPath.startsWith(projectPath)) return null // Security check
         if (!existsSync(fullPath)) return null
         const stats = statSync(fullPath)
         if (stats.size > 50000) return '[File too large]'
@@ -490,6 +491,7 @@ function executeFunction(name, args, projectPath, operations) {
 
             case 'create_file': {
                 const filePath = join(projectPath, args.file_path)
+                if (!filePath.startsWith(projectPath)) return { success: false, error: 'Access denied' }
                 const parentDir = dirname(filePath)
                 if (!existsSync(parentDir)) {
                     mkdirSync(parentDir, { recursive: true })
@@ -506,6 +508,7 @@ function executeFunction(name, args, projectPath, operations) {
 
             case 'edit_file': {
                 const filePath = join(projectPath, args.file_path)
+                if (!filePath.startsWith(projectPath)) return { success: false, error: 'Access denied' }
                 if (!existsSync(filePath)) {
                     return { success: false, error: 'File not found' }
                 }
@@ -524,6 +527,7 @@ function executeFunction(name, args, projectPath, operations) {
                     return { success: false, error: 'Cannot delete main.tex' }
                 }
                 const filePath = join(projectPath, args.file_path)
+                if (!filePath.startsWith(projectPath)) return { success: false, error: 'Access denied' }
                 if (existsSync(filePath)) {
                     unlinkSync(filePath)
                     operations.push({

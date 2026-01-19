@@ -32,14 +32,14 @@ router.get('/temp/:filename', (req, res) => {
         const { filename } = req.params
         const filePath = join(TEMP_DIR, filename)
 
-        console.log(`[Files] Request for temp file: ${filename}`)
+        // console.log(`[Files] Request for temp file: ${filename}`)
 
         if (!existsSync(filePath)) {
-            console.error(`[Files] File not found: ${filePath}`)
+            // console.error(`[Files] File not found: ${filePath}`) // Optional: keep or remove, user asked to remove redundant stuff, 404 is common.
             return res.status(404).json({ error: 'File not found' })
         }
 
-        console.log(`[Files] Serving: ${filePath}`)
+        // console.log(`[Files] Serving: ${filePath}`)
         res.setHeader('Content-Type', 'application/pdf')
         res.sendFile(filePath)
     } catch (err) {
@@ -116,6 +116,11 @@ router.get('/:projectId/:filename', (req, res) => {
         const decodedFilename = decodeURIComponent(filename)
         const filePath = join(auth.projectPath, decodedFilename)
 
+        // Security: Prevent Path Traversal
+        if (!filePath.startsWith(auth.projectPath)) {
+            return res.status(403).json({ error: 'Access denied: Invalid file path' })
+        }
+
         if (!existsSync(filePath)) {
             return res.status(404).json({ error: 'File not found' })
         }
@@ -137,6 +142,11 @@ router.get('/:projectId/:filename/download', (req, res) => {
 
         const decodedFilename = decodeURIComponent(filename)
         const filePath = join(auth.projectPath, decodedFilename)
+
+        // Security: Prevent Path Traversal
+        if (!filePath.startsWith(auth.projectPath)) {
+            return res.status(403).json({ error: 'Access denied: Invalid file path' })
+        }
 
         if (!existsSync(filePath)) {
             return res.status(404).json({ error: 'File not found' })
@@ -179,6 +189,11 @@ router.put('/:projectId/:filename', (req, res) => {
         const { projectPath, ownerId } = auth
         const filePath = join(projectPath, decodedFilename)
 
+        // Security: Prevent Path Traversal
+        if (!filePath.startsWith(projectPath)) {
+            return res.status(403).json({ error: 'Access denied: Invalid file path' })
+        }
+
         // Ensure parent directory exists
         const parentDir = dirname(filePath)
         if (!existsSync(parentDir)) {
@@ -218,6 +233,11 @@ router.post('/:projectId', (req, res) => {
 
         const { projectPath, ownerId } = auth
         const filePath = join(projectPath, filename)
+
+        // Security: Prevent Path Traversal
+        if (!filePath.startsWith(projectPath)) {
+            return res.status(403).json({ error: 'Access denied: Invalid file path' })
+        }
 
         // Check if it's a folder (ends with /)
         const isFolder = filename.endsWith('/')
@@ -268,6 +288,11 @@ router.delete('/:projectId/:filename', (req, res) => {
         const { projectPath, ownerId } = auth
         const filePath = join(projectPath, decodedFilename)
 
+        // Security: Prevent Path Traversal
+        if (!filePath.startsWith(projectPath)) {
+            return res.status(403).json({ error: 'Access denied: Invalid file path' })
+        }
+
         if (existsSync(filePath)) {
             const stats = statSync(filePath)
             if (stats.isDirectory()) {
@@ -299,6 +324,11 @@ router.post('/:projectId/rename', (req, res) => {
         const { projectPath, ownerId } = auth
         const oldPath = join(projectPath, oldName)
         const newPath = join(projectPath, newName)
+
+        // Security: Prevent Path Traversal
+        if (!oldPath.startsWith(projectPath) || !newPath.startsWith(projectPath)) {
+            return res.status(403).json({ error: 'Access denied: Invalid file path' })
+        }
 
         if (!existsSync(oldPath)) {
             return res.status(404).json({ error: 'File not found' })
@@ -335,6 +365,11 @@ router.post('/:projectId/duplicate', (req, res) => {
         const { filename } = req.body
         const { projectPath, ownerId } = auth
         const srcPath = join(projectPath, filename)
+
+        // Security: Prevent Path Traversal
+        if (!srcPath.startsWith(projectPath)) {
+            return res.status(403).json({ error: 'Access denied: Invalid file path' })
+        }
 
         if (!existsSync(srcPath)) {
             return res.status(404).json({ error: 'File not found' })
@@ -378,6 +413,11 @@ router.post('/:projectId/move', (req, res) => {
         const { projectPath, ownerId } = auth
         const oldPath = join(projectPath, oldName)
         const newPath = join(projectPath, newName)
+
+        // Security: Prevent Path Traversal
+        if (!oldPath.startsWith(projectPath) || !newPath.startsWith(projectPath)) {
+            return res.status(403).json({ error: 'Access denied: Invalid file path' })
+        }
 
         if (!existsSync(oldPath)) {
             return res.status(404).json({ error: 'File not found' })

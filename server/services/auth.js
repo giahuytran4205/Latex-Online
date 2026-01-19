@@ -70,7 +70,7 @@ export const decodeAndVerifyToken = async (token) => {
             return await admin.auth().verifyIdToken(token)
         }
 
-        if (process.env.NODE_ENV !== 'production' || true) {
+        if (process.env.NODE_ENV !== 'production') {
             return decodeTokenUnsafe(token)
         }
     } catch (e) {
@@ -112,7 +112,7 @@ export const verifyToken = async (req, res, next) => {
         // This is INSECURE but necessary for development when service account is missing.
         // It's still better than a single shared 'dev-user' because different users
         // will have different tokens and thus different UIDs.
-        if (process.env.NODE_ENV !== 'production' || true) { // allow in production too if no admin apps for now to avoid breaking it
+        if (process.env.NODE_ENV !== 'production') { // allow in production too if no admin apps for now to avoid breaking it
             const decoded = decodeTokenUnsafe(token)
             if (decoded) {
                 req.user = decoded
