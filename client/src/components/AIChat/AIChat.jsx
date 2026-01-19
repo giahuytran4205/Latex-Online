@@ -26,6 +26,7 @@ function AIChat({
     const [messages, setMessages] = useState([])
     const [conversationHistory, setConversationHistory] = useState([])
     const [input, setInput] = useState('')
+    const [images, setImages] = useState([])
     const [isLoading, setIsLoading] = useState(false)
     const [apiKey, setApiKey] = useState(() => localStorage.getItem('gemini_api_key') || '')
     const [selectedModel, setSelectedModel] = useState(() => localStorage.getItem('gemini_model') || 'gemini-1.5-flash-latest')
@@ -93,8 +94,30 @@ function AIChat({
         toast.success('Đã xóa lịch sử chat')
     }
 
+    const handlePaste = (e) => {
+        const items = e.clipboardData.items
+        for (const item of items) {
+            if (item.type.indexOf('image') === 0) {
+                e.preventDefault()
+                const blob = item.getAsFile()
+                const reader = new FileReader()
+                reader.onload = (event) => {
+                    setImages(prev => [...prev, {
+                        mimeType: item.type,
+                        data: event.target.result
+                    }])
+                }
+                reader.readAsDataURL(blob)
+            }
+        }
+    }
+
+    const removeImage = (index) => {
+        setImages(prev => prev.filter((_, i) => i !== index))
+    }
+
     const handleSend = async () => {
-        if (!input.trim() || isLoading) return
+        if ((!input.trim() && images.length === 0) || isLoading) return
 
         if (!apiKey) {
             setShowSettings(true)
@@ -103,10 +126,12 @@ function AIChat({
         }
 
         const userMessage = input.trim()
+        const currentImages = [...images]
         setInput('')
+        setImages([])
 
         // Add user message to display
-        setMessages(prev => [...prev, { role: 'user', content: userMessage }])
+        setMessages(prev => [...prev, { role: 'user', content: userMessage, images: currentImages }])
         setIsLoading(true)
 
         try {
@@ -123,13 +148,14 @@ function AIChat({
                 apiKey,
                 context,
                 selectedModel,
-                conversationHistory
+                conversationHistory,
+                currentImages
             )
 
             // Update conversation history for next request
             setConversationHistory(prev => [
                 ...prev,
-                { role: 'user', content: userMessage },
+                { role: 'user', content: userMessage }, // Note: history currently just stores text, see notes
                 { role: 'assistant', content: response.response }
             ])
 
@@ -163,7 +189,7 @@ function AIChat({
             setMessages(prev => [...prev, {
                 role: 'error',
                 content: friendlyMessage,
-                debug: err.message // Keep raw error for debugging if needed (not shown by default)
+                debug: err.message
             }])
 
             if (err.message.includes('API key') || err.message.includes('quota')) {
@@ -227,35 +253,45 @@ function AIChat({
 
             {showSettings && (
                 <div className="ai-chat__settings">
-                    <div className="ai-chat__setting-group">
-                        <label>
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4" />
-                            </svg>
-                            API Key
-                        </label>
-                        <input
-                            type="password"
-                            value={apiKey}
-                            onChange={(e) => setApiKey(e.target.value)}
-                            placeholder="Nhập API key từ Google AI Studio..."
-                        />
+                    <div className="ai-chat__setting-header">
+                        <h3>Cấu hình Gemini API</h3>
+                        <div className="ai-chat__setting-subtitle">Nhập API Key để kích hoạt AI Assistant</div>
                     </div>
 
-
+                    <div className="ai-chat__setting-group">
+                        <div className="ai-chat__input-wrapper">
+                            <div className="ai-chat__input-icon">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                    <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4" />
+                                </svg>
+                            </div>
+                            <input
+                                type="password"
+                                value={apiKey}
+                                onChange={(e) => setApiKey(e.target.value)}
+                                placeholder="Dán API Key vào đây..."
+                                spellCheck="false"
+                            />
+                        </div>
+                    </div>
 
                     <div className="ai-chat__setting-actions">
-                        <button className="ai-chat__btn-primary" onClick={handleSaveSettings}>
-                            Lưu cài đặt
-                        </button>
                         <a
                             href="https://aistudio.google.com/apikey"
                             target="_blank"
                             rel="noopener noreferrer"
                             className="ai-chat__link"
                         >
-                            Lấy API key miễn phí →
+                            <span>Lấy API Key (Free)</span>
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                                <polyline points="15 3 21 3 21 9" />
+                                <line x1="10" y1="14" x2="21" y2="3" />
+                            </svg>
                         </a>
+                        <button className="ai-chat__btn-primary" onClick={handleSaveSettings}>
+                            Lưu cấu hình
+                        </button>
                     </div>
                 </div>
             )}
@@ -277,6 +313,13 @@ function AIChat({
                 {messages.map((msg, idx) => (
                     <div key={idx} className={`ai-chat__message ai-chat__message--${msg.role}`}>
                         <div className="ai-chat__content">
+                            {msg.images && msg.images.length > 0 && (
+                                <div className="ai-chat__message-images">
+                                    {msg.images.map((img, i) => (
+                                        <img key={i} src={img.data} alt="Attached" className="ai-chat__message-img" />
+                                    ))}
+                                </div>
+                            )}
                             {msg.role === 'error' ? (
                                 <div className="ai-chat__error">{msg.content}</div>
                             ) : (
@@ -347,10 +390,21 @@ function AIChat({
             </div>
 
             <div className="ai-chat__input-area">
+                {images.length > 0 && (
+                    <div className="ai-chat__attachments">
+                        {images.map((img, i) => (
+                            <div key={i} className="ai-chat__attachment-preview">
+                                <img src={img.data} alt="Preview" />
+                                <button onClick={() => removeImage(i)} className="ai-chat__remove-attachment">×</button>
+                            </div>
+                        ))}
+                    </div>
+                )}
                 <textarea
                     ref={inputRef}
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
+                    onPaste={handlePaste}
                     onInput={() => {
                         if (inputRef.current) {
                             inputRef.current.style.height = 'auto'

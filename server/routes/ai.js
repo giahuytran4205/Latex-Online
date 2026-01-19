@@ -144,7 +144,7 @@ router.post('/fetch-models', async (req, res) => {
  */
 router.post('/chat', async (req, res) => {
     try {
-        let { projectId, message, apiKey, context, model = 'gemini-1.5-flash', conversationHistory = [] } = req.body
+        let { projectId, message, apiKey, context, model = 'gemini-1.5-flash', conversationHistory = [], images = [] } = req.body
 
         if (!projectId) return res.status(400).json({ error: 'Project ID is required' })
         if (!apiKey) return res.status(400).json({ error: 'Gemini API key is required' })
@@ -168,7 +168,7 @@ router.post('/chat', async (req, res) => {
         const systemInstruction = buildSystemInstruction(fileList, context, activeFileContent)
 
         // Build conversation with history
-        const contents = buildConversation(systemInstruction, conversationHistory, message)
+        const contents = buildConversation(systemInstruction, conversationHistory, message, images)
 
         // Call Gemini API with function calling
         const response = await callGeminiWithTools(apiKey, model, contents, projectPath)
@@ -249,7 +249,7 @@ ${context?.compileErrors ? `\nCompile errors:\n${context.compileErrors}` : ''}`
 /**
  * Build conversation array for API
  */
-function buildConversation(systemInstruction, history, currentMessage) {
+function buildConversation(systemInstruction, history, currentMessage, images = []) {
     const contents = []
 
     // Add system as first user message (Gemini doesn't have system role in contents)
@@ -259,6 +259,49 @@ function buildConversation(systemInstruction, history, currentMessage) {
     })
 
     if (history.length === 0) {
+        // If it's the first message, we might want to attach images here too if strictly required,
+        // but typically images go with the CURRENT user turn.
+        // However, the above system message "swallows" the first turn in this logic. 
+        // We should probably structure it differently or attach images to the system message? 
+        // Gemini allows multiple user parts.
+
+        // Let's refine: If history is empty, the logic below returns contents immediately.
+        // But we want to include images!
+        // The block below returns EARLY. We need to handle images before returning if history is empty.
+    }
+
+    // REFACTORING LOGIC:
+    // The current implementation returns early if history is empty, using the system message as the prompt.
+    // If we have images, we should attach them to that first message OR append a new user message?
+    // Gemini allows: User (System) -> Model -> User (Current).
+    // If History is empty: User (System + Current) -> Done.
+    // We should treat current message consistently.
+
+    // Let's rewrite strictly to:
+    // 1. System Prompt (User role)
+    // 2. History (Model, User, ...)
+    // 3. Current Message + Images (User role)
+
+    // The existing code merges System + Current if history is empty. 
+    // This reduces turn count but makes adding images tricky if we just append text.
+
+    // Safe approach: ALWAYS add current message as a distinct turn?
+    // Or modify the first turn to include image parts?
+
+    // Let's keep existing flow but inject images into the generated parts.
+
+    if (history.length === 0) {
+        // Modify the ALREADY PUSHED part? 
+        // contents[0] is the system instruction + current message.
+        // We can add more parts to contents[0].
+        if (images && images.length > 0) {
+            images.forEach(img => {
+                const base64Data = img.data.includes('base64,') ? img.data.split('base64,')[1] : img.data
+                contents[0].parts.push({
+                    inlineData: { mimeType: img.mimeType, data: base64Data }
+                })
+            })
+        }
         return contents
     }
 
@@ -276,10 +319,20 @@ function buildConversation(systemInstruction, history, currentMessage) {
         })
     }
 
-    // Add current message
+    // Add current message with images
+    const currentParts = [{ text: currentMessage }]
+    if (images && images.length > 0) {
+        images.forEach(img => {
+            const base64Data = img.data.includes('base64,') ? img.data.split('base64,')[1] : img.data
+            currentParts.push({
+                inlineData: { mimeType: img.mimeType, data: base64Data }
+            })
+        })
+    }
+
     contents.push({
         role: 'user',
-        parts: [{ text: currentMessage }]
+        parts: currentParts
     })
 
     return contents
