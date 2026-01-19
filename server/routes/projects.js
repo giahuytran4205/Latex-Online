@@ -6,6 +6,7 @@ import { v4 as uuidv4 } from 'uuid'
 import admin from 'firebase-admin'
 import { verifyToken, verifyTokenOptional } from '../services/auth.js'
 import { findProjectInfo, getProjectWithAuth, registerShareMapping, findProjectByShareId } from '../utils/project.js'
+import { getDirectorySize, isStorageQuotaExceeded, STORAGE_LIMIT } from '../utils/storage.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -199,7 +200,7 @@ router.get('/storage', verifyToken, (req, res) => {
 
         // Default storage limit: 100MB
         // In production, this could come from Firestore user profile
-        const storageLimit = 100 * 1024 * 1024
+        const storageLimit = STORAGE_LIMIT
 
         console.log(`[Storage] User ${userId}: ${usedStorage} bytes used`)
 
@@ -301,6 +302,11 @@ router.post('/', verifyToken, (req, res) => {
             return res.status(400).json({ error: 'Project name is required' })
         }
 
+        // Check storage quota (assume new project is ~2KB)
+        if (isStorageQuotaExceeded(userId, 2048)) {
+            return res.status(403).json({ error: 'Storage quota exceeded (100MB limit)' })
+        }
+
         const projectId = uuidv4().substring(0, 12)
         const shares = {
             view: uuidv4(),
@@ -383,6 +389,12 @@ router.post('/:projectId/duplicate', verifyTokenOptional, (req, res) => {
 
         if (!existsSync(srcPath)) {
             return res.status(404).json({ error: 'Project not found' })
+        }
+
+        // Check storage quota
+        const projectSize = getDirectorySize(srcPath)
+        if (isStorageQuotaExceeded(userId, projectSize)) {
+            return res.status(403).json({ error: 'Storage quota exceeded (100MB limit)' })
         }
 
         // Read original metadata
@@ -520,24 +532,7 @@ router.post('/:projectId/share', verifyTokenOptional, (req, res) => {
 
 
 // Helper to calculate directory size
-function getDirectorySize(dirPath) {
-    let size = 0
-    try {
-        const files = readdirSync(dirPath)
-        for (const file of files) {
-            const filePath = join(dirPath, file)
-            const stat = statSync(filePath)
-            if (stat.isDirectory()) {
-                size += getDirectorySize(filePath)
-            } else {
-                size += stat.size
-            }
-        }
-    } catch (e) {
-        // Ignore errors
-    }
-    return size
-}
+// Helper to calculate directory size - Removed (imported from storage.js)
 
 export default router
 

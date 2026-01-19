@@ -5,6 +5,7 @@ import { fileURLToPath } from 'url'
 import { getProjectWithAuth } from '../utils/project.js'
 import admin from 'firebase-admin'
 import { verifyToken, verifyTokenOptional } from '../services/auth.js'
+import { isStorageQuotaExceeded } from '../utils/storage.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -187,6 +188,13 @@ router.put('/:projectId/:filename', (req, res) => {
         const { content } = req.body
         const decodedFilename = decodeURIComponent(filename)
         const { projectPath, ownerId } = auth
+
+        // Check storage quota (approximate content length)
+        const contentSize = content ? content.length : 0
+        if (isStorageQuotaExceeded(ownerId, contentSize)) {
+            return res.status(403).json({ error: 'Storage quota exceeded (100MB limit)' })
+        }
+
         const filePath = join(projectPath, decodedFilename)
 
         // Security: Prevent Path Traversal
@@ -232,6 +240,13 @@ router.post('/:projectId', (req, res) => {
         if (!filename) return res.status(400).json({ error: 'Filename required' })
 
         const { projectPath, ownerId } = auth
+
+        // Check storage quota
+        const contentSize = content ? content.length : 0
+        if (isStorageQuotaExceeded(ownerId, contentSize)) {
+            return res.status(403).json({ error: 'Storage quota exceeded (100MB limit)' })
+        }
+
         const filePath = join(projectPath, filename)
 
         // Security: Prevent Path Traversal
@@ -373,6 +388,13 @@ router.post('/:projectId/duplicate', (req, res) => {
 
         if (!existsSync(srcPath)) {
             return res.status(404).json({ error: 'File not found' })
+        }
+
+        // Check storage quota (approximate size from invalidating)
+        // We read logic below, better check before read
+        const stat = statSync(srcPath)
+        if (isStorageQuotaExceeded(ownerId, stat.size)) {
+            return res.status(403).json({ error: 'Storage quota exceeded (100MB limit)' })
         }
 
         // Generate new name with -copy suffix
