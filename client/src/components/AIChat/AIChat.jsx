@@ -84,7 +84,7 @@ function AIChat({
                     setAvailableModels(data.models)
                 }
             })
-            toast.success('Đã lưu API Key')
+            // toast.success('Đã lưu API Key') -- Removed as requested
         }
     }
 
