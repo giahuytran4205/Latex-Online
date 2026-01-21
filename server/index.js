@@ -23,7 +23,8 @@ const server = createServer(app)
 app.use(cors())
 app.use(express.json({ limit: '50mb' }))
 app.use(express.urlencoded({ extended: true, limit: '50mb' }))
-app.use(express.static(join(__dirname, '../client/dist')))
+// Static files are served by Nginx on port 8080
+// Node.js only handles API and WebSocket
 
 // Security Middleware
 app.use(helmet({
@@ -160,19 +161,21 @@ wss.on('connection', (ws, req) => {
     })
 })
 
-// Serve frontend for all other routes (SPA)
-app.get('*', (req, res) => {
-    res.sendFile(join(__dirname, '../client/dist/index.html'))
+// 404 for unknown API routes (frontend is served by Nginx)
+app.use('/api/*', (req, res) => {
+    res.status(404).json({ error: 'API endpoint not found' })
 })
 
 const PORT = process.env.PORT || 3000
-server.listen(PORT, () => {
+const HOST = process.env.HOST || '127.0.0.1' // Only accessible from localhost (Nginx proxy)
+server.listen(PORT, HOST, () => {
     console.log(`
 ╔════════════════════════════════════════════╗
 ║     LaTeX Online Editor Server             ║
 ╠════════════════════════════════════════════╣
-║  HTTP Server:  http://localhost:${PORT}       ║
-║  WebSocket:    ws://localhost:${PORT}/ws      ║
+║  HTTP Server:  http://${HOST}:${PORT}            ║
+║  WebSocket:    ws://${HOST}:${PORT}/ws           ║
+║  Access via:   Nginx proxy (port 8080)       ║
 ║                                            ║
 ║  Ready for LaTeX compilation!              ║
 ╚════════════════════════════════════════════╝
