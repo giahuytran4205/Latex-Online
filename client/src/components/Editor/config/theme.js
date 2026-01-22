@@ -104,6 +104,7 @@ export const createEditorTheme = () => EditorView.theme({
     '.cm-ySelection': {
         // Use very low opacity with blend mode to tint the background
         // without obscuring text
+        display: 'inline-block',
         opacity: 0.7,
         mixBlendMode: 'var(--selection-blend-mode)',
         padding: '0'
