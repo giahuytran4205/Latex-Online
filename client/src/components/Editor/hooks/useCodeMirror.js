@@ -17,12 +17,6 @@ import { errorField, errorGutter, setErrors, errorMark, errorGutterMarker } from
 
 /**
  * Custom hook for CodeMirror editor initialization and management
- * 
- * With server-side Yjs persistence, the server is the source of truth.
- * Client only needs to:
- * 1. Connect to Yjs
- * 2. Wait for sync
- * 3. If document is empty after sync, initialize with API content
  */
 export function useCodeMirror({
     code,
@@ -42,7 +36,6 @@ export function useCodeMirror({
     const onCompileRef = useRef(onCompile)
     const isInternalChange = useRef(false)
     const lastJumpRef = useRef(null)
-    const initializedFilesRef = useRef(new Set())
 
     // Keep refs updated
     useEffect(() => {
@@ -68,13 +61,10 @@ export function useCodeMirror({
             editorTheme,
             autocompletion({ override: [latexCompletions], activateOnTyping: true, maxRenderedOptions: 15 }),
             EditorView.updateListener.of((update) => {
-                // Report changes if not internal
-                // Note: Cursor sync is handled automatically by yCollab
                 if (update.docChanged && !isInternalChange.current) {
                     onChangeRef.current?.(update.state.doc.toString())
                 }
             }),
-
             errorField,
             errorGutter,
             EditorState.readOnly.of(readOnly),
@@ -83,17 +73,23 @@ export function useCodeMirror({
         ]
 
         // Add Yjs collaboration if available
+        // yCollab handles both document sync AND cursor sync automatically
         if (yDoc && awareness && activeFile) {
             const ytext = yDoc.getText(activeFile)
-            extensions.push(yCollab(ytext, awareness))
+            // Pass user info for cursor display
+            const userInfo = awareness.getLocalState()?.user
+            extensions.push(yCollab(ytext, awareness, {
+                undoManager: false // Disable undo manager to avoid conflicts
+            }))
         }
 
-        // Initial content from Yjs (server-persisted) or fallback to code
+        // Get initial content
         let initialContent = ''
         if (yDoc && activeFile) {
             const ytext = yDoc.getText(activeFile)
             initialContent = ytext.toString()
         }
+        // Fallback to code prop if ytext is empty
         if (!initialContent && code) {
             initialContent = code
         }
@@ -114,38 +110,12 @@ export function useCodeMirror({
             }
             viewRef.current = null
         }
-    }, [yDoc, awareness, activeFile, readOnly, editorTheme, keybindings])
+    }, [yDoc, awareness, activeFile, readOnly, editorTheme, keybindings, code])
 
-    /**
-     * Initialize Yjs document with API content if empty after sync
-     * 
-     * With server-side persistence:
-     * - Server already has the document state
-     * - We only need to initialize if it's truly empty (new file)
-     */
+    // Handle standalone mode (no Yjs) - update editor when code prop changes
     useEffect(() => {
-        if (!yDoc || !activeFile || !isSynced || !code) return
-
-        const ytext = yDoc.getText(activeFile)
-        const fileKey = `${yDoc.clientID}-${activeFile}`
-
-        // Skip if already initialized in this session
-        if (initializedFilesRef.current.has(fileKey)) return
-
-        // Only initialize if Yjs document is empty
-        if (ytext.length === 0 && code.length > 0) {
-            console.log(`[Editor] Initializing empty Yjs doc for "${activeFile}"`)
-            yDoc.transact(() => {
-                ytext.insert(0, code)
-            })
-        }
-
-        initializedFilesRef.current.add(fileKey)
-    }, [yDoc, activeFile, isSynced, code])
-
-    // Handle standalone mode (no Yjs)
-    useEffect(() => {
-        if (!viewRef.current || yDoc) return
+        if (!viewRef.current) return
+        if (yDoc && awareness) return // Skip if using Yjs
 
         const currentContent = viewRef.current.state.doc.toString()
 
@@ -160,7 +130,7 @@ export function useCodeMirror({
             })
             isInternalChange.current = false
         }
-    }, [code, yDoc])
+    }, [code, yDoc, awareness])
 
     // Handle error decorations
     useEffect(() => {
