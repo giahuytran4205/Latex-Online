@@ -104,15 +104,13 @@ export const createEditorTheme = () => EditorView.theme({
     '.cm-ySelection': {
         // Use very low opacity with blend mode to tint the background
         // without obscuring text
-        opacity: 0.25,
+        opacity: 0.7,
         mixBlendMode: 'var(--selection-blend-mode)'
     },
     // Remote cursor head (the colored bar)
     '.cm-yLineSelection': {
-        opacity: 0.25,
-        mixBlendMode: 'var(--selection-blend-mode)',
-        padding: '0',
-        margin: '0'
+        opacity: 0.7,
+        mixBlendMode: 'var(--selection-blend-mode)'
     }
 })
 
