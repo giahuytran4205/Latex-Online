@@ -101,8 +101,7 @@ export const createEditorTheme = () => EditorView.theme({
 
     // Remote selection highlight
     '.cm-ySelection': {
-        opacity: '0.5',
-        mixBlendMode: 'multiply'
+        mixBlendMode: 'var(--selection-blend-mode)'
     },
     // Remote cursor head (the colored bar)
     '.cm-yLineSelection': {

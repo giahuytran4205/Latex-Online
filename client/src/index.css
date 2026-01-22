@@ -17,6 +17,7 @@
   --accent-hover: #4f46e5;
   --accent-light: rgba(99, 102, 241, 0.1);
   --bg-active: rgba(99, 102, 241, 0.08);
+  --selection-blend-mode: multiply;
 
   /* Editor Syntax (Overleaf-like) */
   --syntax-keyword: #047857;
@@ -50,6 +51,7 @@
   --accent-hover: #a5b4fc;
   --accent-light: rgba(129, 140, 248, 0.15);
   --bg-active: rgba(129, 140, 248, 0.2);
+  --selection-blend-mode: screen;
 
   /* Editor Syntax (Overleaf Dark-like) */
   --syntax-keyword: #00a698;
