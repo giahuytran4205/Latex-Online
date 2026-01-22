@@ -90,15 +90,15 @@ export const createEditorTheme = () => EditorView.theme({
         pointerEvents: 'none',
         boxShadow: '0 1px 3px rgba(0,0,0,0.2)'
     },
-    // Remote cursor line (the blinking cursor)
+    // Remote cursor line (static, no animation)
     '.cm-ySelectionCaret': {
         position: 'relative',
         borderLeft: '2px solid',
         marginLeft: '-1px',
         marginRight: '-1px',
-        boxSizing: 'border-box',
-        animation: 'blink 1s infinite'
+        boxSizing: 'border-box'
     },
+
     // Remote selection highlight
     '.cm-ySelection': {
         opacity: '0.3'

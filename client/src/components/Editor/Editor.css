@@ -1,19 +1,7 @@
 /* Editor Panel Styles */
 
-/* Collaboration cursor blink animation */
-@keyframes blink {
-
-    0%,
-    100% {
-        opacity: 1;
-    }
-
-    50% {
-        opacity: 0.3;
-    }
-}
-
 /* y-codemirror collaboration cursor styles */
+
 .cm-ySelectionCaret {
     position: relative;
     border-left: 2px solid;
