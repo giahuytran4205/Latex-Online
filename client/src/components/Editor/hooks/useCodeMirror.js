@@ -126,14 +126,19 @@ export function useCodeMirror({
 
         const currentContent = viewRef.current.state.doc.toString()
 
-        // Only update if code is provided and significantly different
-        // This handles cases where AI updates the file and we reload it from server
+        // Only update if code is provided and different from current view
         if (code !== null && code !== undefined && code !== currentContent) {
             if (yDoc && activeFile) {
-                // Collaborative mode: ensure Yjs contains the latest code if it is still empty
+                // Collaborative mode: Only hydrate Yjs AFTER sync is complete
+                // This prevents inserting content before receiving existing content from other clients
+                if (!isSynced) {
+                    console.log('[Editor] Waiting for sync before hydrating Yjs')
+                    return
+                }
+
                 const ytext = yDoc.getText(activeFile)
                 if (ytext.length === 0 && code) {
-                    console.log('[Editor] Hydrating Yjs from code prop after load')
+                    console.log('[Editor] Yjs synced and empty, hydrating with API content')
                     yDoc.transact(() => {
                         ytext.insert(0, code)
                     })
@@ -154,7 +159,8 @@ export function useCodeMirror({
             }
         }
 
-    }, [code, yDoc, activeFile])
+    }, [code, yDoc, activeFile, isSynced])
+
 
     // Removed redundant hydration effect; handled by external code update effect
 
