@@ -95,15 +95,12 @@ export function useCodeMirror({
             const ytextContent = ytext.toString()
             if (ytextContent.length > 0) {
                 initialContent = ytextContent
-            } else if (code && code.length > 0) {
-                // Insert initial code into Yjs if empty to avoid duplication later
-                console.log('[Editor] Initializing Yjs with API content (no sync needed)')
-                yDoc.transact(() => {
-                    ytext.insert(0, code)
-                })
-                initialContent = code
+            } else {
+                // Keep empty; hydration effect will insert code after sync if needed
+                initialContent = ''
             }
         }
+
 
         const view = new EditorView({
             state: EditorState.create({
@@ -159,21 +156,7 @@ export function useCodeMirror({
 
     }, [code, yDoc, activeFile])
 
-    // Handle Initial Yjs Hydration safely
-    useEffect(() => {
-        if (isSynced && yDoc && activeFile) {
-            const ytext = yDoc.getText(activeFile)
-            const length = ytext.length
-            console.log(`[Editor] Hydration Check - Synced: ${isSynced}, YText Len: ${length}, Code Len: ${code?.length}`)
-
-            if (length === 0 && code && code.length > 0) {
-                console.log('[Editor] Yjs synced and empty, hydrating with API content')
-                yDoc.transact(() => {
-                    ytext.insert(0, code)
-                })
-            }
-        }
-    }, [isSynced, yDoc, activeFile, code])
+    // Removed redundant hydration effect; handled by external code update effect
 
     // Handle error decorations
     useEffect(() => {
