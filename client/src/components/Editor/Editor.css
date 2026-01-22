@@ -3,6 +3,7 @@
 /* y-codemirror collaboration cursor styles */
 
 .cm-ySelectionCaret {
+
     position: relative;
     border-left: 2px solid;
     margin-left: -1px;

@@ -56,6 +56,12 @@ function Editor({
     return (
         <div className="editor-panel">
             <EditorHeader displayName={displayName} readOnly={readOnly} />
+            {yDoc && !isSynced && (
+                <div className="editor-loading-overlay">
+                    <div className="loading-spinner"></div>
+                    <span>Synchronizing...</span>
+                </div>
+            )}
             <div className="editor-panel__content" ref={editorRef}></div>
         </div>
     )
