@@ -106,7 +106,8 @@ function broadcastAwareness(doc, changedClients) {
  */
 function handleMessage(conn, doc, message) {
     try {
-        const decoder = decoding.createDecoder(new Uint8Array(message))
+        const messageBuffer = new Uint8Array(message)
+        const decoder = decoding.createDecoder(messageBuffer)
         const messageType = decoding.readVarUint(decoder)
 
         switch (messageType) {
@@ -115,10 +116,18 @@ function handleMessage(conn, doc, message) {
                 encoding.writeVarUint(encoder, messageSync)
                 const syncMessageType = syncProtocol.readSyncMessage(decoder, encoder, doc, conn)
 
-                // If there's a response to send
+                // If there's a response to send back to this client
                 if (encoding.length(encoder) > 1) {
                     conn.send(encoding.toUint8Array(encoder))
                 }
+
+                // CRITICAL: Broadcast the original message to all OTHER clients
+                // This ensures real-time sync between collaborators
+                doc.conns.forEach(client => {
+                    if (client !== conn && client.readyState === 1) {
+                        client.send(messageBuffer)
+                    }
+                })
                 break
             }
             case messageAwareness: {
@@ -127,6 +136,13 @@ function handleMessage(conn, doc, message) {
                     decoding.readVarUint8Array(decoder),
                     conn
                 )
+                // Awareness is already broadcast via the awareness 'update' event
+                // But we should also relay to other clients directly
+                doc.conns.forEach(client => {
+                    if (client !== conn && client.readyState === 1) {
+                        client.send(messageBuffer)
+                    }
+                })
                 break
             }
         }
@@ -134,6 +150,7 @@ function handleMessage(conn, doc, message) {
         console.error('[Yjs] Error handling message:', err.message)
     }
 }
+
 
 /**
  * Send sync step 1 to new client
