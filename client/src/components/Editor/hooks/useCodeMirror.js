@@ -1,4 +1,4 @@
-import { useEffect, useRef, useMemo, useCallback } from 'react'
+import { useEffect, useRef, useMemo } from 'react'
 import { EditorView, basicSetup } from 'codemirror'
 import { EditorState } from '@codemirror/state'
 import { StreamLanguage, syntaxHighlighting } from '@codemirror/language'
@@ -17,6 +17,9 @@ import { errorField, errorGutter, setErrors, errorMark, errorGutterMarker } from
 
 /**
  * Custom hook for CodeMirror editor initialization and management
+ * 
+ * Uses Yjs Map to track file initialization status, ensuring only ONE client
+ * ever initializes content for a file, preventing duplication.
  */
 export function useCodeMirror({
     code,
@@ -88,19 +91,14 @@ export function useCodeMirror({
             extensions.push(yCollab(ytext, awareness))
         }
 
-        // Determine initial content
-        let initialContent = code || ''
+        // Determine initial content - always use ytext content if available
+        let initialContent = ''
         if (yDoc && activeFile) {
             const ytext = yDoc.getText(activeFile)
-            const ytextContent = ytext.toString()
-            if (ytextContent.length > 0) {
-                initialContent = ytextContent
-            } else {
-                // Keep empty; hydration effect will insert code after sync if needed
-                initialContent = ''
-            }
+            initialContent = ytext.toString()
+        } else {
+            initialContent = code || ''
         }
-
 
         const view = new EditorView({
             state: EditorState.create({
@@ -120,49 +118,55 @@ export function useCodeMirror({
         }
     }, [yDoc, awareness, activeFile, readOnly, editorTheme, keybindings])
 
-    // Handle external code updates
+    /**
+     * Handle Yjs hydration with atomic initialization tracking
+     * 
+     * Uses a Yjs Map to track which files have been initialized.
+     * This ensures only ONE client ever inserts initial content,
+     * even if multiple clients connect simultaneously.
+     */
     useEffect(() => {
-        if (!viewRef.current) return
+        if (!yDoc || !activeFile || !isSynced) return
+
+        const ytext = yDoc.getText(activeFile)
+        const initMap = yDoc.getMap('__initialized_files__')
+
+        // Check if this file needs initialization
+        const isInitialized = initMap.get(activeFile)
+        const ytextEmpty = ytext.length === 0
+        const hasCode = code && code.length > 0
+
+        if (!isInitialized && ytextEmpty && hasCode) {
+            // Use a transaction to atomically check and set
+            yDoc.transact(() => {
+                // Double-check inside transaction (in case another client beat us)
+                if (!initMap.get(activeFile) && ytext.length === 0) {
+                    console.log(`[Editor] Initializing file "${activeFile}" with API content`)
+                    ytext.insert(0, code)
+                    initMap.set(activeFile, true)
+                }
+            })
+        }
+    }, [yDoc, activeFile, isSynced, code])
+
+    // Handle standalone mode code updates (no Yjs)
+    useEffect(() => {
+        if (!viewRef.current || yDoc) return // Skip if using Yjs
 
         const currentContent = viewRef.current.state.doc.toString()
 
-        // Only update if code is provided and different from current view
         if (code !== null && code !== undefined && code !== currentContent) {
-            if (yDoc && activeFile) {
-                // Collaborative mode: Only hydrate Yjs AFTER sync is complete
-                // This prevents inserting content before receiving existing content from other clients
-                if (!isSynced) {
-                    console.log('[Editor] Waiting for sync before hydrating Yjs')
-                    return
+            isInternalChange.current = true
+            viewRef.current.dispatch({
+                changes: {
+                    from: 0,
+                    to: currentContent.length,
+                    insert: code || ''
                 }
-
-                const ytext = yDoc.getText(activeFile)
-                if (ytext.length === 0 && code) {
-                    console.log('[Editor] Yjs synced and empty, hydrating with API content')
-                    yDoc.transact(() => {
-                        ytext.insert(0, code)
-                    })
-                }
-                // No need to update the view directly; Yjs will sync to the view via yCollab
-                return
-            } else {
-                // Standalone mode: Update view directly
-                isInternalChange.current = true
-                viewRef.current.dispatch({
-                    changes: {
-                        from: 0,
-                        to: currentContent.length,
-                        insert: code || ''
-                    }
-                })
-                isInternalChange.current = false
-            }
+            })
+            isInternalChange.current = false
         }
-
-    }, [code, yDoc, activeFile, isSynced])
-
-
-    // Removed redundant hydration effect; handled by external code update effect
+    }, [code, yDoc])
 
     // Handle error decorations
     useEffect(() => {
