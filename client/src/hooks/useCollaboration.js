@@ -54,6 +54,7 @@ export function useCollaboration(projectId, userId, userName, activeFile, sid) {
 
             provider.on('sync', (isSynced) => {
                 setIsSynced(isSynced)
+                console.log('[useCollaboration] sync event, isSynced:', isSynced)
             })
         }
 

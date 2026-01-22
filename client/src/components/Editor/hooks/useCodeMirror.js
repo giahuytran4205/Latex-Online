@@ -93,12 +93,15 @@ export function useCodeMirror({
         if (yDoc && activeFile) {
             const ytext = yDoc.getText(activeFile)
             const ytextContent = ytext.toString()
-            // If ytext has content, usage that. 
-            // If it's empty, we WAIT for sync before inserting code (handled in separate effect)
             if (ytextContent.length > 0) {
                 initialContent = ytextContent
-            } else {
-                initialContent = '' // Start empty, wait for sync
+            } else if (code && code.length > 0) {
+                // Insert initial code into Yjs if empty to avoid duplication later
+                console.log('[Editor] Initializing Yjs with API content (no sync needed)')
+                yDoc.transact(() => {
+                    ytext.insert(0, code)
+                })
+                initialContent = code
             }
         }
 
@@ -129,14 +132,16 @@ export function useCodeMirror({
         // Only update if code is provided and significantly different
         // This handles cases where AI updates the file and we reload it from server
         if (code !== null && code !== undefined && code !== currentContent) {
-
             if (yDoc && activeFile) {
-                // Collaborative mode:
-                // We DO NOT update Yjs from the 'code' prop here.
-                // Yjs is the source of truth. The 'code' prop is only used for:
-                // 1. Initial hydration (handled in the isSynced effect below)
-                // 2. Read-only fallback
-                // Overwriting here causes race conditions and duplication.
+                // Collaborative mode: ensure Yjs contains the latest code if it is still empty
+                const ytext = yDoc.getText(activeFile)
+                if (ytext.length === 0 && code) {
+                    console.log('[Editor] Hydrating Yjs from code prop after load')
+                    yDoc.transact(() => {
+                        ytext.insert(0, code)
+                    })
+                }
+                // No need to update the view directly; Yjs will sync to the view via yCollab
                 return
             } else {
                 // Standalone mode: Update view directly
@@ -151,6 +156,7 @@ export function useCodeMirror({
                 isInternalChange.current = false
             }
         }
+
     }, [code, yDoc, activeFile])
 
     // Handle Initial Yjs Hydration safely
