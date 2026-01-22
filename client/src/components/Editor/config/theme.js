@@ -111,8 +111,8 @@ export const createEditorTheme = () => EditorView.theme({
     '.cm-yLineSelection': {
         opacity: 0.7,
         mixBlendMode: 'var(--selection-blend-mode)',
-        padding: '0 2px 0 6px',
-        margin: '0'
+        padding: '0',
+        margin: '0 2px 0 6px'
     }
 })
 
