@@ -155,9 +155,12 @@ export function useCodeMirror({
 
     // Handle Initial Yjs Hydration safely
     useEffect(() => {
-        if (isSynced && yDoc && activeFile && code) {
+        if (isSynced && yDoc && activeFile) {
             const ytext = yDoc.getText(activeFile)
-            if (ytext.length === 0) {
+            const length = ytext.length
+            console.log(`[Editor] Hydration Check - Synced: ${isSynced}, YText Len: ${length}, Code Len: ${code?.length}`)
+
+            if (length === 0 && code && code.length > 0) {
                 console.log('[Editor] Yjs synced and empty, hydrating with API content')
                 yDoc.transact(() => {
                     ytext.insert(0, code)
