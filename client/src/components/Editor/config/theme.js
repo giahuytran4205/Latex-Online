@@ -102,9 +102,9 @@ export const createEditorTheme = () => EditorView.theme({
 
     // Remote selection highlight
     '.cm-ySelection': {
-        opacity: 0.3,
-        padding: '0.1px 0', // Fix for tiny gaps between lines specific to some renderers
-        // Removed mixBlendMode to ensure consistent style across all lines
+        // No opacity -> Text ensures fully opaque and readable
+        mixBlendMode: 'var(--selection-blend-mode)',
+        padding: '0.1px 0' // Prevent gaps
     },
     // Remote cursor head (the colored bar)
     '.cm-yLineSelection': {
