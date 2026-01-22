@@ -68,20 +68,13 @@ export function useCodeMirror({
             editorTheme,
             autocompletion({ override: [latexCompletions], activateOnTyping: true, maxRenderedOptions: 15 }),
             EditorView.updateListener.of((update) => {
-                // Track cursor position in awareness
-                if (update.selectionSet && awareness) {
-                    const pos = update.state.selection.main.head
-                    awareness.setLocalStateField('user', {
-                        ...awareness.getLocalState()?.user,
-                        cursor: pos
-                    })
-                }
-
                 // Report changes if not internal
+                // Note: Cursor sync is handled automatically by yCollab
                 if (update.docChanged && !isInternalChange.current) {
                     onChangeRef.current?.(update.state.doc.toString())
                 }
             }),
+
             errorField,
             errorGutter,
             EditorState.readOnly.of(readOnly),

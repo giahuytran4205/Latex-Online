@@ -77,17 +77,39 @@ export const createEditorTheme = () => EditorView.theme({
     },
     '.cm-ySelectionInfo': {
         fontSize: '0.7rem',
-        padding: '2px 4px',
-        borderRadius: '4px',
+        padding: '2px 6px',
+        borderRadius: '4px 4px 4px 0',
         whiteSpace: 'nowrap',
         overflow: 'hidden',
         textOverflow: 'ellipsis',
-        backgroundColor: 'var(--bg-panel)',
-        color: 'var(--text-color)',
-        border: '1px solid var(--border-color)',
-        zIndex: 10
+        position: 'absolute',
+        top: '-1.4em',
+        left: '-1px',
+        fontWeight: '500',
+        zIndex: 100,
+        pointerEvents: 'none',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.2)'
+    },
+    // Remote cursor line (the blinking cursor)
+    '.cm-ySelectionCaret': {
+        position: 'relative',
+        borderLeft: '2px solid',
+        marginLeft: '-1px',
+        marginRight: '-1px',
+        boxSizing: 'border-box',
+        animation: 'blink 1s infinite'
+    },
+    // Remote selection highlight
+    '.cm-ySelection': {
+        opacity: '0.3'
+    },
+    // Remote cursor head (the colored bar)
+    '.cm-yLineSelection': {
+        padding: '0',
+        margin: '0'
     }
 })
+
 
 // User colors for collaboration cursors
 export const USER_COLORS = [

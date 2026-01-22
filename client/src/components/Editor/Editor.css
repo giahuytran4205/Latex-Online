@@ -1,6 +1,56 @@
 /* Editor Panel Styles */
 
+/* Collaboration cursor blink animation */
+@keyframes blink {
+
+    0%,
+    100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.3;
+    }
+}
+
+/* y-codemirror collaboration cursor styles */
+.cm-ySelectionCaret {
+    position: relative;
+    border-left: 2px solid;
+    margin-left: -1px;
+    margin-right: -1px;
+}
+
+.cm-ySelectionCaretDot {
+    position: absolute;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    top: -3px;
+    left: -4px;
+}
+
+.cm-ySelectionInfo {
+    font-family: 'Inter', sans-serif;
+    font-size: 11px;
+    font-weight: 500;
+    padding: 2px 6px;
+    border-radius: 4px 4px 4px 0;
+    position: absolute;
+    top: -18px;
+    left: 0;
+    white-space: nowrap;
+    z-index: 100;
+    pointer-events: none;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+}
+
+.cm-ySelection {
+    opacity: 0.25;
+}
+
 .editor-panel__status {
+
     display: flex;
     align-items: center;
     gap: 8px;
