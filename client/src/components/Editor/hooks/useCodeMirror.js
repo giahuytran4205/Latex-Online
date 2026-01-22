@@ -16,12 +16,13 @@ import { createKeybindings } from '../config/keybindings'
 import { errorField, errorGutter, setErrors, errorMark, errorGutterMarker } from '../utils/errorDecorations'
 
 /**
- * Custom hook for CodeMirror editor initialization and management
+ * Professional Overleaf-style Editor Hook
  * 
- * Strategy for collaboration:
- * 1. yCollab handles real-time sync between clients
- * 2. First client to open a file initializes ytext with API content
- * 3. Subsequent clients receive content via Yjs sync
+ * Logic:
+ * 1. Server is the Single Source of Truth.
+ * 2. On connection, Server sends the full document state.
+ * 3. Client purely renders what Yjs provides.
+ * 4. Client NEVER initializes content from API code (prevents race conditions/duplication).
  */
 export function useCodeMirror({
     code,
@@ -41,7 +42,6 @@ export function useCodeMirror({
     const onCompileRef = useRef(onCompile)
     const isInternalChange = useRef(false)
     const lastJumpRef = useRef(null)
-    const hasHydratedRef = useRef(new Set()) // Track hydrated files per yDoc
 
     // Keep refs updated
     useEffect(() => {
@@ -51,8 +51,6 @@ export function useCodeMirror({
 
     // Memoize theme
     const editorTheme = useMemo(() => createEditorTheme(), [])
-
-    // Memoize keybindings
     const keybindings = useMemo(() => createKeybindings(onCompileRef), [])
 
     // Initialize CodeMirror
@@ -78,18 +76,20 @@ export function useCodeMirror({
             EditorView.lineWrapping,
         ]
 
-        // Add Yjs collaboration if available
+        // Collaboration Setup (The Core Logic)
+        let initialContent = ''
+
         if (yDoc && awareness && activeFile) {
             const ytext = yDoc.getText(activeFile)
-            extensions.push(yCollab(ytext, awareness, { undoManager: false }))
-        }
 
-        // Get initial content from ytext or code
-        let initialContent = ''
-        if (yDoc && activeFile) {
-            initialContent = yDoc.getText(activeFile).toString()
-        }
-        if (!initialContent) {
+            // 1. Connect yCollab (handles all syncing and cursors)
+            extensions.push(yCollab(ytext, awareness, { undoManager: false }))
+
+            // 2. Initial content is purely from Yjs
+            // Even if empty initially, yCollab will insert content when sync arrives
+            initialContent = ytext.toString()
+        } else {
+            // Fallback for non-collaborative / disconnected mode
             initialContent = code || ''
         }
 
@@ -111,36 +111,14 @@ export function useCodeMirror({
         }
     }, [yDoc, awareness, activeFile, readOnly, editorTheme, keybindings])
 
-    // Hydrate Yjs when sync completes (for relay server without persistence)
+    // Handle standalone mode updates (when Yjs is NOT active Only)
     useEffect(() => {
-        if (!yDoc || !activeFile || !code) return
-
-        const ytext = yDoc.getText(activeFile)
-        const hydrateKey = activeFile
-
-        // Check if already hydrated
-        if (hasHydratedRef.current.has(hydrateKey)) return
-
-        // If ytext is empty and we have code, initialize
-        if (ytext.length === 0 && code.length > 0) {
-            console.log(`[Editor] Hydrating "${activeFile}" with ${code.length} chars`)
-            yDoc.transact(() => {
-                ytext.insert(0, code)
-            })
-            hasHydratedRef.current.add(hydrateKey)
-        } else if (ytext.length > 0) {
-            // Already has content, mark as hydrated
-            hasHydratedRef.current.add(hydrateKey)
-        }
-    }, [yDoc, activeFile, code, isSynced])
-
-    // Handle standalone mode (no Yjs)
-    useEffect(() => {
+        // If Yjs is active, we IGNORE 'code' prop updates to avoid conflicts
+        // Server is the truth, not the API response
+        if (yDoc && awareness) return
         if (!viewRef.current) return
-        if (yDoc) return // Skip if using Yjs
 
         const currentContent = viewRef.current.state.doc.toString()
-
         if (code !== null && code !== undefined && code !== currentContent) {
             isInternalChange.current = true
             viewRef.current.dispatch({
@@ -152,45 +130,35 @@ export function useCodeMirror({
             })
             isInternalChange.current = false
         }
-    }, [code, yDoc])
+    }, [code, yDoc, awareness])
 
-    // Handle error decorations
+    // Error and Jump functionality handled as normal
     useEffect(() => {
         if (!viewRef.current || !activeFile) return
-
+        // ... (Error handling logic unchanged)
         const activeErrors = errors.filter(e => e.file === activeFile || e.file === activeFile.split('/').pop())
         const deco = []
-
         for (const err of activeErrors) {
             if (err.line >= 1 && err.line <= viewRef.current.state.doc.lines) {
                 try {
                     const line = viewRef.current.state.doc.line(err.line)
                     deco.push(errorMark.range(line.from))
                     deco.push(errorGutterMarker.range(line.from))
-                } catch (e) {
-                    console.error('Error applying marker:', e)
-                }
+                } catch (e) { }
             }
         }
-
         deco.sort((a, b) => a.from - b.from)
-
-        viewRef.current.dispatch({
-            effects: setErrors.of(Decoration.set(deco, true))
-        })
+        viewRef.current.dispatch({ effects: setErrors.of(Decoration.set(deco, true)) })
     }, [errors, activeFile])
 
-    // Handle jump to line
     useEffect(() => {
         if (!viewRef.current || !jumpToLine) return
-
         if (lastJumpRef.current === jumpToLine.timestamp) return
-
         const { line, file, cursor, isUserJump } = jumpToLine
-
         if (file && file !== activeFile) return
 
-        if (!isUserJump && viewRef.current.state.doc.toString() !== code) return
+        // Relaxed check for collab mode
+        if (!isUserJump && !yDoc && viewRef.current.state.doc.toString() !== code) return
 
         if (isUserJump && cursor !== undefined) {
             const safePos = Math.min(cursor, viewRef.current.state.doc.length)
@@ -203,7 +171,6 @@ export function useCodeMirror({
             lastJumpRef.current = jumpToLine.timestamp
         } else if (line >= 1 && line <= viewRef.current.state.doc.lines) {
             const lineInfo = viewRef.current.state.doc.line(line)
-
             viewRef.current.dispatch({
                 selection: { anchor: lineInfo.from, head: lineInfo.from },
                 scrollIntoView: true,
@@ -212,7 +179,7 @@ export function useCodeMirror({
             viewRef.current.focus()
             lastJumpRef.current = jumpToLine.timestamp
         }
-    }, [jumpToLine, code, activeFile])
+    }, [jumpToLine, code, activeFile, yDoc])
 
     return { editorRef, viewRef }
 }
