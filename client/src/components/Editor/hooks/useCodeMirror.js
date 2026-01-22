@@ -18,8 +18,11 @@ import { errorField, errorGutter, setErrors, errorMark, errorGutterMarker } from
 /**
  * Custom hook for CodeMirror editor initialization and management
  * 
- * Uses Yjs Map to track file initialization status, ensuring only ONE client
- * ever initializes content for a file, preventing duplication.
+ * With server-side Yjs persistence, the server is the source of truth.
+ * Client only needs to:
+ * 1. Connect to Yjs
+ * 2. Wait for sync
+ * 3. If document is empty after sync, initialize with API content
  */
 export function useCodeMirror({
     code,
@@ -39,6 +42,7 @@ export function useCodeMirror({
     const onCompileRef = useRef(onCompile)
     const isInternalChange = useRef(false)
     const lastJumpRef = useRef(null)
+    const initializedFilesRef = useRef(new Set())
 
     // Keep refs updated
     useEffect(() => {
@@ -91,13 +95,14 @@ export function useCodeMirror({
             extensions.push(yCollab(ytext, awareness))
         }
 
-        // Determine initial content - always use ytext content if available
+        // Initial content from Yjs (server-persisted) or fallback to code
         let initialContent = ''
         if (yDoc && activeFile) {
             const ytext = yDoc.getText(activeFile)
             initialContent = ytext.toString()
-        } else {
-            initialContent = code || ''
+        }
+        if (!initialContent && code) {
+            initialContent = code
         }
 
         const view = new EditorView({
@@ -119,56 +124,35 @@ export function useCodeMirror({
     }, [yDoc, awareness, activeFile, readOnly, editorTheme, keybindings])
 
     /**
-     * Handle Yjs hydration with atomic initialization tracking
+     * Initialize Yjs document with API content if empty after sync
      * 
-     * Uses a Yjs Map to track which files have been initialized.
-     * This ensures only ONE client ever inserts initial content,
-     * even if multiple clients connect simultaneously.
+     * With server-side persistence:
+     * - Server already has the document state
+     * - We only need to initialize if it's truly empty (new file)
      */
     useEffect(() => {
-        console.log(`[Editor] Hydration check - yDoc: ${!!yDoc}, activeFile: ${activeFile}, isSynced: ${isSynced}, code length: ${code?.length}`)
-
-        if (!yDoc || !activeFile) return
+        if (!yDoc || !activeFile || !isSynced || !code) return
 
         const ytext = yDoc.getText(activeFile)
-        const initMap = yDoc.getMap('__initialized_files__')
+        const fileKey = `${yDoc.clientID}-${activeFile}`
 
-        // Check if this file needs initialization
-        const isInitialized = initMap.get(activeFile)
-        const ytextLen = ytext.length
-        const hasCode = code && code.length > 0
+        // Skip if already initialized in this session
+        if (initializedFilesRef.current.has(fileKey)) return
 
-        console.log(`[Editor] File "${activeFile}" - initialized: ${isInitialized}, ytext.length: ${ytextLen}, hasCode: ${hasCode}, isSynced: ${isSynced}`)
-
-        // If ytext already has content, we're good
-        if (ytextLen > 0) {
-            console.log(`[Editor] File already has content in Yjs, skipping hydration`)
-            return
-        }
-
-        // Wait for sync before hydrating
-        if (!isSynced) {
-            console.log(`[Editor] Waiting for sync...`)
-            return
-        }
-
-        if (!isInitialized && hasCode) {
-            // Use a transaction to atomically check and set
+        // Only initialize if Yjs document is empty
+        if (ytext.length === 0 && code.length > 0) {
+            console.log(`[Editor] Initializing empty Yjs doc for "${activeFile}"`)
             yDoc.transact(() => {
-                // Double-check inside transaction (in case another client beat us)
-                if (!initMap.get(activeFile) && ytext.length === 0) {
-                    console.log(`[Editor] Initializing file "${activeFile}" with API content (${code.length} chars)`)
-                    ytext.insert(0, code)
-                    initMap.set(activeFile, true)
-                }
+                ytext.insert(0, code)
             })
         }
+
+        initializedFilesRef.current.add(fileKey)
     }, [yDoc, activeFile, isSynced, code])
 
-
-    // Handle standalone mode code updates (no Yjs)
+    // Handle standalone mode (no Yjs)
     useEffect(() => {
-        if (!viewRef.current || yDoc) return // Skip if using Yjs
+        if (!viewRef.current || yDoc) return
 
         const currentContent = viewRef.current.state.doc.toString()
 
@@ -221,11 +205,9 @@ export function useCodeMirror({
 
         if (file && file !== activeFile) return
 
-        // Skip code match check for user jump as it might be mid-sync
         if (!isUserJump && viewRef.current.state.doc.toString() !== code) return
 
         if (isUserJump && cursor !== undefined) {
-            // Jump by cursor index (for collaborator jump)
             const safePos = Math.min(cursor, viewRef.current.state.doc.length)
             viewRef.current.dispatch({
                 selection: { anchor: safePos, head: safePos },
@@ -235,7 +217,6 @@ export function useCodeMirror({
             viewRef.current.focus()
             lastJumpRef.current = jumpToLine.timestamp
         } else if (line >= 1 && line <= viewRef.current.state.doc.lines) {
-            // Jump by line number
             const lineInfo = viewRef.current.state.doc.line(line)
 
             viewRef.current.dispatch({
