@@ -65,6 +65,16 @@ export function useCodeMirror({
             editorTheme,
             autocompletion({ override: [latexCompletions], activateOnTyping: true, maxRenderedOptions: 15 }),
             EditorView.updateListener.of((update) => {
+                if (update.selectionSet && awareness) {
+                    const pos = update.state.selection.main.head
+                    const currentLocalState = awareness.getLocalState()
+                    if (currentLocalState?.user) {
+                        awareness.setLocalStateField('user', {
+                            ...currentLocalState.user,
+                            cursor: pos
+                        })
+                    }
+                }
                 if (update.docChanged && !isInternalChange.current) {
                     onChangeRef.current?.(update.state.doc.toString())
                 }

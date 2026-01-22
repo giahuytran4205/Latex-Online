@@ -73,19 +73,22 @@ export const createEditorTheme = () => EditorView.theme({
         display: 'block',
     },
     '.cm-ySelectionInfo': {
-        fontSize: '0.7rem',
+        fontFamily: 'Inter, sans-serif',
+        fontSize: '10px',
         padding: '2px 6px',
-        borderRadius: '4px 4px 4px 0',
+        borderRadius: '4px',
         whiteSpace: 'nowrap',
         overflow: 'hidden',
         textOverflow: 'ellipsis',
         position: 'absolute',
-        top: '-1.4em',
-        left: '-1px',
-        fontWeight: '500',
+        top: '-20px',
+        left: '0',
+        fontWeight: '600',
         zIndex: 100,
         pointerEvents: 'none',
-        boxShadow: '0 1px 3px rgba(0,0,0,0.2)'
+        boxShadow: '0 2px 5px rgba(0,0,0,0.2)',
+        color: '#fff', // Ensure text is readable on colored bg
+        lineHeight: '1.2'
     },
     // Remote cursor line (static, no animation)
     '.cm-ySelectionCaret': {
@@ -93,12 +96,15 @@ export const createEditorTheme = () => EditorView.theme({
         borderLeft: '2px solid',
         marginLeft: '-1px',
         marginRight: '-1px',
-        boxSizing: 'border-box'
+        boxSizing: 'border-box',
+        zIndex: 10
     },
 
     // Remote selection highlight
     '.cm-ySelection': {
-        opacity: 0.7,
+        // Use very low opacity with blend mode to tint the background
+        // without obscuring text
+        opacity: 0.25,
         mixBlendMode: 'var(--selection-blend-mode)'
     },
     // Remote cursor head (the colored bar)
