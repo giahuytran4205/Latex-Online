@@ -17,6 +17,11 @@ import { errorField, errorGutter, setErrors, errorMark, errorGutterMarker } from
 
 /**
  * Custom hook for CodeMirror editor initialization and management
+ * 
+ * Strategy for collaboration:
+ * 1. yCollab handles real-time sync between clients
+ * 2. First client to open a file initializes ytext with API content
+ * 3. Subsequent clients receive content via Yjs sync
  */
 export function useCodeMirror({
     code,
@@ -36,6 +41,7 @@ export function useCodeMirror({
     const onCompileRef = useRef(onCompile)
     const isInternalChange = useRef(false)
     const lastJumpRef = useRef(null)
+    const hasHydratedRef = useRef(new Set()) // Track hydrated files per yDoc
 
     // Keep refs updated
     useEffect(() => {
@@ -73,25 +79,18 @@ export function useCodeMirror({
         ]
 
         // Add Yjs collaboration if available
-        // yCollab handles both document sync AND cursor sync automatically
         if (yDoc && awareness && activeFile) {
             const ytext = yDoc.getText(activeFile)
-            // Pass user info for cursor display
-            const userInfo = awareness.getLocalState()?.user
-            extensions.push(yCollab(ytext, awareness, {
-                undoManager: false // Disable undo manager to avoid conflicts
-            }))
+            extensions.push(yCollab(ytext, awareness, { undoManager: false }))
         }
 
-        // Get initial content
+        // Get initial content from ytext or code
         let initialContent = ''
         if (yDoc && activeFile) {
-            const ytext = yDoc.getText(activeFile)
-            initialContent = ytext.toString()
+            initialContent = yDoc.getText(activeFile).toString()
         }
-        // Fallback to code prop if ytext is empty
-        if (!initialContent && code) {
-            initialContent = code
+        if (!initialContent) {
+            initialContent = code || ''
         }
 
         const view = new EditorView({
@@ -110,12 +109,35 @@ export function useCodeMirror({
             }
             viewRef.current = null
         }
-    }, [yDoc, awareness, activeFile, readOnly, editorTheme, keybindings, code])
+    }, [yDoc, awareness, activeFile, readOnly, editorTheme, keybindings])
 
-    // Handle standalone mode (no Yjs) - update editor when code prop changes
+    // Hydrate Yjs when sync completes (for relay server without persistence)
+    useEffect(() => {
+        if (!yDoc || !activeFile || !code) return
+
+        const ytext = yDoc.getText(activeFile)
+        const hydrateKey = activeFile
+
+        // Check if already hydrated
+        if (hasHydratedRef.current.has(hydrateKey)) return
+
+        // If ytext is empty and we have code, initialize
+        if (ytext.length === 0 && code.length > 0) {
+            console.log(`[Editor] Hydrating "${activeFile}" with ${code.length} chars`)
+            yDoc.transact(() => {
+                ytext.insert(0, code)
+            })
+            hasHydratedRef.current.add(hydrateKey)
+        } else if (ytext.length > 0) {
+            // Already has content, mark as hydrated
+            hasHydratedRef.current.add(hydrateKey)
+        }
+    }, [yDoc, activeFile, code, isSynced])
+
+    // Handle standalone mode (no Yjs)
     useEffect(() => {
         if (!viewRef.current) return
-        if (yDoc && awareness) return // Skip if using Yjs
+        if (yDoc) return // Skip if using Yjs
 
         const currentContent = viewRef.current.state.doc.toString()
 
@@ -130,7 +152,7 @@ export function useCodeMirror({
             })
             isInternalChange.current = false
         }
-    }, [code, yDoc, awareness])
+    }, [code, yDoc])
 
     // Handle error decorations
     useEffect(() => {
