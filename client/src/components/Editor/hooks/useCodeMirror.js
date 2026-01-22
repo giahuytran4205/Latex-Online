@@ -126,28 +126,45 @@ export function useCodeMirror({
      * even if multiple clients connect simultaneously.
      */
     useEffect(() => {
-        if (!yDoc || !activeFile || !isSynced) return
+        console.log(`[Editor] Hydration check - yDoc: ${!!yDoc}, activeFile: ${activeFile}, isSynced: ${isSynced}, code length: ${code?.length}`)
+
+        if (!yDoc || !activeFile) return
 
         const ytext = yDoc.getText(activeFile)
         const initMap = yDoc.getMap('__initialized_files__')
 
         // Check if this file needs initialization
         const isInitialized = initMap.get(activeFile)
-        const ytextEmpty = ytext.length === 0
+        const ytextLen = ytext.length
         const hasCode = code && code.length > 0
 
-        if (!isInitialized && ytextEmpty && hasCode) {
+        console.log(`[Editor] File "${activeFile}" - initialized: ${isInitialized}, ytext.length: ${ytextLen}, hasCode: ${hasCode}, isSynced: ${isSynced}`)
+
+        // If ytext already has content, we're good
+        if (ytextLen > 0) {
+            console.log(`[Editor] File already has content in Yjs, skipping hydration`)
+            return
+        }
+
+        // Wait for sync before hydrating
+        if (!isSynced) {
+            console.log(`[Editor] Waiting for sync...`)
+            return
+        }
+
+        if (!isInitialized && hasCode) {
             // Use a transaction to atomically check and set
             yDoc.transact(() => {
                 // Double-check inside transaction (in case another client beat us)
                 if (!initMap.get(activeFile) && ytext.length === 0) {
-                    console.log(`[Editor] Initializing file "${activeFile}" with API content`)
+                    console.log(`[Editor] Initializing file "${activeFile}" with API content (${code.length} chars)`)
                     ytext.insert(0, code)
                     initMap.set(activeFile, true)
                 }
             })
         }
     }, [yDoc, activeFile, isSynced, code])
+
 
     // Handle standalone mode code updates (no Yjs)
     useEffect(() => {
