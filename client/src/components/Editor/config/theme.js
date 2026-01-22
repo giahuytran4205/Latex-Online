@@ -72,9 +72,6 @@ export const createEditorTheme = () => EditorView.theme({
         paddingLeft: '4px',
         display: 'block',
     },
-    '.cm-ySelection': {
-        opacity: 0.5
-    },
     '.cm-ySelectionInfo': {
         fontSize: '0.7rem',
         padding: '2px 6px',
@@ -101,6 +98,7 @@ export const createEditorTheme = () => EditorView.theme({
 
     // Remote selection highlight
     '.cm-ySelection': {
+        opacity: 0.7,
         mixBlendMode: 'var(--selection-blend-mode)'
     },
     // Remote cursor head (the colored bar)
