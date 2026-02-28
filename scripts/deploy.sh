@@ -59,12 +59,13 @@ cd server
 npm install --production --prefer-offline --no-audit --no-fund
 cd ..
 
-# 4. CONFIGURE NGINX (Skip if already configured)
-if [ ! -f "$NGINX_CONF_DIR/latex-online.conf" ]; then
-    echo "⚙️  Configuring Nginx..."
-    cp "$PROJECT_DIR/nginx/latex-online.conf" "$NGINX_CONF_DIR/latex-online.conf"
-    nginx -s reload 2>/dev/null || nginx &
-fi
+# 4. CONFIGURE NGINX (Always overwrite and clear old configs)
+echo "⚙️  Configuring Nginx..."
+# Clear old configs to prevent duplicate warnings
+rm -f "$NGINX_CONF_DIR"/*.conf
+# Copy fresh config
+cp "$PROJECT_DIR/nginx/latex-online.conf" "$NGINX_CONF_DIR/latex-online.conf"
+nginx -s reload 2>/dev/null || nginx &
 
 # 5. RESTART SERVICES (Targeted reload, not kill)
 echo "🚀 Reloading Backend via PM2..."
