@@ -1,0 +1,53 @@
+
+version: '3.8'
+
+services:
+  backend:
+    build: 
+      context: ./server
+      dockerfile: Dockerfile
+    container_name: latex-backend
+    ports:
+      - "3000:3000"
+    volumes:
+      # Mount the projects directory (persistent storage for user files & "database")
+      - ./projects:/app/projects
+      # Avoid overwriting container node_modules with host node_modules
+      - /app/server/node_modules
+    environment:
+      - PORT=3000
+      - HOST=0.0.0.0
+      - NODE_ENV=production
+    restart: unless-stopped
+
+  ai-service:
+    build:
+      context: ./ai_agent
+      dockerfile: Dockerfile
+    container_name: latex-ai
+    volumes:
+      - ./projects:/app/projects
+      - ./ai_agent_cache:/app/cache/huggingface
+      - nanobot_data:/app/nanobot_data
+      # Mount source code for hot reload on restart
+      - ./ai_agent/main.py:/app/main.py
+      - ./ai_agent/providers.py:/app/providers.py
+      - ./ai_agent/tools.py:/app/tools.py
+      - ./ai_agent/safe_tools.py:/app/safe_tools.py
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+
+  frontend:
+    build: 
+      context: ./client
+      dockerfile: Dockerfile
+    container_name: latex-frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  nanobot_data:
